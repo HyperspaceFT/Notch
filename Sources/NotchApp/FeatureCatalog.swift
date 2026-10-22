@@ -17,9 +17,9 @@ import SystemHUDFeature
 enum FeatureCatalog {
     static func makeFeatures() -> [any NotchFeature] {
         [
-            AirPodsFeature(),
             HomeFeature(),
             FilesFeature(),
+            AirPodsFeature(),
             BatteryFeature(),
             SystemHUDFeature(),
         ]

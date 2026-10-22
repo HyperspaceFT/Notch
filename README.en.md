@@ -25,7 +25,7 @@ Built-in features:
 
 | Feature | Description |
 |---|---|
-| 🎧 AirPods | Connecting AirPods briefly shows an AirPods icon left of the notch and the battery level right of it. While they are connected, an AirPods tab appears at the far left of the open panel: it shows the left, right, and case battery levels and adjusts the AirPods' volume and noise-control mode (Noise Cancellation / Transparency / Adaptive, depending on the model). When the sound switches back to the Mac's own speakers (for example, when the AirPods disconnect), a Mac icon and the current volume briefly show beside the notch too; this part needs no Bluetooth access. macOS's own connection notice cannot be hidden and still appears. Needs Bluetooth access; noise control uses undocumented system interfaces and may stop working after a macOS update |
+| 🎧 AirPods | Connecting AirPods briefly shows an AirPods icon left of the notch and the battery level right of it. While they are connected, an AirPods tab appears in the open panel just left of the notch: it shows the left, right, and case battery levels and adjusts the AirPods' volume and noise-control mode (Noise Cancellation / Transparency / Adaptive, depending on the model). When the sound switches back to the Mac's own speakers (for example, when the AirPods disconnect), a Mac icon and the current volume briefly show beside the notch too; this part needs no Bluetooth access. macOS's own connection notice cannot be hidden and still appears. Needs Bluetooth access; noise control uses undocumented system interfaces and may stop working after a macOS update |
 | 🏠 Home | The home tab of the panel; shows the current time for now |
 | 📂 Files | On the left, an AirDrop zone: drop files on it to send them with AirDrop. On the right, a shelf: files dropped there can be dragged out again, or copied with the right-click **Copy** item and pasted elsewhere. With **Remove after pasting** on, files leave the shelf once they are dragged out or pasted (the originals are kept) |
 | 🔋 Battery | Plugging in the power adapter briefly shows a green charging battery left of the notch and the charge level right of it; unplugging shows a notice too. In the open panel, the battery icon right of the notch follows the charge level; its tab shows the time remaining and the battery health (maximum capacity, cycle count) |
@@ -150,7 +150,7 @@ The island has three states:
 
 - **collapsed**: exactly the size of the hardware notch, so it is invisible;
 - **activity**: when a feature presents a live activity, the island extends to both sides and shows content there (such as the charging notice);
-- **expanded**: after a click, the panel opens with the features' tabs along the top (AirPods while connected, Home, and Files left of the notch, Battery right of it) and the selected feature's content below.
+- **expanded**: after a click, the panel opens with the features' tabs along the top (Home, Files, and AirPods while connected left of the notch, Battery right of it) and the selected feature's content below.
 
 While the pointer rests on the collapsed or activity island, it grows a little with a slight bounce (hovered). A click then opens it, and a right-click shows the **Settings…** / **Quit** menu.
 
