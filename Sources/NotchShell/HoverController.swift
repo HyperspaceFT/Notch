@@ -1,23 +1,29 @@
 import AppKit
 
-/// Expands the island when the pointer enters the notch and collapses it when
-/// the pointer leaves the expanded island.
+/// Marks the island hovered when the pointer stays on the notch for `hoverDelay`
+/// (it grows and the trackpad taps once), drops the hover when the pointer leaves it, and
+/// collapses the expanded island when the pointer leaves that. Expanding itself
+/// takes a click on the hovered island, handled in `NotchRootView`.
 ///
 /// Uses global + local NSEvent mouse monitors. Mouse-move monitors do not require
 /// the Accessibility permission (only keyboard monitors do), so none is requested.
 @MainActor
 final class HoverController {
-    /// Delay before expanding, so quickly sweeping across the menu bar does not open the island.
-    static let expandDelay: Duration = .milliseconds(80)
-    /// Debounce before collapsing after the pointer leaves the island.
+    /// Time from entering the hot zone to the hover; a sweep across the menu bar
+    /// that leaves sooner neither grows the island nor taps the trackpad.
+    static let hoverDelay: Duration = .milliseconds(80)
+    /// Debounce before collapsing after the pointer leaves the expanded island.
     static let collapseDelay: Duration = .milliseconds(250)
     /// How far the hot zone extends beyond the collapsed island.
     static let hotZoneInset = CGSize(width: 6, height: 4)
     /// Extra room around the expanded island before it counts as "left".
     static let exitMargin: CGFloat = 8
+    /// The same for the hovered island. Kept small because the whole panel takes
+    /// clicks while hovered; the ring alone already reaches past the hot zone.
+    static let hoverExitMargin: CGFloat = 2
 
     private enum Pending {
-        case expand
+        case hover
         case collapse
     }
 
@@ -45,7 +51,7 @@ final class HoverController {
         }) {
             monitors.append(global)
         }
-        // Events for our own panel (while expanded and accepting the mouse).
+        // Events for our own panel (while hovered or expanded and accepting the mouse).
         if let local = NSEvent.addLocalMonitorForEvents(matching: mask, handler: { [weak self] event in
             MainActor.assumeIsolated { self?.pointerMoved() }
             return event
@@ -70,16 +76,22 @@ final class HoverController {
         let location = NSEvent.mouseLocation
 
         if model.isExpanded {
-            if isInsideExpandedIsland(location) {
+            if isInsideIsland(location, margin: Self.exitMargin) {
                 cancelPending(.collapse)
             } else {
                 schedule(.collapse, after: Self.collapseDelay)
             }
+        } else if model.isHovered {
+            // No debounce: while hovered the whole panel takes the mouse, so any
+            // lingering would swallow clicks meant for the menu bar beside it.
+            if !isInsideIsland(location, margin: Self.hoverExitMargin) {
+                model.setHovered(false)
+            }
         } else {
             if isInsideHotZone(location) {
-                schedule(.expand, after: Self.expandDelay)
+                schedule(.hover, after: Self.hoverDelay)
             } else {
-                cancelPending(.expand)
+                cancelPending(.hover)
             }
         }
     }
@@ -90,9 +102,10 @@ final class HoverController {
             .contains(point)
     }
 
-    private func isInsideExpandedIsland(_ point: CGPoint) -> Bool {
+    /// For the hovered or expanded island, whose frame already has its final size.
+    private func isInsideIsland(_ point: CGPoint, margin: CGFloat) -> Bool {
         model.islandScreenFrame
-            .insetBy(dx: -Self.exitMargin, dy: -Self.exitMargin)
+            .insetBy(dx: -margin, dy: -margin)
             .contains(point)
     }
 
@@ -114,12 +127,14 @@ final class HoverController {
         // Re-check against the pointer position at fire time, not at schedule time.
         let location = NSEvent.mouseLocation
         switch action {
-        case .expand:
-            if !model.isExpanded, isInsideHotZone(location) {
-                model.setExpanded(true)
+        case .hover:
+            if !model.isExpanded, !model.isHovered, isInsideHotZone(location) {
+                model.setHovered(true)
+                // Felt only on a Force Touch trackpad with a finger on it; a no-op otherwise.
+                NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
             }
         case .collapse:
-            if model.isExpanded, !isInsideExpandedIsland(location) {
+            if model.isExpanded, !isInsideIsland(location, margin: Self.exitMargin) {
                 model.setExpanded(false)
             }
         }

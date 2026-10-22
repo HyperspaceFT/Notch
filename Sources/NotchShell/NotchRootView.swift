@@ -38,8 +38,27 @@ struct NotchRootView: View {
         .background { shape.fill(NotchTheme.islandColor) }
         .clipShape(shape)
         .shadow(color: .black.opacity(isExpanded ? 0.5 : 0), radius: 14, y: 6)
+        // The whole outline takes clicks, including the empty collapsed body.
+        // The panel only passes them on while the island is hovered or expanded.
+        .contentShape(shape)
+        .gesture(
+            TapGesture().onEnded { model.setExpanded(true) },
+            // Expanded: clicks belong to the controls inside.
+            including: isExpanded ? .subviews : .all
+        )
+        .contextMenu {
+            // Placeholder: there is no settings panel yet.
+            Button("Settings…", systemImage: "gearshape") {}
+            Divider()
+            Button("Quit", systemImage: "power") {
+                NSApp.terminate(nil)
+            }
+        }
+        // Inner animations win when several values change at once, so expanding
+        // the hovered island (which also clears the hover) uses `expandAnimation`.
         .animation(animation(for: model.state), value: model.state)
         .animation(NotchTheme.activityAnimation, value: model.currentActivity.map { "\($0.featureID).\($0.id)" })
+        .animation(model.isHovered ? NotchTheme.hoverAnimation : NotchTheme.collapseAnimation, value: model.isHovered)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         // The panel overlaps the notch; without this SwiftUI would push content below it.
         .ignoresSafeArea()
@@ -77,8 +96,8 @@ private struct ActivityWingsView: View {
     }
 }
 
-/// The expanded panel: a header row with tab buttons and a quit button, and the
-/// selected feature's view below.
+/// The expanded panel: a header row with tab buttons, and the selected feature's
+/// view below. Quitting lives in the island's right-click menu.
 private struct ExpandedIslandView: View {
     let model: NotchViewModel
 
@@ -105,7 +124,7 @@ private struct ExpandedIslandView: View {
         .padding(.bottom, 14)
     }
 
-    /// Sits in the same band as the hardware notch, so controls stay left and right of it.
+    /// Sits in the same band as the hardware notch, so the tab buttons stay left of it.
     private var header: some View {
         HStack(spacing: 0) {
             GlassEffectContainer(spacing: 8) {
@@ -122,9 +141,6 @@ private struct ExpandedIslandView: View {
                 }
             }
             Spacer(minLength: model.geometry.notchRect.width)
-            GlassCapsuleButton("退出 Notch", symbol: "power") {
-                NSApp.terminate(nil)
-            }
         }
         .frame(height: max(model.geometry.notchRect.height, 30))
     }

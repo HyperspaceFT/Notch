@@ -51,13 +51,51 @@ struct NotchViewModelTests {
         #expect(model.state == .collapsed)
     }
 
-    @Test func expansionCallbackFiresOnlyOnChange() {
+    @Test func interactivityCallbackFiresOnlyOnChange() {
         var calls: [Bool] = []
-        model.onExpansionChange = { calls.append($0) }
+        model.onInteractivityChange = { calls.append($0) }
         model.setExpanded(true)
         model.setExpanded(true)
         model.setExpanded(false)
         #expect(calls == [true, false])
+    }
+
+    @Test func clickingTheHoveredIslandKeepsItInteractive() {
+        var calls: [Bool] = []
+        model.onInteractivityChange = { calls.append($0) }
+        model.setHovered(true)
+        model.setHovered(true)
+        #expect(model.isInteractive)
+
+        // Expanding replaces the hover without the panel dropping the mouse in between.
+        model.setExpanded(true)
+        #expect(!model.isHovered)
+        #expect(model.isInteractive)
+
+        model.setExpanded(false)
+        #expect(calls == [true, false])
+    }
+
+    @Test func hoverGrowsCollapsedAndActivityIslandByARing() {
+        let ring = NotchTheme.hoverGrowth
+        model.setHovered(true)
+        #expect(model.state == .collapsed)
+        #expect(model.bodySize == CGSize(width: 190 + ring * 2, height: 32 + ring))
+        #expect(model.islandScreenFrame.maxY == 956)
+
+        model.present(activity("a"))
+        let activityWidth = 190 + NotchTheme.activityWingWidth * 2
+        #expect(model.bodySize == CGSize(width: activityWidth + ring * 2, height: 32 + ring))
+
+        model.setHovered(false)
+        #expect(model.bodySize == CGSize(width: activityWidth, height: 32))
+    }
+
+    @Test func expandedIslandIgnoresHover() {
+        model.setExpanded(true)
+        model.setHovered(true)
+        #expect(!model.isHovered)
+        #expect(model.bodySize == NotchTheme.expandedSize)
     }
 
     @Test func higherPriorityWinsThenNewestAmongEqual() {

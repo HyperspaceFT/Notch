@@ -9,10 +9,14 @@ import SwiftUI
 /// State machine:
 /// - `.collapsed`: island exactly covers the hardware notch.
 /// - `.activity`: the top-priority activity is shown as wings beside the notch.
-/// - `.expanded`: the full panel with feature tabs (hover or `requestExpand`).
+/// - `.expanded`: the full panel with feature tabs (a click on the hovered
+///   island, or `requestExpand`).
 ///
 /// Expansion always wins over activities; activities keep their queue and
 /// timers while expanded and reappear on collapse.
+///
+/// `isHovered` sits on top of `.collapsed` and `.activity`: the island grows by
+/// `NotchTheme.hoverGrowth` and takes the clicks that expand it.
 @MainActor
 @Observable
 final class NotchViewModel {
@@ -38,15 +42,17 @@ final class NotchViewModel {
 
     private(set) var geometry: NotchGeometry
     private(set) var isExpanded = false
+    /// The pointer rests on the collapsed or activity island. Always false while expanded.
+    private(set) var isHovered = false
     private(set) var tabs: [Tab] = []
     var selectedTabID: String?
 
     /// When false, the hover controller leaves the state alone (debug pinning).
     var isHoverEnabled = true
 
-    /// Invoked whenever `isExpanded` changes; the shell uses it to toggle mouse
+    /// Invoked whenever `isInteractive` changes; the shell uses it to toggle mouse
     /// interception on the panel.
-    @ObservationIgnored var onExpansionChange: ((Bool) -> Void)?
+    @ObservationIgnored var onInteractivityChange: ((Bool) -> Void)?
 
     private var entries: [ActivityEntry] = []
     @ObservationIgnored private var nextSequence = 0
@@ -61,6 +67,12 @@ final class NotchViewModel {
     var state: State {
         if isExpanded { return .expanded }
         return currentActivity == nil ? .collapsed : .activity
+    }
+
+    /// Whether the panel takes mouse events: the hovered island needs its click
+    /// and right-click, the expanded one its controls.
+    var isInteractive: Bool {
+        isExpanded || isHovered
     }
 
     /// The activity that wins: highest priority, then most recently presented.
@@ -92,14 +104,20 @@ final class NotchViewModel {
     /// Size of the island body (without the ears) for the current state.
     var bodySize: CGSize {
         let notch = geometry.notchRect.size
+        let size: CGSize
         switch state {
         case .collapsed:
-            return notch
+            size = notch
         case .activity:
-            return CGSize(width: notch.width + NotchTheme.activityWingWidth * 2, height: notch.height)
+            size = CGSize(width: notch.width + NotchTheme.activityWingWidth * 2, height: notch.height)
         case .expanded:
             return NotchTheme.expandedSize
         }
+        guard isHovered else { return size }
+        return CGSize(
+            width: size.width + NotchTheme.hoverGrowth * 2,
+            height: size.height + NotchTheme.hoverGrowth
+        )
     }
 
     var topCornerRadius: CGFloat {
@@ -147,8 +165,25 @@ final class NotchViewModel {
 
     func setExpanded(_ expanded: Bool) {
         guard expanded != isExpanded else { return }
+        let wasInteractive = isInteractive
         isExpanded = expanded
-        onExpansionChange?(expanded)
+        // Expanding replaces the hover; collapsing happens with the pointer outside.
+        isHovered = false
+        reportInteractivity(ifChangedFrom: wasInteractive)
+    }
+
+    /// Ignored while expanded.
+    func setHovered(_ hovered: Bool) {
+        let hovered = hovered && !isExpanded
+        guard hovered != isHovered else { return }
+        let wasInteractive = isInteractive
+        isHovered = hovered
+        reportInteractivity(ifChangedFrom: wasInteractive)
+    }
+
+    private func reportInteractivity(ifChangedFrom wasInteractive: Bool) {
+        guard isInteractive != wasInteractive else { return }
+        onInteractivityChange?(isInteractive)
     }
 
     /// Expands the island, selecting `tabID` when such a tab exists.

@@ -16,6 +16,10 @@ public enum NotchTheme {
     public static let expandedTopRadius: CGFloat = 14
     public static let expandedBottomRadius: CGFloat = 32
 
+    /// How much the collapsed or activity island grows on the sides and bottom
+    /// while the pointer rests on it. The top stays at the screen edge.
+    public static let hoverGrowth: CGFloat = 8
+
     /// Transparent room around the expanded island so its shadow is not clipped.
     public static let shadowPadding: CGFloat = 24
 
@@ -49,4 +53,7 @@ public enum NotchTheme {
     public static let collapseAnimation = Animation.smooth(duration: 0.34)
     /// Activities appearing or disappearing in collapsed mode.
     public static let activityAnimation = Animation.snappy(duration: 0.36)
+    /// Pointer arriving on the island: overshoots the hover ring by about a
+    /// quarter, then springs back. Leaving uses `collapseAnimation`.
+    public static let hoverAnimation = Animation.bouncy(duration: 0.4, extraBounce: 0.3)
 }

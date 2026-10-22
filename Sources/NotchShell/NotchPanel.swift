@@ -4,8 +4,8 @@ import SwiftUI
 /// Borderless, transparent, non-activating window that hosts the island.
 ///
 /// The panel has a fixed size and sits top-centered on the notch, overlapping
-/// the menu bar. While the island is not expanded it ignores mouse events so
-/// the menu bar underneath stays clickable.
+/// the menu bar. While the island is neither hovered nor expanded it ignores
+/// mouse events so the menu bar underneath stays clickable.
 final class NotchPanel: NSPanel {
     /// Three levels above the main menu so the island draws over the menu bar
     /// (and over the status-bar level used by menu bar extras) on every Space.

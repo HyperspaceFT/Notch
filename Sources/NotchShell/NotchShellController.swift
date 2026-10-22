@@ -48,9 +48,9 @@ public final class NotchShellController {
         panel.contentView = hostingView
         self.panel = panel
 
-        model.onExpansionChange = { [weak panel] expanded in
-            // Collapsed/activity: let clicks through to the menu bar underneath.
-            panel?.ignoresMouseEvents = !expanded
+        model.onInteractivityChange = { [weak panel] interactive in
+            // Collapsed/activity without hover: let clicks through to the menu bar underneath.
+            panel?.ignoresMouseEvents = !interactive
         }
 
         screenLocator.onChange = { [weak self] geometry in
