@@ -1,3 +1,4 @@
+import CoreAudio
 import IOBluetooth
 import NotchKit
 import NotchUI
@@ -7,6 +8,9 @@ import SwiftUI
 /// Shows a short activity with the battery level when AirPods connect, and, while
 /// they stay connected, a tab left of the notch with their battery levels, volume,
 /// and noise-control mode. Needs Bluetooth access; without it the tab stays hidden.
+///
+/// Also shows a short activity when the sound switches back to the Mac's own
+/// speakers, from AirPods or any other output. That part needs no Bluetooth access.
 @MainActor
 public final class AirPodsFeature: NotchFeature {
     public let id = "airpods"
@@ -17,16 +21,23 @@ public final class AirPodsFeature: NotchFeature {
 
     /// How long the connection activity stays visible.
     static let activityDuration: TimeInterval = 4
+    /// How long the activity for the Mac's speakers taking over stays visible.
+    static let speakerActivityDuration: TimeInterval = 3
 
     private let model = AirPodsModel()
     private let authorizer = BluetoothAuthorizer()
     private var monitor: AirPodsMonitor?
+    private var outputObserver: AudioHardwareObserver?
+    /// The default output device at the last look, so only an actual switch to the
+    /// speakers shows the activity, not a notification that repeats the same device.
+    private var defaultOutput: AudioObjectID?
     private weak var context: (any NotchContext)?
 
     public init() {}
 
     public func activate(context: any NotchContext) {
         self.context = context
+        startFollowingDefaultOutput()
         if BluetoothAuthorizer.isGranted {
             startMonitoring()
         } else if BluetoothAuthorizer.isUndecided {
@@ -42,9 +53,13 @@ public final class AirPodsFeature: NotchFeature {
         authorizer.cancel()
         monitor?.stop()
         monitor = nil
+        outputObserver?.stop()
+        outputObserver = nil
+        defaultOutput = nil
         if model.connection != nil {
             context?.dismiss(activityID: "connected")
         }
+        context?.dismiss(activityID: "speaker")
         model.disconnect()
         context = nil
     }
@@ -83,6 +98,35 @@ public final class AirPodsFeature: NotchFeature {
             Image(systemName: product.symbol)
         } trailing: { [model] in
             AirPodsActivityTrailing(model: model)
+        })
+    }
+
+    private func startFollowingDefaultOutput() {
+        guard outputObserver == nil else { return }
+        defaultOutput = AirPodsAudioDevice.defaultOutput()?.device
+        let observer = AudioHardwareObserver(property: kAudioHardwarePropertyDefaultOutputDevice) { [weak self] in
+            self?.defaultOutputChanged()
+        }
+        observer.start()
+        outputObserver = observer
+    }
+
+    private func defaultOutputChanged() {
+        guard outputObserver != nil else { return }
+        let output = AirPodsAudioDevice.defaultOutput()
+        let previous = defaultOutput
+        defaultOutput = output?.device
+        guard let output, output.device != previous, output.isBuiltInSpeaker else { return }
+        let volume = output.volume ?? 0
+        let isMuted = output.isMuted == true || volume == 0
+        context?.present(NotchActivity(
+            id: "speaker",
+            priority: .high,
+            duration: Self.speakerActivityDuration
+        ) {
+            Image(systemName: "macbook")
+        } trailing: {
+            Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.3.fill", variableValue: Double(volume))
         })
     }
 }

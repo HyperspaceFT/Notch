@@ -87,10 +87,13 @@ enum AudioDeviceMatching {
         return hexDigits(uid).contains(address)
     }
 
-    /// The UID is expected to carry the Bluetooth address, but its format is not
-    /// documented, so an exact name match is the fallback.
+    /// The UID carries the Bluetooth address ("70-AE-2A-7A-9D-7C:output" on macOS
+    /// 27), but its format is not documented, so an exact name match is the fallback.
     static func matches(uid: String?, name: String?, address: String?, deviceName: String?) -> Bool {
         if let uid, let address, self.uid(uid, containsAddress: address) { return true }
+        // A UID with an address of its own belongs to another device, whatever its
+        // name: two pairs of AirPods can share one.
+        if let uid, hexDigits(uid).count >= 12 { return false }
         guard let name, let deviceName, !name.isEmpty else { return false }
         return name == deviceName
     }

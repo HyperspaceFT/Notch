@@ -100,5 +100,7 @@ struct AudioDeviceMatchingTests {
         #expect(AudioDeviceMatching.matches(uid: "unrelated", name: "My AirPods", address: address, deviceName: "My AirPods"))
         #expect(!AudioDeviceMatching.matches(uid: "unrelated", name: "Other", address: address, deviceName: "My AirPods"))
         #expect(!AudioDeviceMatching.matches(uid: nil, name: nil, address: address, deviceName: "My AirPods"))
+        // Same name, but the UID names another pair's address.
+        #expect(!AudioDeviceMatching.matches(uid: "11-22-33-44-55-66:output", name: "My AirPods", address: address, deviceName: "My AirPods"))
     }
 }

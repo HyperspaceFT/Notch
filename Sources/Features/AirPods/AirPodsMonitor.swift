@@ -49,26 +49,27 @@ final class BluetoothAuthorizer: NSObject, CBCentralManagerDelegate {
     }
 }
 
-/// Follows which supported AirPods are connected, through IOBluetooth's connect
-/// and disconnect notifications. Calls `onChange` with the most recently
-/// connected one (`nil` when none is left) and whether it just connected; AirPods
-/// already connected when monitoring starts do not count as just connected.
+/// Follows which supported AirPods are connected to this Mac, judged by their
+/// CoreAudio output device: it appears when the AirPods connect for audio and
+/// disappears when they disconnect or switch to another device. Calls `onChange`
+/// with the most recently connected one (`nil` when none is left) and whether it
+/// just connected; AirPods already connected when monitoring starts do not count
+/// as just connected.
+///
+/// IOBluetooth's connect and disconnect notifications are not used. Its link can
+/// come up minutes before the AirPods play here, or stay up while they play
+/// elsewhere, and on macOS 27 its per-device disconnect notification was not
+/// delivered at all. IOBluetooth only supplies the paired devices and which of
+/// them are AirPods.
 ///
 /// Only start it once Bluetooth access is granted (see `BluetoothAuthorizer`).
 @MainActor
-final class AirPodsMonitor: NSObject {
-    private struct Tracked {
-        let device: IOBluetoothDevice
-        let disconnectNotification: IOBluetoothUserNotification?
-    }
-
+final class AirPodsMonitor {
     private let onChange: @MainActor (_ current: IOBluetoothDevice?, _ isNewConnection: Bool) -> Void
-    private var connectNotification: IOBluetoothUserNotification?
-    /// Connected supported AirPods by address, oldest first in `order`.
-    private var tracked: [String: Tracked] = [:]
+    private var observer: AudioHardwareObserver?
+    /// Connected supported AirPods by address, with the addresses oldest first in `order`.
+    private var devices: [String: IOBluetoothDevice] = [:]
     private var order: [String] = []
-    /// False once stopped, so a notification already on its way does nothing.
-    private var isRunning = false
 
     init(onChange: @escaping @MainActor (_ current: IOBluetoothDevice?, _ isNewConnection: Bool) -> Void) {
         self.onChange = onChange
@@ -79,93 +80,59 @@ final class AirPodsMonitor: NSObject {
     }
 
     var current: IOBluetoothDevice? {
-        order.last.flatMap { tracked[$0]?.device }
+        order.last.flatMap { devices[$0] }
     }
 
     func start() {
-        guard !isRunning else { return }
-        isRunning = true
-        connectNotification = IOBluetoothDevice.register(
-            forConnectNotifications: self,
-            selector: #selector(deviceConnected(_:device:))
-        )
-        for case let device as IOBluetoothDevice in IOBluetoothDevice.pairedDevices() ?? [] where device.isConnected() {
-            track(device)
+        guard observer == nil else { return }
+        let observer = AudioHardwareObserver(property: kAudioHardwarePropertyDevices) { [weak self] in
+            self?.update(isStart: false)
         }
-        if current != nil {
-            onChange(current, false)
-        }
+        // Without the listener only the AirPods connected right now are seen.
+        observer.start()
+        self.observer = observer
+        update(isStart: true)
     }
 
     func stop() {
-        guard isRunning else { return }
-        isRunning = false
-        connectNotification?.unregister()
-        connectNotification = nil
-        for entry in tracked.values {
-            entry.disconnectNotification?.unregister()
-        }
-        tracked = [:]
+        observer?.stop()
+        observer = nil
+        devices = [:]
         order = []
     }
 
-    /// Starts following `device` if it is a supported AirPods not yet tracked.
-    @discardableResult
-    private func track(_ device: IOBluetoothDevice) -> Bool {
-        guard
-            let address = device.addressString,
-            tracked[address] == nil,
-            device.airPodsProduct != nil
-        else { return false }
-        let notification = device.register(
-            forDisconnectNotification: self,
-            selector: #selector(deviceDisconnected(_:device:))
-        )
-        tracked[address] = Tracked(device: device, disconnectNotification: notification)
-        order.append(address)
-        return true
+    /// Compares the connected AirPods with the last look, and reports a change of
+    /// the current one or a new arrival.
+    private func update(isStart: Bool) {
+        guard observer != nil else { return }
+        let connected = Self.connectedAirPods()
+        let previous = order.last
+        order.removeAll { connected[$0] == nil }
+        // Several pairs arriving at once are ordered by address, so the choice of
+        // the current one is stable.
+        let arrived = connected.keys.filter { !order.contains($0) }.sorted()
+        order.append(contentsOf: arrived)
+        devices = connected
+
+        let isNewConnection = !isStart && !arrived.isEmpty
+        guard isNewConnection || order.last != previous else { return }
+        onChange(current, isNewConnection)
     }
 
-    // IOBluetooth delivers both notifications on its own queue, not on the main
-    // thread they were registered from (macOS 27 uses its coordinator queue). The
-    // device object is not Sendable, so only its address crosses to the main
-    // queue, where the device is looked up again. `DispatchQueue.main` keeps a
-    // connect and a disconnect in the order they arrived.
-
-    @objc private nonisolated func deviceConnected(_ notification: IOBluetoothUserNotification, device: IOBluetoothDevice) {
-        guard let address = device.addressString else { return }
-        DispatchQueue.main.async { [weak self] in
-            MainActor.assumeIsolated {
-                self?.connected(address: address)
-            }
+    /// Paired AirPods that have a CoreAudio output device, by address. The audio
+    /// device alone proves the connection; IOBluetooth's own connected flag may
+    /// lag behind it.
+    private static func connectedAirPods() -> [String: IOBluetoothDevice] {
+        var connected: [String: IOBluetoothDevice] = [:]
+        for case let device as IOBluetoothDevice in IOBluetoothDevice.pairedDevices() ?? [] {
+            guard
+                let address = device.addressString,
+                device.airPodsProduct != nil,
+                AirPodsAudioDevice.find(address: address, name: device.name) != nil
+            else { continue }
+            connected[address] = device
         }
-    }
-
-    @objc private nonisolated func deviceDisconnected(_ notification: IOBluetoothUserNotification, device: IOBluetoothDevice) {
-        guard let address = device.addressString else { return }
-        DispatchQueue.main.async { [weak self] in
-            MainActor.assumeIsolated {
-                self?.disconnected(address: address)
-            }
-        }
-    }
-
-    private func connected(address: String) {
-        // Also fires for devices already connected and for failed attempts.
-        guard
-            isRunning,
-            let device = IOBluetoothDevice(addressString: address),
-            device.isConnected(),
-            track(device)
-        else { return }
-        onChange(device, true)
-    }
-
-    private func disconnected(address: String) {
-        guard isRunning, let entry = tracked.removeValue(forKey: address) else { return }
-        entry.disconnectNotification?.unregister()
-        order.removeAll { $0 == address }
-        onChange(current, false)
+        return connected
     }
 }
 

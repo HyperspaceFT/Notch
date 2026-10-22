@@ -4,8 +4,39 @@ import CoreAudio
 /// The CoreAudio output device of the connected AirPods: its volume and, through
 /// private BTAudioHAL properties, its noise-control mode. Look it up again for
 /// every refresh; the audio route can appear later than the Bluetooth link.
+/// `defaultOutput()` wraps the default output device the same way, for the
+/// notice that the Mac's speakers took over.
 struct AirPodsAudioDevice {
     let device: AudioObjectID
+
+    /// The current default output device; `nil` when there is none.
+    static func defaultOutput() -> AirPodsAudioDevice? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var device = AudioObjectID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioObjectID>.size)
+        let status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &device
+        )
+        guard status == noErr, device != AudioObjectID(kAudioObjectUnknown) else { return nil }
+        return AirPodsAudioDevice(device: device)
+    }
+
+    /// The Mac's own speakers. On Apple silicon their UID is "BuiltInSpeakerDevice";
+    /// the headphone jack is a separate built-in device ("BuiltInHeadphoneOutputDevice").
+    var isBuiltInSpeaker: Bool {
+        var transport: UInt32 = 0
+        let address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyTransportType,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        guard read(address, into: &transport), transport == kAudioDeviceTransportTypeBuiltIn else { return false }
+        return string(kAudioDevicePropertyDeviceUID)?.contains("Speaker") == true
+    }
 
     /// The Bluetooth output device whose UID carries `address`, else the one named
     /// `name`; `nil` when there is none (yet).
@@ -38,6 +69,12 @@ struct AirPodsAudioDevice {
     func setVolume(_ volume: Float) {
         var value = Float32(min(max(volume, 0), 1))
         write(Self.volumeAddress, value: &value)
+    }
+
+    /// `nil` when the device has no mute control.
+    var isMuted: Bool? {
+        var value: UInt32 = 0
+        return read(Self.muteAddress, into: &value) ? value != 0 : nil
     }
 
     // MARK: Noise control (private)
@@ -73,6 +110,12 @@ struct AirPodsAudioDevice {
 
     private static let volumeAddress = AudioObjectPropertyAddress(
         mSelector: kAudioHardwareServiceDeviceProperty_VirtualMainVolume,
+        mScope: kAudioDevicePropertyScopeOutput,
+        mElement: kAudioObjectPropertyElementMain
+    )
+
+    private static let muteAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioDevicePropertyMute,
         mScope: kAudioDevicePropertyScopeOutput,
         mElement: kAudioObjectPropertyElementMain
     )
@@ -170,5 +213,54 @@ struct AirPodsAudioDevice {
     private func write<Value: BitwiseCopyable>(_ address: AudioObjectPropertyAddress, value: inout Value) -> Bool {
         var address = address
         return AudioObjectSetPropertyData(device, &address, 0, nil, UInt32(MemoryLayout<Value>.size), &value) == noErr
+    }
+}
+
+/// Calls `onChange` whenever a property of the audio system changes, such as the
+/// device list (AirPods connecting for audio or switching to another device) or
+/// the default output device.
+@MainActor
+final class AudioHardwareObserver {
+    private let address: AudioObjectPropertyAddress
+    private let onChange: @MainActor () -> Void
+    /// Removing a listener takes the very block that was added.
+    private var listener: AudioObjectPropertyListenerBlock?
+
+    init(property: AudioObjectPropertySelector, onChange: @escaping @MainActor () -> Void) {
+        address = AudioObjectPropertyAddress(
+            mSelector: property,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        self.onChange = onChange
+    }
+
+    isolated deinit {
+        stop()
+    }
+
+    /// `false` when CoreAudio refuses the listener.
+    @discardableResult
+    func start() -> Bool {
+        guard listener == nil else { return true }
+        let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            // Added with the main queue below, so it always runs on the main thread.
+            MainActor.assumeIsolated {
+                self?.onChange()
+            }
+        }
+        var address = address
+        guard AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject), &address, .main, listener
+        ) == noErr else { return false }
+        self.listener = listener
+        return true
+    }
+
+    func stop() {
+        guard let listener else { return }
+        var address = address
+        AudioObjectRemovePropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, .main, listener)
+        self.listener = nil
     }
 }
