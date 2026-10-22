@@ -124,32 +124,27 @@ private struct ExpandedIslandView: View {
     }
 
     /// Sits in the same band as the hardware notch, so the tab buttons stay clear
-    /// of it: leading tabs to its left, trailing tabs to its right. Only the
-    /// selected button has a glass background, one view that follows the selection.
+    /// of it: leading tabs to its left, trailing tabs to its right.
     private var header: some View {
-        GlassEffectContainer(spacing: 8) {
-            HStack(spacing: 0) {
-                tabButtons(.leading)
-                Spacer(minLength: model.geometry.notchRect.width)
-                tabButtons(.trailing)
-            }
-            .background {
-                if let selectedID = model.selectedTab?.id {
-                    Color.clear
-                        .glassEffect(.regular.tint(.white.opacity(0.18)), in: .circle)
-                        .matchedGeometryEffect(id: selectedID, in: tabSelection, isSource: false)
-                }
-            }
+        HStack(spacing: 0) {
+            tabButtons(.leading)
+            Spacer(minLength: model.geometry.notchRect.width)
+            tabButtons(.trailing)
         }
         .frame(height: max(model.geometry.notchRect.height, 30))
     }
 
+    /// One side's buttons. Only the selected button has a glass background: one
+    /// view per side that slides between that side's buttons, and fades out on one
+    /// side and in on the other when the selection crosses the notch.
     private func tabButtons(_ placement: NotchTabPlacement) -> some View {
-        HStack(spacing: 6) {
-            ForEach(model.tabs.filter { $0.placement == placement }) { tab in
+        let tabs = model.tabs.filter { $0.placement == placement }
+        let selectedID = model.selectedTab?.id
+        return HStack(spacing: 6) {
+            ForEach(tabs) { tab in
                 TabButton(
                     symbol: tab.symbol(),
-                    isSelected: tab.id == model.selectedTab?.id,
+                    isSelected: tab.id == selectedID,
                     help: tab.title
                 ) {
                     withAnimation(NotchTheme.tabSwitchAnimation) {
@@ -157,6 +152,15 @@ private struct ExpandedIslandView: View {
                     }
                 }
                 .matchedGeometryEffect(id: tab.id, in: tabSelection)
+            }
+        }
+        // Not inside a GlassEffectContainer: there this glass was drawn over the icons.
+        .background {
+            if let selectedID, tabs.contains(where: { $0.id == selectedID }) {
+                Color.clear
+                    .glassEffect(.regular.tint(.white.opacity(0.18)), in: .circle)
+                    .matchedGeometryEffect(id: selectedID, in: tabSelection, isSource: false)
+                    .transition(.opacity)
             }
         }
     }
