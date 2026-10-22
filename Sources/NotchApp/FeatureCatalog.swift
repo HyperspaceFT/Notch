@@ -2,6 +2,7 @@ import BatteryFeature
 import FilesFeature
 import HomeFeature
 import NotchKit
+import SystemHUDFeature
 
 /// The one place that lists enabled features. Order = tab order in the expanded
 /// panel, on each side of the notch (see `NotchFeature.tabPlacement`).
@@ -17,6 +18,7 @@ enum FeatureCatalog {
             HomeFeature(),
             FilesFeature(),
             BatteryFeature(),
+            SystemHUDFeature(),
         ]
     }
 }

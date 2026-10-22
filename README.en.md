@@ -28,6 +28,7 @@ Built-in features:
 | 🏠 Home | The first tab of the panel; shows the current time for now |
 | 📂 Files | On the left, an AirDrop zone: drop files on it to send them with AirDrop. On the right, a shelf: files dropped there can be dragged out again, or copied with the right-click **Copy** item and pasted elsewhere. With **Remove after pasting** on, files leave the shelf once they are dragged out or pasted (the originals are kept) |
 | 🔋 Battery | Plugging in the power adapter briefly shows a green charging battery left of the notch and the charge level right of it; unplugging shows a notice too. In the open panel, the battery icon right of the notch follows the charge level; its tab shows the time remaining and the battery health (maximum capacity, cycle count) |
+| 🔊 Volume & Brightness | The volume and brightness keys show Notch's own notice beside the notch instead of the system one: an icon on the left and a ring with the current level on the right; hold Option + Shift for finer steps. Needs Accessibility access (see the installation steps below), and can be turned off under **Settings…** |
 
 The interface is available in English and Simplified Chinese. It follows the system language by default, and you can switch it under **Settings…** in the right-click menu; the change applies right away. **Settings…** also has an **Open at Login** switch that starts Notch when you log in.
 
@@ -44,13 +45,16 @@ Download the latest `Notch-x.y.z.zip` from the [Releases](https://github.com/Hyp
 
 1. Unzip it and drag `Notch.app` into your Applications folder;
 2. Double-click it. The app is not notarized by Apple, so macOS blocks it and says it cannot verify the developer; click **Done**;
-3. Open **System Settings → Privacy & Security**, scroll to the bottom, click **Open Anyway**, and enter your password. It opens normally from then on.
+3. Open **System Settings → Privacy & Security**, scroll to the bottom, click **Open Anyway**, and enter your password. It opens normally from then on;
+4. On first launch macOS asks for Accessibility access (used to take over the volume and brightness keys). Click **Open System Settings** and turn Notch on in the list.
 
 Or remove the download quarantine flag in Terminal and open it directly:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Notch.app
 ```
+
+If the volume and brightness notices fall back to the system ones after an update, select Notch in **System Settings → Privacy & Security → Accessibility**, remove it with **−**, then open Notch and allow it again. The app has no formal signature, so macOS treats each new version as a different app.
 
 To quit: move the pointer onto the notch, wait for it to grow, right-click, and choose **Quit**.
 
@@ -70,7 +74,7 @@ cd Notch
 make run
 ```
 
-The built app is at `build/Notch.app` and can be opened directly.
+The built app is at `build/Notch.app` and can be opened directly. A rebuild usually invalidates the Accessibility access granted before; remove Notch from the list and allow it again as described above.
 
 Common commands:
 
@@ -102,7 +106,8 @@ Sources/
 ├── Features/        # One folder per feature, depending only on NotchKit + NotchUI
 │   ├── Battery/
 │   ├── Files/
-│   └── Home/
+│   ├── Home/
+│   └── SystemHUD/
 └── NotchApp/        # Executable entry point and settings window; FeatureCatalog.swift lists the enabled features
 Tests/               # Unit tests
 Resources/Info.plist # App info template
@@ -141,9 +146,9 @@ Write interface text with `localized(en:zh:)`, giving both the English and the C
 - [ ] 🎵 Now Playing / media controls
 - [ ] 📅 Calendar and Reminders
 - [x] 📂 File shelf (drag files onto the notch to keep them)
-- [ ] 🔊 Replace the system volume / brightness HUD
+- [x] 🔊 Replace the system volume / brightness HUD
 - [ ] 🎧 AirPods connection notice
-- [x] ⚙️ Settings window (launch at login and language for now)
+- [x] ⚙️ Settings window (launch at login, the volume/brightness HUD switch, and language for now)
 - [x] 🚀 Launch at login
 - [ ] 🔄 Automatic updates
 

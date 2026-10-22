@@ -2,6 +2,7 @@ import AppKit
 import NotchKit
 import Observation
 import SwiftUI
+import SystemHUDFeature
 
 /// The settings window: a standalone window with one toolbar tab per pane
 /// (just General for now). Built on first use and kept for later openings.
@@ -13,6 +14,7 @@ final class SettingsWindowController {
 
     func show() {
         launchAtLogin.refresh()
+        SystemHUDSettings.shared.refreshAccessibilityAccess()
         let window = window ?? makeWindow()
         // An accessory app is never active on its own; without this the window
         // would open behind the frontmost app.
@@ -23,7 +25,8 @@ final class SettingsWindowController {
     private func makeWindow() -> NSWindow {
         let general = NSHostingController(rootView: GeneralSettingsView(
             localization: .shared,
-            launchAtLogin: launchAtLogin
+            launchAtLogin: launchAtLogin,
+            systemHUD: .shared
         ))
         // The window takes the pane's ideal size.
         general.sizingOptions = [.preferredContentSize]
@@ -65,6 +68,7 @@ final class SettingsWindowController {
 private struct GeneralSettingsView: View {
     @Bindable var localization: Localization
     @Bindable var launchAtLogin: LaunchAtLogin
+    @Bindable var systemHUD: SystemHUDSettings
 
     var body: some View {
         Form {
@@ -75,6 +79,21 @@ private struct GeneralSettingsView: View {
                 }
             }
             .toggleStyle(.switch)
+            Toggle(isOn: $systemHUD.isEnabled) {
+                Text(localized(en: "Replace Volume and Brightness HUD", zh: "替换系统音量和亮度提示"))
+                if needsAccessibilityAccess {
+                    Text(localized(
+                        en: "Allow Notch in System Settings → Privacy & Security → Accessibility.",
+                        zh: "请在「系统设置 → 隐私与安全性 → 辅助功能」中允许 Notch。"
+                    ))
+                }
+            }
+            .toggleStyle(.switch)
+            if needsAccessibilityAccess {
+                Button(localized(en: "Open Accessibility Settings…", zh: "打开辅助功能设置…")) {
+                    systemHUD.requestAccessibilityAccess()
+                }
+            }
             Picker(localized(en: "Language", zh: "语言"), selection: $localization.override) {
                 Text(localized(en: "System", zh: "跟随系统"))
                     .tag(AppLanguage?.none)
@@ -88,10 +107,16 @@ private struct GeneralSettingsView: View {
         .formStyle(.grouped)
         .frame(width: 420)
         .fixedSize(horizontal: false, vertical: true)
-        // Coming back from System Settings, where the login item may have changed.
+        // Coming back from System Settings, where the login item or Accessibility access may have changed.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             launchAtLogin.refresh()
+            systemHUD.refreshAccessibilityAccess()
         }
+    }
+
+    /// The HUD is on but cannot intercept the keys until the user grants access.
+    private var needsAccessibilityAccess: Bool {
+        systemHUD.isEnabled && !systemHUD.hasAccessibilityAccess
     }
 
     /// Shown under the switch: why turning it on or off failed, or what is left to do.

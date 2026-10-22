@@ -9,6 +9,7 @@ let featureNames = [
     "Battery",
     "Files",
     "Home",
+    "SystemHUD",
 ]
 
 let featureTargets: [Target] = featureNames.map { name in
@@ -40,6 +41,7 @@ let package = Package(
         ),
         .testTarget(name: "NotchKitTests", dependencies: ["NotchKit"]),
         .testTarget(name: "NotchShellTests", dependencies: ["NotchShell", "NotchKit"]),
+        .testTarget(name: "SystemHUDFeatureTests", dependencies: ["SystemHUDFeature"]),
     ] + featureTargets,
     swiftLanguageModes: [.v6]
 )
