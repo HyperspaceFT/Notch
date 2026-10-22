@@ -35,9 +35,7 @@
 
 ## 安装（给朋友用）
 
-> 目前还没有 Release，需要自己从源码构建，见下一节。
-
-拿到 `Notch-x.y.z.zip` 后：
+到 [Releases](https://github.com/HyperspaceFT/Notch/releases) 页面下载最新的 `Notch-x.y.z.zip`，然后：
 
 1. 解压，把 `Notch.app` 拖进「应用程序」文件夹；
 2. 双击打开。因为 App 没有经过苹果公证，系统会拦截并提示「无法验证开发者」，点「完成」；
