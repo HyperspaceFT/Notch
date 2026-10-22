@@ -1,5 +1,7 @@
 # Notch
 
+**简体中文** | [English](README.en.md)
+
 > 一个运行在 macOS 刘海屏上的「灵动岛」。
 
 ![macOS 26+](https://img.shields.io/badge/macOS-26%2B-black?logo=apple)
