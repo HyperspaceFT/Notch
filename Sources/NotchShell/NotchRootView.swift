@@ -37,7 +37,12 @@ struct NotchRootView: View {
         .frame(width: model.islandSize.width, height: model.islandSize.height, alignment: .top)
         .background { shape.fill(NotchTheme.islandColor) }
         .clipShape(shape)
-        .shadow(color: .black.opacity(isExpanded ? 0.5 : 0), radius: 14, y: 6)
+        // The hovered ring casts a lighter, tighter shadow than the expanded panel.
+        .shadow(
+            color: .black.opacity(isExpanded ? 0.5 : model.isHovered ? 0.35 : 0),
+            radius: isExpanded ? 14 : 8,
+            y: isExpanded ? 6 : 4
+        )
         // The whole outline takes clicks, including the empty collapsed body.
         // The panel only passes them on while the island is hovered or expanded.
         .contentShape(shape)
