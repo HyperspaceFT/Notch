@@ -5,6 +5,7 @@
 ![macOS 26+](https://img.shields.io/badge/macOS-26%2B-black?logo=apple)
 ![Swift 6](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
 ![Heavy Vibe Coded](https://img.shields.io/badge/Heavy%20Vibe%20Coded-🤖-ff69b4)
+![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue)
 
 > [!WARNING]
 > **本项目是 Heavy Vibe Coded 的。**
@@ -144,3 +145,17 @@ NotchApp ──▶ NotchShell ──▶ NotchKit
 - [boring.notch](https://github.com/TheBoredTeam/boring.notch)
 - [NotchDrop](https://github.com/Lakr233/NotchDrop)
 - [DynamicNotchKit](https://github.com/MrKai77/DynamicNotchKit)
+
+## 许可证
+
+Copyright (C) 2026 [HyperspaceFT](https://github.com/HyperspaceFT)
+
+本项目以 [GNU 通用公共许可证第 3 版（GPL-3.0）](LICENSE) 发布，你也可以选择该许可证的任何更新版本。
+
+简单来说：
+
+- ✅ 可以自由使用、复制、修改、分发，也可以发布修改后的版本；
+- 📌 分发时必须保留原作者的版权声明，并附上本许可证；
+- 📌 发布修改版时，必须注明改了什么，并且修改版**同样要以 GPL-3.0 开源、公开完整源码**，不能闭源。
+
+以上只是通俗说明，具体条款以 [LICENSE](LICENSE) 原文为准。
