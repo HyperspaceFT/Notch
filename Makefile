@@ -1,10 +1,10 @@
 .DEFAULT_GOAL := help
-.PHONY: help build debug run test dist clean
+.PHONY: help build debug run test dist clean cert
 
 help: ## List available targets
 	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-6s %s\n", $$1, $$2}'
 
-build: ## Build release build/Notch.app (ad-hoc signed)
+build: ## Build release build/Notch.app (signed with the local certificate if any, else ad hoc)
 	@scripts/build-app.sh release
 
 debug: ## Build debug build/Notch.app
@@ -21,3 +21,6 @@ dist: build ## Zip the app into build/dist/Notch-<version>.zip
 
 clean: ## Remove .build and build
 	rm -rf .build build
+
+cert: ## Create the local signing certificate that keeps Accessibility access across builds
+	@scripts/create-signing-cert.sh

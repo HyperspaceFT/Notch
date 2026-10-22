@@ -54,7 +54,7 @@
 xattr -dr com.apple.quarantine /Applications/Notch.app
 ```
 
-更新到新版本后，如果音量和亮度提示又变回了系统自带的样式，到 **系统设置 → 隐私与安全性 → 辅助功能** 里选中 Notch，点「−」删掉，再重新打开 Notch 允许一次。App 没有正式签名，系统会把新版本当成另一个 App。
+更新到新版本后，如果音量和亮度提示又变回了系统自带的样式，到 **系统设置 → 隐私与安全性 → 辅助功能** 里选中 Notch，点「−」删掉，再重新打开 Notch 允许一次。App 没有经过苹果的正式签名，签名变了的新版本会被系统当成另一个 App。
 
 退出方法：鼠标移到刘海上，等它变大一圈后点右键，选 **退出**（英文界面下是 Quit）。
 
@@ -74,7 +74,7 @@ cd Notch
 make run
 ```
 
-构建好的 App 在 `build/Notch.app`，可以直接双击运行。重新构建后，之前给的「辅助功能」权限通常会失效，需要按上面的方法删掉 Notch 再重新允许。
+构建好的 App 在 `build/Notch.app`，可以直接双击运行。建议先执行一次 `make cert` 创建本地签名证书，否则每次重新构建后「辅助功能」权限都要重新给，见下面的 [本地签名证书](#本地签名证书)。
 
 常用命令：
 
@@ -86,6 +86,7 @@ make run
 | `make test` | 运行单元测试 |
 | `make dist` | 打包成 `build/dist/Notch-<版本号>.zip`，方便发给别人 |
 | `make clean` | 删除所有构建产物 |
+| `make cert` | 创建本地签名证书，让重新构建后「辅助功能」权限不失效 |
 
 调试时可以强制刘海停在某个状态，方便看效果；加上 `-NotchDebugSnapshot` 还能把界面导出成图片（不需要屏幕录制权限，但导出的图里没有 Liquid Glass 效果）：
 
@@ -93,6 +94,29 @@ make run
 open build/Notch.app --args -NotchDebugState expanded   # 也可以是 activity / collapsed
 open build/Notch.app --args -NotchDebugState expanded -NotchDebugSnapshot /tmp/notch.png
 ```
+
+### 本地签名证书
+
+默认情况下，构建出来的 App 只有临时签名（ad-hoc），每次构建的签名都不一样。系统会把每次构建出来的 App 当成一个新 App，之前在「辅助功能」里给的权限就失效了，得删掉再重新允许。
+
+在钥匙串里建一个本地签名证书，之后的构建都用它签名，签名就不会再变，权限也会一直保留。只需要执行一次：
+
+```bash
+make cert
+```
+
+它会：
+
+1. 生成一个名为「Notch Local Signing」的自签名代码签名证书，有效期 10 年；
+2. 把证书和私钥导入「登录」钥匙串，并允许 `codesign` 直接使用，构建时不会弹窗询问。
+
+之后 `make build`、`make debug`、`make run` 都会自动用这个证书签名，构建输出里会显示 `==> Signing (Notch Local Signing)`；钥匙串里找不到它时会退回临时签名，显示 `==> Signing (ad-hoc; …)`。
+
+这个证书只用来在本机给 Notch 签名。它是自签名的，「钥匙串访问」会把它标成「此证书不受信任」，这不影响签名，不需要改信任设置。
+
+换成证书签名后第一次运行时，需要最后一次到 **系统设置 → 隐私与安全性 → 辅助功能** 里把旧的 Notch 删掉（−）再重新允许；以后再重新构建就不用管了。
+
+不想用了：打开「钥匙串访问」，在「登录」钥匙串的「我的证书」里删掉「Notch Local Signing」，之后的构建会回到临时签名。
 
 ## 项目结构
 

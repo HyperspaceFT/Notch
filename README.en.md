@@ -54,7 +54,7 @@ Or remove the download quarantine flag in Terminal and open it directly:
 xattr -dr com.apple.quarantine /Applications/Notch.app
 ```
 
-If the volume and brightness notices fall back to the system ones after an update, select Notch in **System Settings → Privacy & Security → Accessibility**, remove it with **−**, then open Notch and allow it again. The app has no formal signature, so macOS treats each new version as a different app.
+If the volume and brightness notices fall back to the system ones after an update, select Notch in **System Settings → Privacy & Security → Accessibility**, remove it with **−**, then open Notch and allow it again. The app has no formal Apple signature, so macOS treats a new version whose signature changed as a different app.
 
 To quit: move the pointer onto the notch, wait for it to grow, right-click, and choose **Quit**.
 
@@ -74,7 +74,7 @@ cd Notch
 make run
 ```
 
-The built app is at `build/Notch.app` and can be opened directly. A rebuild usually invalidates the Accessibility access granted before; remove Notch from the list and allow it again as described above.
+The built app is at `build/Notch.app` and can be opened directly. Run `make cert` once first to create a local signing certificate; otherwise Accessibility access has to be granted again after every rebuild. See [Local signing certificate](#local-signing-certificate) below.
 
 Common commands:
 
@@ -86,6 +86,7 @@ Common commands:
 | `make test` | Run the unit tests |
 | `make dist` | Zip it into `build/dist/Notch-<version>.zip` for sharing |
 | `make clean` | Delete all build output |
+| `make cert` | Create a local signing certificate so Accessibility access survives rebuilds |
 
 For debugging you can pin the island in one state, and `-NotchDebugSnapshot` also exports the interface as an image (no Screen Recording permission needed, but the image has no Liquid Glass):
 
@@ -93,6 +94,29 @@ For debugging you can pin the island in one state, and `-NotchDebugSnapshot` als
 open build/Notch.app --args -NotchDebugState expanded   # or activity / collapsed
 open build/Notch.app --args -NotchDebugState expanded -NotchDebugSnapshot /tmp/notch.png
 ```
+
+### Local signing certificate
+
+By default a build only gets an ad-hoc signature, which differs on every build. macOS then treats each build as a new app, and the Accessibility access granted before stops working until you remove Notch and allow it again.
+
+Create a local signing certificate in your keychain once, and every later build is signed with it: the signature no longer changes, and the access stays. Run this once:
+
+```bash
+make cert
+```
+
+It:
+
+1. creates a self-signed code-signing certificate named "Notch Local Signing", valid for 10 years;
+2. imports the certificate and its private key into the login keychain and lets `codesign` use them without asking during builds.
+
+From then on `make build`, `make debug`, and `make run` sign with it, and the build output shows `==> Signing (Notch Local Signing)`. Without it in the keychain, builds fall back to an ad-hoc signature and show `==> Signing (ad-hoc; …)`.
+
+The certificate is only for signing Notch on this Mac. Because it is self-signed, Keychain Access marks it as "not trusted"; that does not affect signing, and no trust settings need changing.
+
+On the first run after switching to the certificate, remove the old Notch from **System Settings → Privacy & Security → Accessibility** with **−** and allow it again one last time. Later rebuilds keep the access.
+
+To stop using it, open Keychain Access and delete "Notch Local Signing" from My Certificates in the login keychain; later builds go back to ad-hoc signatures.
 
 ## Project structure
 

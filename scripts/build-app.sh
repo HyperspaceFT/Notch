@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Builds the Swift package and assembles an ad-hoc signed build/Notch.app.
+# Builds the Swift package and assembles a signed build/Notch.app: with the local
+# certificate from scripts/create-signing-cert.sh when it is in the keychain,
+# ad hoc otherwise.
 #
 # Usage: scripts/build-app.sh [debug|release]   (default: release)
 # Env:   BUILD_NUMBER overrides CFBundleVersion (default: git commit count, else 1).
+#        SIGN_IDENTITY overrides the certificate name (default: Notch Local Signing).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -35,8 +38,17 @@ plutil -replace CFBundleShortVersionString -string "$VERSION" "$APP/Contents/Inf
 plutil -replace CFBundleVersion -string "$BUILD_NUMBER" "$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
 
-echo "==> Signing (ad-hoc)"
-codesign --force --sign - "$APP"
+# An ad-hoc signature changes with every build, and macOS then treats the app as
+# new and drops its Accessibility access; a certificate's signature stays the same.
+# Listed without -v: the self-signed certificate is untrusted, which signing allows.
+SIGN_IDENTITY="${SIGN_IDENTITY:-Notch Local Signing}"
+if security find-identity -p codesigning 2>/dev/null | grep -qF "\"$SIGN_IDENTITY\""; then
+    echo "==> Signing ($SIGN_IDENTITY)"
+    codesign --force --sign "$SIGN_IDENTITY" "$APP"
+else
+    echo "==> Signing (ad-hoc; run 'make cert' to keep Accessibility access across builds)"
+    codesign --force --sign - "$APP"
+fi
 codesign --verify --verbose "$APP"
 
 echo "$APP"
