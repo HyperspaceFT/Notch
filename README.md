@@ -27,6 +27,8 @@
 | 📂 文件 | 左边是隔空投送区，把文件拖进去即可用 AirDrop 发送；右边是文件暂存区，拖进来的文件可以再拖出去或右键「拷贝」后粘贴。打开「粘贴后自动删除文件」后，文件被拖出或粘贴后会自动从暂存区移除（不会删除原文件） |
 | 🔋 电池 | 插拔电源时，刘海两侧短暂弹出充电提示；展开后刘海右侧的电池图标随电量变化，点开可以看到剩余时间和电池健康（最大容量、循环次数） |
 
+界面支持简体中文和英文，默认跟随系统语言；也可以在右键菜单的「设置…」里切换，切换后立即生效。
+
 更多功能见下面的 [路线图](#路线图)。
 
 ## 系统要求
@@ -48,7 +50,7 @@
 xattr -dr com.apple.quarantine /Applications/Notch.app
 ```
 
-退出方法：鼠标移到刘海上，等它变大一圈后点右键，选 **Quit**。
+退出方法：鼠标移到刘海上，等它变大一圈后点右键，选 **退出**（英文界面下是 Quit）。
 
 ## 从源码构建
 
@@ -92,14 +94,14 @@ open build/Notch.app --args -NotchDebugState expanded -NotchDebugSnapshot /tmp/n
 
 ```
 Sources/
-├── NotchKit/        # 功能模块的「接口」：NotchFeature 协议、NotchActivity、NotchContext
+├── NotchKit/        # 功能模块的「接口」：NotchFeature 协议、NotchActivity、NotchContext、界面语言
 ├── NotchUI/         # 设计系统：刘海形状、主题、动画、Liquid Glass 按钮等通用组件
 ├── NotchShell/      # 外壳：窗口、屏幕/刘海定位、鼠标悬停、状态机、根视图
 ├── Features/        # 各个功能，每个功能一个文件夹，只依赖 NotchKit + NotchUI
 │   ├── Battery/
 │   ├── Files/
 │   └── Home/
-└── NotchApp/        # 可执行入口；FeatureCatalog.swift 是启用功能的唯一清单
+└── NotchApp/        # 可执行入口、设置窗口；FeatureCatalog.swift 是启用功能的唯一清单
 Tests/               # 单元测试
 Resources/Info.plist # App 信息模板
 scripts/             # 构建、运行、打包脚本
@@ -118,7 +120,7 @@ NotchApp ──▶ NotchShell ──▶ NotchKit
 - **activity**：某个功能发出「实时活动」时，刘海向两侧延伸，左右显示内容（比如充电提示）；
 - **expanded**：点击刘海后展开，顶部是各功能的标签页（主页、文件在刘海左侧，电池在右侧），下面是当前功能的内容。
 
-鼠标停在 collapsed 或 activity 状态的刘海上时，刘海会带一点回弹地放大一圈（hovered），这时点击展开，右键弹出 Settings… / Quit 菜单。
+鼠标停在 collapsed 或 activity 状态的刘海上时，刘海会带一点回弹地放大一圈（hovered），这时点击展开，右键弹出「设置…」/「退出」菜单。
 
 ## 添加新功能
 
@@ -130,6 +132,8 @@ NotchApp ──▶ NotchShell ──▶ NotchKit
 
 功能可以通过 `NotchContext` 和外壳交互，比如 `present(_:)` 发出一个实时活动、`dismiss(activityID:)` 收回它。具体写法可以参照 `Sources/Features/Battery`。
 
+界面文字用 `localized(en:zh:)` 同时写出英文和中文，并在视图绘制时读取（比如 `title` 写成计算属性），这样切换语言后会立即刷新。
+
 ## 路线图
 
 - [ ] 🎵 正在播放 / 媒体控制
@@ -137,7 +141,8 @@ NotchApp ──▶ NotchShell ──▶ NotchKit
 - [x] 📂 文件中转架（拖文件到刘海暂存）
 - [ ] 🔊 替换系统音量 / 亮度提示
 - [ ] 🎧 AirPods 连接提示
-- [ ] ⚙️ 设置面板、开机自启
+- [x] ⚙️ 设置面板（目前只有语言选项）
+- [ ] 🚀 开机自启
 - [ ] 🔄 自动更新
 
 ## 致谢

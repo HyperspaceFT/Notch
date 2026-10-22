@@ -2,12 +2,12 @@ import NotchKit
 import NotchUI
 import SwiftUI
 
-/// "主页" tab, the first one in the expanded panel. For now it shows only the
+/// Home tab, the first one in the expanded panel. For now it shows only the
 /// live time. No activities.
 @MainActor
 public final class HomeFeature: NotchFeature {
     public let id = "home"
-    public let title = "主页"
+    public var title: String { localized(en: "Home", zh: "主页") }
     public let symbol = "house"
 
     public init() {}

@@ -30,7 +30,7 @@ final class FeatureHost {
             feature.makeExpandedView().map { view in
                 NotchViewModel.Tab(
                     id: feature.id,
-                    title: feature.title,
+                    title: { feature.title },
                     symbol: { feature.symbol },
                     placement: feature.tabPlacement,
                     opensOnDrag: feature.opensOnDrag,

@@ -1,4 +1,5 @@
 import AppKit
+import NotchKit
 import SwiftUI
 
 /// An AppKit overlay on a shelf item that drags the file out and shows its context
@@ -68,9 +69,9 @@ final class ShelfItemDragNSView: NSView {
         guard item != nil else { return nil }
         let menu = NSMenu()
         for (title, action) in [
-            ("拷贝", #selector(copyItem)),
-            ("在访达中显示", #selector(revealItem)),
-            ("移除", #selector(removeItem)),
+            (localized(en: "Copy", zh: "拷贝"), #selector(copyItem)),
+            (localized(en: "Show in Finder", zh: "在访达中显示"), #selector(revealItem)),
+            (localized(en: "Remove", zh: "移除"), #selector(removeItem)),
         ] {
             let menuItem = NSMenuItem(title: title, action: action, keyEquivalent: "")
             menuItem.target = self

@@ -38,6 +38,7 @@ let package = Package(
             dependencies: ["NotchKit", "NotchShell"]
                 + featureNames.map { .target(name: "\($0)Feature") }
         ),
+        .testTarget(name: "NotchKitTests", dependencies: ["NotchKit"]),
         .testTarget(name: "NotchShellTests", dependencies: ["NotchShell", "NotchKit"]),
     ] + featureTargets,
     swiftLanguageModes: [.v6]

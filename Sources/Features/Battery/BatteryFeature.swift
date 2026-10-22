@@ -9,7 +9,7 @@ import SwiftUI
 @MainActor
 public final class BatteryFeature: NotchFeature {
     public let id = "battery"
-    public let title = "电池"
+    public var title: String { localized(en: "Battery", zh: "电池") }
     /// Follows the charge level, so the header button doubles as a battery gauge.
     public var symbol: String { model.status?.symbolName ?? "battery.75percent" }
     public let tabPlacement = NotchTabPlacement.trailing
@@ -95,6 +95,8 @@ final class BatteryModel {
     }
 }
 
+// Main actor: the strings follow the interface language.
+@MainActor
 extension PowerStatus {
     /// SF Symbol matching the charge level (bolt variant while on AC power).
     var symbolName: String {
@@ -115,38 +117,49 @@ extension PowerStatus {
 
     /// Title of the remaining-time card; its headline counts down to full while charging.
     var remainingTitle: String {
-        isCharging ? "充满还需" : "剩余时间"
+        isCharging ? localized(en: "Until Full", zh: "充满还需") : localized(en: "Time Remaining", zh: "剩余时间")
     }
 
     /// The time left, or the power state when there is no time to show.
     var remainingHeadline: String {
-        if isCharging { return minutesToFull.map(Self.format) ?? "正在估算…" }
-        if isOnACPower { return "已接通电源" }
-        return minutesToEmpty.map(Self.format) ?? "正在估算…"
+        let estimating = localized(en: "Estimating…", zh: "正在估算…")
+        if isCharging { return minutesToFull.map(Self.format) ?? estimating }
+        if isOnACPower { return localized(en: "Plugged In", zh: "已接通电源") }
+        return minutesToEmpty.map(Self.format) ?? estimating
     }
 
     var remainingCaption: String {
-        let level = "电量 \(percent)%"
-        if isCharging { return "正在充电 · \(level)" }
-        if isOnACPower { return "\(isCharged ? "已充满" : "未在充电") · \(level)" }
-        return "使用电池 · \(level)"
+        let level = localized(en: "\(percent)% charged", zh: "电量 \(percent)%")
+        if isCharging { return "\(localized(en: "Charging", zh: "正在充电")) · \(level)" }
+        if isOnACPower {
+            let state = isCharged
+                ? localized(en: "Fully Charged", zh: "已充满")
+                : localized(en: "Not Charging", zh: "未在充电")
+            return "\(state) · \(level)"
+        }
+        return "\(localized(en: "On Battery", zh: "使用电池")) · \(level)"
     }
 
     private static func format(minutes: Int) -> String {
         let hours = minutes / 60
         let rest = minutes % 60
-        return hours > 0 ? "\(hours) 小时 \(rest) 分钟" : "\(rest) 分钟"
+        return hours > 0
+            ? localized(en: "\(hours) hr \(rest) min", zh: "\(hours) 小时 \(rest) 分钟")
+            : localized(en: "\(rest) min", zh: "\(rest) 分钟")
     }
 }
 
+@MainActor
 extension BatteryHealth {
     var summary: String {
         var parts: [String] = []
         if let isNormal {
-            parts.append(isNormal ? "状态正常" : "建议维修")
+            parts.append(isNormal
+                ? localized(en: "Normal", zh: "状态正常")
+                : localized(en: "Service Recommended", zh: "建议维修"))
         }
         if let cycleCount {
-            parts.append("循环 \(cycleCount) 次")
+            parts.append(localized(en: "\(cycleCount) cycles", zh: "循环 \(cycleCount) 次"))
         }
         return parts.joined(separator: " · ")
     }
@@ -191,14 +204,14 @@ private struct BatteryExpandedView: View {
                     }
                     .animation(.smooth, value: status)
                 }
-                NotchCard(title: "电池健康") {
+                NotchCard(title: localized(en: "Battery Health", zh: "电池健康")) {
                     BatteryHealthView(health: model.health, isReading: model.isReadingHealth)
                 }
             }
             .onAppear { model.refreshHealth() }
         } else {
-            NotchCard(title: "电池") {
-                Text("这台 Mac 没有内置电池")
+            NotchCard(title: localized(en: "Battery", zh: "电池")) {
+                Text(localized(en: "This Mac has no built-in battery", zh: "这台 Mac 没有内置电池"))
                     .font(.system(size: 12))
                     .foregroundStyle(NotchTheme.secondaryText)
             }
@@ -217,7 +230,7 @@ private struct BatteryHealthView: View {
                     Text(health.maximumCapacity.map { "\($0)%" } ?? "—")
                         .font(.system(size: 22, weight: .semibold, design: .rounded))
                         .monospacedDigit()
-                    Text("最大容量")
+                    Text(localized(en: "Maximum Capacity", zh: "最大容量"))
                         .font(.system(size: 12))
                         .foregroundStyle(NotchTheme.secondaryText)
                 }
@@ -225,7 +238,7 @@ private struct BatteryHealthView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(NotchTheme.secondaryText)
             } else {
-                Text(isReading ? "正在读取…" : "无法读取")
+                Text(isReading ? localized(en: "Reading…", zh: "正在读取…") : localized(en: "Unavailable", zh: "无法读取"))
                     .font(.system(size: 12))
                     .foregroundStyle(NotchTheme.secondaryText)
             }

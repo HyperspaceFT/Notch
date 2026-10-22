@@ -13,7 +13,8 @@ import SwiftUI
 public protocol NotchFeature: AnyObject {
     /// Stable identifier, e.g. "battery". Used for activity ownership and tab selection.
     var id: String { get }
-    /// Display name shown to the user (may be localized, e.g. "电池").
+    /// Display name shown to the user, e.g. `localized(en: "Battery", zh: "电池")`.
+    /// Read while the panel draws, so it follows the interface language.
     var title: String { get }
     /// SF Symbol name used for the feature's tab in the expanded panel. Read while
     /// the panel draws, so it may follow observable state (e.g. the charge level).

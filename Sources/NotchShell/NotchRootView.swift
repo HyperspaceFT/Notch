@@ -6,6 +6,8 @@ import SwiftUI
 /// Root of the panel: the island, pinned to the top center of the fixed-size panel.
 struct NotchRootView: View {
     let model: NotchViewModel
+    /// Opens the settings window; the app owns it.
+    let openSettings: () -> Void
 
     var body: some View {
         let shape = NotchShape(
@@ -52,10 +54,9 @@ struct NotchRootView: View {
             including: isExpanded ? .subviews : .all
         )
         .contextMenu {
-            // Placeholder: there is no settings panel yet.
-            Button("Settings…", systemImage: "gearshape") {}
+            Button(localized(en: "Settings…", zh: "设置…"), systemImage: "gearshape", action: openSettings)
             Divider()
-            Button("Quit", systemImage: "power") {
+            Button(localized(en: "Quit", zh: "退出"), systemImage: "power") {
                 NSApp.terminate(nil)
             }
         }
@@ -145,7 +146,7 @@ private struct ExpandedIslandView: View {
                 TabButton(
                     symbol: tab.symbol(),
                     isSelected: tab.id == selectedID,
-                    help: tab.title
+                    help: tab.title()
                 ) {
                     withAnimation(NotchTheme.tabSwitchAnimation) {
                         model.selectedTabID = tab.id
@@ -171,7 +172,7 @@ private struct ExpandedIslandView: View {
     private var content: some View {
         let tabs = orderedTabs
         if tabs.isEmpty {
-            Text("没有可显示的内容")
+            Text(localized(en: "Nothing to show", zh: "没有可显示的内容"))
                 .font(.system(size: 12))
                 .foregroundStyle(NotchTheme.secondaryText)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -28,7 +28,8 @@ final class NotchViewModel {
 
     struct Tab: Identifiable {
         let id: String
-        let title: String
+        /// Read while the header draws, so it can follow the interface language.
+        let title: @MainActor () -> String
         /// Read while the header draws, so it can follow the feature's observable state.
         let symbol: @MainActor () -> String
         let placement: NotchTabPlacement
@@ -37,7 +38,7 @@ final class NotchViewModel {
 
         init(
             id: String,
-            title: String,
+            title: @escaping @MainActor () -> String,
             symbol: @escaping @MainActor () -> String,
             placement: NotchTabPlacement = .leading,
             opensOnDrag: Bool = false,

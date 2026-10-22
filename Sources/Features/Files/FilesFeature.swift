@@ -9,7 +9,7 @@ import UniformTypeIdentifiers
 @MainActor
 public final class FilesFeature: NotchFeature {
     public let id = "files"
-    public let title = "文件"
+    public var title: String { localized(en: "Files", zh: "文件") }
     public let symbol = "folder"
     public let opensOnDrag = true
 
@@ -45,18 +45,21 @@ private struct ShelfCard: View {
     var body: some View {
         NotchCard {
             HStack {
-                Text("文件暂存")
+                Text(localized(en: "Shelf", zh: "文件暂存"))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(NotchTheme.secondaryText)
                 Spacer()
-                Toggle("粘贴后自动删除文件", isOn: $shelf.removesAfterPaste)
+                Toggle(localized(en: "Remove after pasting", zh: "粘贴后自动删除文件"), isOn: $shelf.removesAfterPaste)
                     .toggleStyle(.notchSwitch)
                     .font(.system(size: 11))
                     .foregroundStyle(NotchTheme.secondaryText)
-                    .help("文件被拖出或粘贴到别处后，自动从暂存区移除（不会删除原文件）")
+                    .help(localized(
+                        en: "Removes files from the shelf once they are dragged out or pasted elsewhere (the originals are kept)",
+                        zh: "文件被拖出或粘贴到别处后，自动从暂存区移除（不会删除原文件）"
+                    ))
             }
             if shelf.items.isEmpty {
-                Text("把文件拖到这里暂存")
+                Text(localized(en: "Drop files here to keep them handy", zh: "把文件拖到这里暂存"))
                     .font(.system(size: 12))
                     .foregroundStyle(NotchTheme.secondaryText)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

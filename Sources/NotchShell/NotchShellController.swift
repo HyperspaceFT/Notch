@@ -24,6 +24,9 @@ public final class NotchShellController {
     private var featureHost: FeatureHost?
     private let screenLocator = ScreenLocator()
 
+    /// Called from the island's right-click menu to open the settings window.
+    public var onOpenSettings: () -> Void = {}
+
     public init() {}
 
     public func start(features: [any NotchFeature]) {
@@ -41,7 +44,9 @@ public final class NotchShellController {
         self.model = model
 
         let panel = NotchPanel(contentRect: geometry.topCenteredRect(size: NotchTheme.panelSize))
-        let hostingView = NotchHostingView(rootView: NotchRootView(model: model))
+        let hostingView = NotchHostingView(rootView: NotchRootView(model: model) { [weak self] in
+            self?.onOpenSettings()
+        })
         // The panel has a fixed size; the SwiftUI content must not resize it.
         hostingView.sizingOptions = []
         hostingView.safeAreaRegions = []

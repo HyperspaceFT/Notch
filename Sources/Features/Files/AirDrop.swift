@@ -1,4 +1,5 @@
 import AppKit
+import NotchKit
 import NotchUI
 import Observation
 import SwiftUI
@@ -13,9 +14,9 @@ struct AirDropZone: View {
             VStack(spacing: 6) {
                 Image(systemName: "dot.radiowaves.left.and.right")
                     .font(.system(size: 26, weight: .regular))
-                Text("隔空投送")
+                Text(localized(en: "AirDrop", zh: "隔空投送"))
                     .font(.system(size: 12, weight: .semibold))
-                Text("拖到这里发送")
+                Text(localized(en: "Drop here to send", zh: "拖到这里发送"))
                     .font(.system(size: 10))
                     .foregroundStyle(NotchTheme.secondaryText)
             }
