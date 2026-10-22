@@ -85,8 +85,6 @@ final class AirPodsMonitor: NSObject {
     func start() {
         guard !isRunning else { return }
         isRunning = true
-        // Registered from the main thread, so IOBluetooth delivers both kinds of
-        // notification on the main run loop.
         connectNotification = IOBluetoothDevice.register(
             forConnectNotifications: self,
             selector: #selector(deviceConnected(_:device:))
@@ -128,20 +126,43 @@ final class AirPodsMonitor: NSObject {
         return true
     }
 
-    // Main-actor isolated: the notifications were registered from the main thread
-    // (see `start()`), so IOBluetooth delivers them on the main run loop. The
-    // device argument is not Sendable, so it cannot enter `MainActor.assumeIsolated`
-    // from a nonisolated method; the @objc entry point checks the isolation at
-    // runtime instead.
+    // IOBluetooth delivers both notifications on its own queue, not on the main
+    // thread they were registered from (macOS 27 uses its coordinator queue). The
+    // device object is not Sendable, so only its address crosses to the main
+    // queue, where the device is looked up again. `DispatchQueue.main` keeps a
+    // connect and a disconnect in the order they arrived.
 
-    @objc private func deviceConnected(_ notification: IOBluetoothUserNotification, device: IOBluetoothDevice) {
+    @objc private nonisolated func deviceConnected(_ notification: IOBluetoothUserNotification, device: IOBluetoothDevice) {
+        guard let address = device.addressString else { return }
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                self?.connected(address: address)
+            }
+        }
+    }
+
+    @objc private nonisolated func deviceDisconnected(_ notification: IOBluetoothUserNotification, device: IOBluetoothDevice) {
+        guard let address = device.addressString else { return }
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                self?.disconnected(address: address)
+            }
+        }
+    }
+
+    private func connected(address: String) {
         // Also fires for devices already connected and for failed attempts.
-        guard isRunning, device.isConnected(), track(device) else { return }
+        guard
+            isRunning,
+            let device = IOBluetoothDevice(addressString: address),
+            device.isConnected(),
+            track(device)
+        else { return }
         onChange(device, true)
     }
 
-    @objc private func deviceDisconnected(_ notification: IOBluetoothUserNotification, device: IOBluetoothDevice) {
-        guard isRunning, let address = device.addressString, let entry = tracked.removeValue(forKey: address) else { return }
+    private func disconnected(address: String) {
+        guard isRunning, let entry = tracked.removeValue(forKey: address) else { return }
         entry.disconnectNotification?.unregister()
         order.removeAll { $0 == address }
         onChange(current, false)
