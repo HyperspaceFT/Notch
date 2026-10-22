@@ -186,4 +186,83 @@ struct NotchViewModelTests {
         #expect(model.state == .expanded)
         #expect(model.selectedTabID == "battery")
     }
+
+    /// Lets a test show and hide a tab after it is set, as a feature's observable state would.
+    private final class Availability {
+        var isAvailable: Bool
+
+        init(_ isAvailable: Bool) {
+            self.isAvailable = isAvailable
+        }
+    }
+
+    @Test func hiddenTabIsNotVisible() {
+        let airPods = Availability(false)
+        model.setTabs([
+            .init(id: "airpods", title: { "AirPods" }, symbol: { "airpods" }, isAvailable: { airPods.isAvailable }, content: AnyView(EmptyView())),
+            .init(id: "home", title: { "主页" }, symbol: { "house" }, content: AnyView(EmptyView())),
+        ])
+        #expect(model.visibleTabs.map(\.id) == ["home"])
+
+        airPods.isAvailable = true
+        #expect(model.visibleTabs.map(\.id) == ["airpods", "home"])
+    }
+
+    @Test func defaultSelectionSkipsAHiddenFirstTab() {
+        let airPods = Availability(false)
+        model.setTabs([
+            .init(id: "airpods", title: { "AirPods" }, symbol: { "airpods" }, isAvailable: { airPods.isAvailable }, content: AnyView(EmptyView())),
+            .init(id: "home", title: { "主页" }, symbol: { "house" }, content: AnyView(EmptyView())),
+        ])
+        #expect(model.selectedTabID == "home")
+
+        // Showing up later leaves the selection where it is.
+        airPods.isAvailable = true
+        #expect(model.selectedTab?.id == "home")
+    }
+
+    @Test func selectionFallsBackWhileItsTabIsHiddenAndReturnsWhenShown() {
+        let airPods = Availability(true)
+        model.setTabs([
+            .init(id: "home", title: { "主页" }, symbol: { "house" }, content: AnyView(EmptyView())),
+            .init(id: "airpods", title: { "AirPods" }, symbol: { "airpods" }, isAvailable: { airPods.isAvailable }, content: AnyView(EmptyView())),
+            .init(id: "battery", title: { "电池" }, symbol: { "battery.75percent" }, placement: .trailing, content: AnyView(EmptyView())),
+        ])
+        model.selectedTabID = "airpods"
+        #expect(model.selectedTab?.id == "airpods")
+
+        airPods.isAvailable = false
+        #expect(model.selectedTab?.id == "home")
+        #expect(model.selectedTabID == "airpods")
+
+        airPods.isAvailable = true
+        #expect(model.selectedTab?.id == "airpods")
+    }
+
+    @Test func requestExpandIgnoresAHiddenTab() {
+        let airPods = Availability(false)
+        model.setTabs([
+            .init(id: "home", title: { "主页" }, symbol: { "house" }, content: AnyView(EmptyView())),
+            .init(id: "airpods", title: { "AirPods" }, symbol: { "airpods" }, isAvailable: { airPods.isAvailable }, content: AnyView(EmptyView())),
+        ])
+        #expect(model.selectedTabID == "home")
+
+        model.requestExpand(tabID: "airpods")
+        #expect(model.state == .expanded)
+        #expect(model.selectedTabID == "home")
+        #expect(model.selectedTab?.id == "home")
+    }
+
+    @Test func dragSkipsAHiddenTabThatTakesDrops() {
+        let files = Availability(false)
+        model.setTabs([
+            .init(id: "home", title: { "主页" }, symbol: { "house" }, content: AnyView(EmptyView())),
+            .init(id: "files", title: { "文件" }, symbol: { "folder" }, opensOnDrag: true, isAvailable: { files.isAvailable }, content: AnyView(EmptyView())),
+            .init(id: "shelf", title: { "架子" }, symbol: { "tray" }, opensOnDrag: true, content: AnyView(EmptyView())),
+        ])
+
+        model.expandForDrop()
+        #expect(model.state == .expanded)
+        #expect(model.selectedTabID == "shelf")
+    }
 }

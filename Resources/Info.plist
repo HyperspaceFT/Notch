@@ -34,6 +34,8 @@
 	<string>26.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Notch uses Bluetooth to show your AirPods' connection, battery, and controls in the notch.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 </dict>

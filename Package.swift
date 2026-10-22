@@ -6,6 +6,7 @@ import PackageDescription
 // NotchKit and NotchUI. To add a feature: create the folder, add its name here,
 // and list an instance in Sources/NotchApp/FeatureCatalog.swift.
 let featureNames = [
+    "AirPods",
     "Battery",
     "Files",
     "Home",
@@ -42,6 +43,7 @@ let package = Package(
         .testTarget(name: "NotchKitTests", dependencies: ["NotchKit"]),
         .testTarget(name: "NotchShellTests", dependencies: ["NotchShell", "NotchKit"]),
         .testTarget(name: "SystemHUDFeatureTests", dependencies: ["SystemHUDFeature"]),
+        .testTarget(name: "AirPodsFeatureTests", dependencies: ["AirPodsFeature"]),
     ] + featureTargets,
     swiftLanguageModes: [.v6]
 )

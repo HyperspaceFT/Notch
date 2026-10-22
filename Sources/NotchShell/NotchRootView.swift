@@ -109,9 +109,10 @@ private struct ExpandedIslandView: View {
     /// Shared by the tab buttons and the selection highlight that slides between them.
     @Namespace private var tabSelection
 
-    /// Tabs in header order, left to right.
+    /// Visible tabs in header order, left to right.
     private var orderedTabs: [NotchViewModel.Tab] {
-        model.tabs.filter { $0.placement == .leading } + model.tabs.filter { $0.placement == .trailing }
+        let tabs = model.visibleTabs
+        return tabs.filter { $0.placement == .leading } + tabs.filter { $0.placement == .trailing }
     }
 
     var body: some View {
@@ -139,7 +140,7 @@ private struct ExpandedIslandView: View {
     /// view per side that slides between that side's buttons, and fades out on one
     /// side and in on the other when the selection crosses the notch.
     private func tabButtons(_ placement: NotchTabPlacement) -> some View {
-        let tabs = model.tabs.filter { $0.placement == placement }
+        let tabs = model.visibleTabs.filter { $0.placement == placement }
         let selectedID = model.selectedTab?.id
         return HStack(spacing: 6) {
             ForEach(tabs) { tab in

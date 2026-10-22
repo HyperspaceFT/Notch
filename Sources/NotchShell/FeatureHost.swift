@@ -34,6 +34,7 @@ final class FeatureHost {
                     symbol: { feature.symbol },
                     placement: feature.tabPlacement,
                     opensOnDrag: feature.opensOnDrag,
+                    isAvailable: { feature.isTabAvailable },
                     content: view
                 )
             }

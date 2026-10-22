@@ -25,7 +25,8 @@ Built-in features:
 
 | Feature | Description |
 |---|---|
-| 🏠 Home | The first tab of the panel; shows the current time for now |
+| 🎧 AirPods | Connecting AirPods briefly shows an AirPods icon left of the notch and the battery level right of it. While they are connected, an AirPods tab appears at the far left of the open panel: it shows the left, right, and case battery levels and adjusts the AirPods' volume and noise-control mode (Noise Cancellation / Transparency / Adaptive, depending on the model). macOS's own connection notice cannot be hidden and still appears. Needs Bluetooth access; noise control uses undocumented system interfaces and may stop working after a macOS update |
+| 🏠 Home | The home tab of the panel; shows the current time for now |
 | 📂 Files | On the left, an AirDrop zone: drop files on it to send them with AirDrop. On the right, a shelf: files dropped there can be dragged out again, or copied with the right-click **Copy** item and pasted elsewhere. With **Remove after pasting** on, files leave the shelf once they are dragged out or pasted (the originals are kept) |
 | 🔋 Battery | Plugging in the power adapter briefly shows a green charging battery left of the notch and the charge level right of it; unplugging shows a notice too. In the open panel, the battery icon right of the notch follows the charge level; its tab shows the time remaining and the battery health (maximum capacity, cycle count) |
 | 🔊 Volume & Brightness | The volume and brightness keys show Notch's own notice beside the notch instead of the system one: an icon on the left and a ring with the current level on the right; hold Option + Shift for finer steps. Needs Accessibility access (see the installation steps below), and can be turned off in the **Island** pane of **Settings…** |
@@ -46,7 +47,7 @@ Download the latest `Notch-x.y.z.zip` from the [Releases](https://github.com/Hyp
 1. Unzip it and drag `Notch.app` into your Applications folder;
 2. Double-click it. The app is not notarized by Apple, so macOS blocks it and says it cannot verify the developer; click **Done**;
 3. Open **System Settings → Privacy & Security**, scroll to the bottom, click **Open Anyway**, and enter your password. It opens normally from then on;
-4. On first launch macOS asks for Accessibility access (used to take over the volume and brightness keys). Click **Open System Settings** and turn Notch on in the list.
+4. On first launch macOS asks for Accessibility access (used to take over the volume and brightness keys). Click **Open System Settings** and turn Notch on in the list. It also asks for Bluetooth access (used to show your AirPods' connection and battery); click **Allow**.
 
 Or remove the download quarantine flag in Terminal and open it directly:
 
@@ -149,7 +150,7 @@ The island has three states:
 
 - **collapsed**: exactly the size of the hardware notch, so it is invisible;
 - **activity**: when a feature presents a live activity, the island extends to both sides and shows content there (such as the charging notice);
-- **expanded**: after a click, the panel opens with the features' tabs along the top (Home and Files left of the notch, Battery right of it) and the selected feature's content below.
+- **expanded**: after a click, the panel opens with the features' tabs along the top (AirPods while connected, Home, and Files left of the notch, Battery right of it) and the selected feature's content below.
 
 While the pointer rests on the collapsed or activity island, it grows a little with a slight bounce (hovered). A click then opens it, and a right-click shows the **Settings…** / **Quit** menu.
 
@@ -159,7 +160,7 @@ A new feature takes three steps:
 
 1. Create a folder `Sources/Features/<Name>/` with a class that conforms to `NotchFeature`;
 2. Add `"<Name>"` to the `featureNames` array in `Package.swift`; this generates a `<Name>Feature` module and links it into the app;
-3. In `Sources/NotchApp/FeatureCatalog.swift`, `import <Name>Feature` and add an instance to the list. The list order is the tab order in the open panel; tabs sit left of the notch by default, and setting `tabPlacement` to `.trailing` puts them on the right.
+3. In `Sources/NotchApp/FeatureCatalog.swift`, `import <Name>Feature` and add an instance to the list. The list order is the tab order in the open panel; tabs sit left of the notch by default, and setting `tabPlacement` to `.trailing` puts them on the right; while `isTabAvailable` is `false` the tab is hidden (for example, AirPods while they are not connected).
 
 Features talk to the shell through `NotchContext`, e.g. `present(_:)` shows a live activity and `dismiss(activityID:)` removes it. See `Sources/Features/Battery` for an example.
 
@@ -171,7 +172,7 @@ Write interface text with `localized(en:zh:)`, giving both the English and the C
 - [ ] 📅 Calendar and Reminders
 - [x] 📂 File shelf (drag files onto the notch to keep them)
 - [x] 🔊 Replace the system volume / brightness HUD
-- [ ] 🎧 AirPods connection notice
+- [x] 🎧 AirPods connection notice and headphone settings (battery, volume, noise control)
 - [x] ⚙️ Settings window (launch at login, the volume/brightness HUD switch, and language for now)
 - [x] 🚀 Launch at login
 - [ ] 🔄 Automatic updates

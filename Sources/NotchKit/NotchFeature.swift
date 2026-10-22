@@ -19,6 +19,9 @@ public protocol NotchFeature: AnyObject {
     /// SF Symbol name used for the feature's tab in the expanded panel. Read while
     /// the panel draws, so it may follow observable state (e.g. the charge level).
     var symbol: String { get }
+    /// Whether the feature's tab shows in the expanded panel. Read while the panel
+    /// draws, so it may follow observable state (e.g. a device being connected).
+    var isTabAvailable: Bool { get }
     /// Which side of the hardware notch the feature's tab button sits on.
     var tabPlacement: NotchTabPlacement { get }
     /// Whether content (such as files) dragged onto the notch opens the island on
@@ -45,6 +48,7 @@ public enum NotchTabPlacement: Sendable {
 extension NotchFeature {
     public var tabPlacement: NotchTabPlacement { .leading }
     public var opensOnDrag: Bool { false }
+    public var isTabAvailable: Bool { true }
     public func activate(context: any NotchContext) {}
     public func deactivate() {}
     public func makeExpandedView() -> AnyView? { nil }

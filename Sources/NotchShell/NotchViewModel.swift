@@ -10,7 +10,8 @@ import SwiftUI
 /// - `.collapsed`: island exactly covers the hardware notch.
 /// - `.activity`: the top-priority activity is shown as wings beside the notch.
 /// - `.expanded`: the full panel with feature tabs (a click on the hovered
-///   island, content dragged onto the notch, or `requestExpand`).
+///   island, content dragged onto the notch, or `requestExpand`). Only tabs
+///   whose `isAvailable` is true show (`visibleTabs`).
 ///
 /// Expansion always wins over activities; activities keep their queue and
 /// timers while expanded and reappear on collapse.
@@ -34,6 +35,9 @@ final class NotchViewModel {
         let symbol: @MainActor () -> String
         let placement: NotchTabPlacement
         let opensOnDrag: Bool
+        /// Read while the panel draws, so the tab can hide while the feature has
+        /// nothing to show (e.g. its device is disconnected).
+        let isAvailable: @MainActor () -> Bool
         let content: AnyView
 
         init(
@@ -42,6 +46,7 @@ final class NotchViewModel {
             symbol: @escaping @MainActor () -> String,
             placement: NotchTabPlacement = .leading,
             opensOnDrag: Bool = false,
+            isAvailable: @escaping @MainActor () -> Bool = { true },
             content: AnyView
         ) {
             self.id = id
@@ -49,6 +54,7 @@ final class NotchViewModel {
             self.symbol = symbol
             self.placement = placement
             self.opensOnDrag = opensOnDrag
+            self.isAvailable = isAvailable
             self.content = content
         }
     }
@@ -117,8 +123,16 @@ final class NotchViewModel {
             .map(\.activity.id)
     }
 
+    /// The tabs whose feature currently offers them, in `tabs` order.
+    var visibleTabs: [Tab] {
+        tabs.filter { $0.isAvailable() }
+    }
+
+    /// The visible tab with `selectedTabID`, else the first visible tab. A hidden
+    /// selection is not rewritten, so the user's choice returns with its tab.
     var selectedTab: Tab? {
-        tabs.first { $0.id == selectedTabID } ?? tabs.first
+        let visible = visibleTabs
+        return visible.first { $0.id == selectedTabID } ?? visible.first
     }
 
     /// Size of the island body (without the ears) for the current state.
@@ -176,10 +190,12 @@ final class NotchViewModel {
         self.geometry = geometry
     }
 
+    /// Selects the first tab visible right now when nothing valid is selected, so a
+    /// hidden tab that shows up later does not take over the panel.
     func setTabs(_ tabs: [Tab]) {
         self.tabs = tabs
         if selectedTabID == nil || !tabs.contains(where: { $0.id == selectedTabID }) {
-            selectedTabID = tabs.first?.id
+            selectedTabID = (tabs.first { $0.isAvailable() } ?? tabs.first)?.id
         }
     }
 
@@ -206,18 +222,18 @@ final class NotchViewModel {
         onInteractivityChange?(isInteractive)
     }
 
-    /// Expands the island, selecting `tabID` when such a tab exists.
+    /// Expands the island, selecting `tabID` when such a tab exists and is visible.
     func requestExpand(tabID: String?) {
-        if let tabID, tabs.contains(where: { $0.id == tabID }) {
+        if let tabID, visibleTabs.contains(where: { $0.id == tabID }) {
             selectedTabID = tabID
         }
         setExpanded(true)
     }
 
-    /// Expands the island for content dragged onto the notch, on the first tab
-    /// that takes drops (the selected tab when none does).
+    /// Expands the island for content dragged onto the notch, on the first visible
+    /// tab that takes drops (the selected tab when none does).
     func expandForDrop() {
-        requestExpand(tabID: tabs.first(where: \.opensOnDrag)?.id)
+        requestExpand(tabID: visibleTabs.first(where: \.opensOnDrag)?.id)
     }
 
     /// Adds an activity, replacing any existing one with the same feature and id.
