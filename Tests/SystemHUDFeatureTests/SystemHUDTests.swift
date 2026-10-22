@@ -42,6 +42,24 @@ struct LevelStepTests {
     }
 }
 
+@MainActor
+struct BrightnessIconTests {
+    @Test func raysLengthenInThirds() {
+        #expect(BrightnessIcon.tier(for: 0) == 0)
+        #expect(BrightnessIcon.tier(for: 5.0 / 16) == 0)
+        #expect(BrightnessIcon.tier(for: 6.0 / 16) == 1)
+        #expect(BrightnessIcon.tier(for: 10.0 / 16) == 1)
+        #expect(BrightnessIcon.tier(for: 11.0 / 16) == 2)
+        #expect(BrightnessIcon.tier(for: 1) == 2)
+    }
+
+    @Test func brighterTiersHaveLongerRays() {
+        let lengths = BrightnessIcon.rayLengths
+        #expect(lengths.count == 3)
+        #expect(lengths[0] < lengths[1] && lengths[1] < lengths[2])
+    }
+}
+
 struct MediaKeyEventTests {
     @Test func decodesSoundUpDown() {
         #expect(MediaKeyEvent(data1: (0 << 16) | (0x0A << 8)) == MediaKeyEvent(key: .soundUp, isDown: true, isRepeat: false))

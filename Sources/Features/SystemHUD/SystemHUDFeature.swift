@@ -190,24 +190,86 @@ private struct LevelHUDLeading: View {
     let model: LevelHUDModel
 
     var body: some View {
-        symbol
-            .foregroundStyle(NotchTheme.primaryText)
-            .contentTransition(.symbolEffect(.replace))
-            .animation(.snappy(duration: 0.2), value: model.kind)
-            .animation(.snappy(duration: 0.2), value: model.isMuted)
+        Group {
+            switch model.kind {
+            case .volume:
+                volumeSymbol
+                    .contentTransition(.symbolEffect(.replace))
+            case .brightness:
+                BrightnessIcon(level: model.level)
+            }
+        }
+        .foregroundStyle(NotchTheme.primaryText)
+        .animation(.snappy(duration: 0.2), value: model.kind)
+        .animation(.snappy(duration: 0.2), value: model.isMuted)
     }
 
     /// One `Image` whose symbol changes, not one view per branch, so the
     /// replace transition animates between symbols.
-    private var symbol: Image {
-        switch model.kind {
-        case .volume:
-            model.isMuted
-                ? Image(systemName: "speaker.slash.fill")
-                : Image(systemName: "speaker.wave.3.fill", variableValue: model.level)
-        case .brightness:
-            Image(systemName: "sun.max.fill")
+    private var volumeSymbol: Image {
+        model.isMuted
+            ? Image(systemName: "speaker.slash.fill")
+            : Image(systemName: "speaker.wave.3.fill", variableValue: model.level)
+    }
+}
+
+/// A sun whose rays grow with the brightness, in three lengths. SF Symbols has
+/// only the short-rayed `sun.min` and the long-rayed `sun.max`, nothing between,
+/// so it is drawn here, matching their weight at the wings' 13 pt.
+struct BrightnessIcon: View {
+    let level: Double
+
+    private static let size: CGFloat = 16
+    private static let coreRadius: CGFloat = 3.5
+    private static let rayGap: CGFloat = 1.2
+    private static let rayWidth: CGFloat = 1.6
+    /// Dim, medium, bright. The medium sun is as wide as `sun.max`; the longest
+    /// rays, with their round caps, reach the edge of `size`.
+    static let rayLengths: [CGFloat] = [0.3, 1.5, 2.5]
+
+    /// Which third of the range `level` falls in: 0, 1, or 2.
+    static func tier(for level: Double) -> Int {
+        min(max(Int(level * 3), 0), 2)
+    }
+
+    var body: some View {
+        let length = Self.rayLengths[Self.tier(for: level)]
+        ZStack {
+            Circle()
+                .frame(width: Self.coreRadius * 2, height: Self.coreRadius * 2)
+            SunRays(innerRadius: Self.coreRadius + Self.rayGap, length: length)
+                .stroke(style: StrokeStyle(lineWidth: Self.rayWidth, lineCap: .round))
         }
+        .frame(width: Self.size, height: Self.size)
+        .animation(.snappy(duration: 0.2), value: length)
+    }
+}
+
+/// Eight rays around a center, starting `innerRadius` out. Animates its length,
+/// so the rays grow and shrink between tiers rather than jump.
+private struct SunRays: Shape {
+    var innerRadius: CGFloat
+    var length: CGFloat
+
+    var animatableData: CGFloat {
+        get { length }
+        set { length = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        for index in 0..<8 {
+            let angle = Double(index) * .pi / 4
+            let dx = CGFloat(cos(angle))
+            let dy = CGFloat(sin(angle))
+            path.move(to: CGPoint(x: center.x + dx * innerRadius, y: center.y + dy * innerRadius))
+            path.addLine(to: CGPoint(
+                x: center.x + dx * (innerRadius + length),
+                y: center.y + dy * (innerRadius + length)
+            ))
+        }
+        return path
     }
 }
 
