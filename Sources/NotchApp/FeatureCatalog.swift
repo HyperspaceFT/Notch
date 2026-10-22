@@ -1,8 +1,10 @@
 import BatteryFeature
-import ClockFeature
+import FilesFeature
+import HomeFeature
 import NotchKit
 
-/// The one place that lists enabled features. Order = tab order in the expanded panel.
+/// The one place that lists enabled features. Order = tab order in the expanded
+/// panel, on each side of the notch (see `NotchFeature.tabPlacement`).
 ///
 /// Adding a feature:
 /// 1. Create Sources/Features/<Name>/ with a type conforming to `NotchFeature`.
@@ -12,7 +14,8 @@ import NotchKit
 enum FeatureCatalog {
     static func makeFeatures() -> [any NotchFeature] {
         [
-            ClockFeature(),
+            HomeFeature(),
+            FilesFeature(),
             BatteryFeature(),
         ]
     }

@@ -17,14 +17,15 @@
 
 ## 它能做什么
 
-鼠标移到刘海上，刘海会弹一下、变大一圈（用 Force Touch 触控板时还会轻轻震一下）；点一下，它才「长大」成一个黑色的小面板；移开后又缩回去，和硬件刘海融为一体。
+鼠标移到刘海上，刘海会弹一下、变大一圈（用 Force Touch 触控板时还会轻轻震一下）；点一下，它才「长大」成一个黑色的小面板；移开后又缩回去，和硬件刘海融为一体。拖着文件移到刘海上，它会直接展开到「文件」页。
 
 目前内置的功能：
 
 | 功能 | 说明 |
 |---|---|
-| 🔋 电池 | 插拔电源时，刘海两侧短暂弹出充电提示；展开后可以看到电量、充电状态和剩余时间 |
-| 🕐 今天 | 展开后显示当前时间、日期和星期 |
+| 🏠 主页 | 展开后的第一页，目前显示当前时间 |
+| 📂 文件 | 左边是隔空投送区，把文件拖进去即可用 AirDrop 发送；右边是文件暂存区，拖进来的文件可以再拖出去或右键「拷贝」后粘贴。打开「粘贴后自动删除文件」后，文件被拖出或粘贴后会自动从暂存区移除（不会删除原文件） |
+| 🔋 电池 | 插拔电源时，刘海两侧短暂弹出充电提示；展开后刘海右侧的电池图标随电量变化，点开可以看到剩余时间和电池健康（最大容量、循环次数） |
 
 更多功能见下面的 [路线图](#路线图)。
 
@@ -96,7 +97,8 @@ Sources/
 ├── NotchShell/      # 外壳：窗口、屏幕/刘海定位、鼠标悬停、状态机、根视图
 ├── Features/        # 各个功能，每个功能一个文件夹，只依赖 NotchKit + NotchUI
 │   ├── Battery/
-│   └── Clock/
+│   ├── Files/
+│   └── Home/
 └── NotchApp/        # 可执行入口；FeatureCatalog.swift 是启用功能的唯一清单
 Tests/               # 单元测试
 Resources/Info.plist # App 信息模板
@@ -114,7 +116,7 @@ NotchApp ──▶ NotchShell ──▶ NotchKit
 
 - **collapsed**：和硬件刘海一样大，看不出来；
 - **activity**：某个功能发出「实时活动」时，刘海向两侧延伸，左右显示内容（比如充电提示）；
-- **expanded**：点击刘海后展开，顶部是各功能的标签页，下面是当前功能的内容。
+- **expanded**：点击刘海后展开，顶部是各功能的标签页（主页、文件在刘海左侧，电池在右侧），下面是当前功能的内容。
 
 鼠标停在 collapsed 或 activity 状态的刘海上时，刘海会带一点回弹地放大一圈（hovered），这时点击展开，右键弹出 Settings… / Quit 菜单。
 
@@ -124,7 +126,7 @@ NotchApp ──▶ NotchShell ──▶ NotchKit
 
 1. 在 `Sources/Features/<名字>/` 下新建文件夹，写一个遵循 `NotchFeature` 的类；
 2. 在 `Package.swift` 的 `featureNames` 数组里加上 `"<名字>"`，会自动生成 `<名字>Feature` 模块并接进 App；
-3. 在 `Sources/NotchApp/FeatureCatalog.swift` 里 `import <名字>Feature`，并把实例加进列表。列表顺序就是展开面板里标签页的顺序。
+3. 在 `Sources/NotchApp/FeatureCatalog.swift` 里 `import <名字>Feature`，并把实例加进列表。列表顺序就是展开面板里标签页的顺序；标签页默认在刘海左侧，把 `tabPlacement` 设为 `.trailing` 可以放到右侧。
 
 功能可以通过 `NotchContext` 和外壳交互，比如 `present(_:)` 发出一个实时活动、`dismiss(activityID:)` 收回它。具体写法可以参照 `Sources/Features/Battery`。
 
@@ -132,7 +134,7 @@ NotchApp ──▶ NotchShell ──▶ NotchKit
 
 - [ ] 🎵 正在播放 / 媒体控制
 - [ ] 📅 日历与提醒事项
-- [ ] 📂 文件中转架（拖文件到刘海暂存）
+- [x] 📂 文件中转架（拖文件到刘海暂存）
 - [ ] 🔊 替换系统音量 / 亮度提示
 - [ ] 🎧 AirPods 连接提示
 - [ ] ⚙️ 设置面板、开机自启

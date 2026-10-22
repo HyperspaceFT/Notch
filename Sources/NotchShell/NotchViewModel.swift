@@ -10,7 +10,7 @@ import SwiftUI
 /// - `.collapsed`: island exactly covers the hardware notch.
 /// - `.activity`: the top-priority activity is shown as wings beside the notch.
 /// - `.expanded`: the full panel with feature tabs (a click on the hovered
-///   island, or `requestExpand`).
+///   island, content dragged onto the notch, or `requestExpand`).
 ///
 /// Expansion always wins over activities; activities keep their queue and
 /// timers while expanded and reappear on collapse.
@@ -29,8 +29,27 @@ final class NotchViewModel {
     struct Tab: Identifiable {
         let id: String
         let title: String
-        let symbol: String
+        /// Read while the header draws, so it can follow the feature's observable state.
+        let symbol: @MainActor () -> String
+        let placement: NotchTabPlacement
+        let opensOnDrag: Bool
         let content: AnyView
+
+        init(
+            id: String,
+            title: String,
+            symbol: @escaping @MainActor () -> String,
+            placement: NotchTabPlacement = .leading,
+            opensOnDrag: Bool = false,
+            content: AnyView
+        ) {
+            self.id = id
+            self.title = title
+            self.symbol = symbol
+            self.placement = placement
+            self.opensOnDrag = opensOnDrag
+            self.content = content
+        }
     }
 
     private struct ActivityEntry {
@@ -192,6 +211,12 @@ final class NotchViewModel {
             selectedTabID = tabID
         }
         setExpanded(true)
+    }
+
+    /// Expands the island for content dragged onto the notch, on the first tab
+    /// that takes drops (the selected tab when none does).
+    func expandForDrop() {
+        requestExpand(tabID: tabs.first(where: \.opensOnDrag)?.id)
     }
 
     /// Adds an activity, replacing any existing one with the same feature and id.

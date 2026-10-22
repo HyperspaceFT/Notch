@@ -129,24 +129,30 @@ private struct ExpandedIslandView: View {
         .padding(.bottom, 14)
     }
 
-    /// Sits in the same band as the hardware notch, so the tab buttons stay left of it.
+    /// Sits in the same band as the hardware notch, so the tab buttons stay clear
+    /// of it: leading tabs to its left, trailing tabs to its right.
     private var header: some View {
         HStack(spacing: 0) {
-            GlassEffectContainer(spacing: 8) {
-                HStack(spacing: 6) {
-                    ForEach(model.tabs) { tab in
-                        GlassIconButton(
-                            symbol: tab.symbol,
-                            isSelected: tab.id == model.selectedTab?.id,
-                            help: tab.title
-                        ) {
-                            model.selectedTabID = tab.id
-                        }
+            tabButtons(.leading)
+            Spacer(minLength: model.geometry.notchRect.width)
+            tabButtons(.trailing)
+        }
+        .frame(height: max(model.geometry.notchRect.height, 30))
+    }
+
+    private func tabButtons(_ placement: NotchTabPlacement) -> some View {
+        GlassEffectContainer(spacing: 8) {
+            HStack(spacing: 6) {
+                ForEach(model.tabs.filter { $0.placement == placement }) { tab in
+                    GlassIconButton(
+                        symbol: tab.symbol(),
+                        isSelected: tab.id == model.selectedTab?.id,
+                        help: tab.title
+                    ) {
+                        model.selectedTabID = tab.id
                     }
                 }
             }
-            Spacer(minLength: model.geometry.notchRect.width)
         }
-        .frame(height: max(model.geometry.notchRect.height, 30))
     }
 }

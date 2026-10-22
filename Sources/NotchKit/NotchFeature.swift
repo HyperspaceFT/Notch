@@ -15,8 +15,14 @@ public protocol NotchFeature: AnyObject {
     var id: String { get }
     /// Display name shown to the user (may be localized, e.g. "电池").
     var title: String { get }
-    /// SF Symbol name used for the feature's tab in the expanded panel.
+    /// SF Symbol name used for the feature's tab in the expanded panel. Read while
+    /// the panel draws, so it may follow observable state (e.g. the charge level).
     var symbol: String { get }
+    /// Which side of the hardware notch the feature's tab button sits on.
+    var tabPlacement: NotchTabPlacement { get }
+    /// Whether content (such as files) dragged onto the notch opens the island on
+    /// this feature's tab. For features whose tab takes drops; the first one wins.
+    var opensOnDrag: Bool { get }
 
     /// Called once when the shell starts. Keep the context to present activities later.
     func activate(context: any NotchContext)
@@ -27,7 +33,17 @@ public protocol NotchFeature: AnyObject {
     func makeExpandedView() -> AnyView?
 }
 
+/// Where a feature's tab button sits in the expanded panel's header.
+public enum NotchTabPlacement: Sendable {
+    /// Left of the hardware notch.
+    case leading
+    /// Right of the hardware notch.
+    case trailing
+}
+
 extension NotchFeature {
+    public var tabPlacement: NotchTabPlacement { .leading }
+    public var opensOnDrag: Bool { false }
     public func activate(context: any NotchContext) {}
     public func deactivate() {}
     public func makeExpandedView() -> AnyView? { nil }

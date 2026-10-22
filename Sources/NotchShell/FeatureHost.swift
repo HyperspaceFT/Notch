@@ -28,7 +28,14 @@ final class FeatureHost {
 
         model.setTabs(features.compactMap { feature in
             feature.makeExpandedView().map { view in
-                NotchViewModel.Tab(id: feature.id, title: feature.title, symbol: feature.symbol, content: view)
+                NotchViewModel.Tab(
+                    id: feature.id,
+                    title: feature.title,
+                    symbol: { feature.symbol },
+                    placement: feature.tabPlacement,
+                    opensOnDrag: feature.opensOnDrag,
+                    content: view
+                )
             }
         })
     }

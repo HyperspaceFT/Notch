@@ -3,7 +3,9 @@ import AppKit
 /// Marks the island hovered when the pointer stays on the notch for `hoverDelay`
 /// (it grows and the trackpad taps once), drops the hover when the pointer leaves it, and
 /// collapses the expanded island when the pointer leaves that. Expanding itself
-/// takes a click on the hovered island, handled in `NotchRootView`.
+/// takes a click on the hovered island, handled in `NotchRootView`; only content
+/// dragged onto the notch (files, for instance) expands it directly, because a
+/// drag cannot click.
 ///
 /// Uses global + local NSEvent mouse monitors. Mouse-move monitors do not require
 /// the Accessibility permission (only keyboard monitors do), so none is requested.
@@ -11,6 +13,7 @@ import AppKit
 final class HoverController {
     /// Time from entering the hot zone to the hover; a sweep across the menu bar
     /// that leaves sooner neither grows the island nor taps the trackpad.
+    /// Content dragged onto the notch waits as long before the island opens.
     static let hoverDelay: Duration = .milliseconds(80)
     /// Debounce before collapsing after the pointer leaves the expanded island.
     static let collapseDelay: Duration = .milliseconds(250)
@@ -24,10 +27,16 @@ final class HoverController {
 
     private enum Pending {
         case hover
+        case dropExpand
         case collapse
     }
 
     private let model: NotchViewModel
+    /// A drag that carries content (files, text, images) writes this pasteboard when it starts.
+    private let dragPasteboard = NSPasteboard(name: .drag)
+    /// `dragPasteboard.changeCount` at the last left mouse-down; a different count
+    /// while the button is still held means the current drag carries content.
+    private var dragChangeCountAtMouseDown: Int?
     private var monitors: [Any] = []
     private var pending: Pending?
     private var pendingTask: Task<Void, Never>?
@@ -42,18 +51,20 @@ final class HoverController {
 
     func start() {
         guard monitors.isEmpty else { return }
-        let mask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged]
+        let mask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged, .leftMouseDown]
 
         // Events for other apps (most of the time, since the panel ignores the mouse when collapsed).
-        if let global = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: { [weak self] _ in
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: { [weak self] event in
+            let type = event.type
             // AppKit delivers monitor callbacks on the main thread.
-            MainActor.assumeIsolated { self?.pointerMoved() }
+            MainActor.assumeIsolated { self?.handle(type) }
         }) {
             monitors.append(global)
         }
         // Events for our own panel (while hovered or expanded and accepting the mouse).
         if let local = NSEvent.addLocalMonitorForEvents(matching: mask, handler: { [weak self] event in
-            MainActor.assumeIsolated { self?.pointerMoved() }
+            let type = event.type
+            MainActor.assumeIsolated { self?.handle(type) }
             return event
         }) {
             monitors.append(local)
@@ -68,7 +79,15 @@ final class HoverController {
         cancelPending()
     }
 
-    private func pointerMoved() {
+    private func handle(_ type: NSEvent.EventType) {
+        if type == .leftMouseDown {
+            dragChangeCountAtMouseDown = dragPasteboard.changeCount
+        } else {
+            pointerMoved(dragging: type == .leftMouseDragged)
+        }
+    }
+
+    private func pointerMoved(dragging: Bool) {
         guard model.isHoverEnabled else {
             cancelPending()
             return
@@ -89,11 +108,18 @@ final class HoverController {
             }
         } else {
             if isInsideHotZone(location) {
-                schedule(.hover, after: Self.hoverDelay)
+                schedule(dragging && isDraggingContent ? .dropExpand : .hover, after: Self.hoverDelay)
             } else {
                 cancelPending(.hover)
+                cancelPending(.dropExpand)
             }
         }
+    }
+
+    /// Only meaningful while the left button is held, i.e. for dragged events.
+    private var isDraggingContent: Bool {
+        guard let dragChangeCountAtMouseDown else { return false }
+        return dragPasteboard.changeCount != dragChangeCountAtMouseDown
     }
 
     private func isInsideHotZone(_ point: CGPoint) -> Bool {
@@ -131,6 +157,12 @@ final class HoverController {
             if !model.isExpanded, !model.isHovered, isInsideHotZone(location) {
                 model.setHovered(true)
                 // Felt only on a Force Touch trackpad with a finger on it; a no-op otherwise.
+                NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+            }
+        case .dropExpand:
+            // A drag released within the delay landed on the menu bar; there is nothing to drop.
+            if !model.isExpanded, NSEvent.pressedMouseButtons & 1 != 0, isInsideHotZone(location) {
+                model.expandForDrop()
                 NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
             }
         case .collapse:

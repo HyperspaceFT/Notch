@@ -148,8 +148,8 @@ struct NotchViewModelTests {
 
     @Test func requestExpandSelectsKnownTab() {
         model.setTabs([
-            .init(id: "clock", title: "今天", symbol: "clock", content: AnyView(EmptyView())),
-            .init(id: "battery", title: "电池", symbol: "battery.75percent", content: AnyView(EmptyView())),
+            .init(id: "clock", title: "今天", symbol: { "clock" }, content: AnyView(EmptyView())),
+            .init(id: "battery", title: "电池", symbol: { "battery.75percent" }, content: AnyView(EmptyView())),
         ])
         #expect(model.selectedTab?.id == "clock")
 
@@ -158,6 +158,32 @@ struct NotchViewModelTests {
         #expect(model.selectedTabID == "battery")
 
         model.requestExpand(tabID: "unknown")
+        #expect(model.selectedTabID == "battery")
+    }
+
+    @Test func dragOpensTheFirstTabThatTakesDrops() {
+        model.setTabs([
+            .init(id: "home", title: "主页", symbol: { "house" }, content: AnyView(EmptyView())),
+            .init(id: "files", title: "文件", symbol: { "folder" }, opensOnDrag: true, content: AnyView(EmptyView())),
+            .init(id: "shelf", title: "架子", symbol: { "tray" }, opensOnDrag: true, content: AnyView(EmptyView())),
+            .init(id: "battery", title: "电池", symbol: { "battery.75percent" }, placement: .trailing, content: AnyView(EmptyView())),
+        ])
+        model.selectedTabID = "battery"
+
+        model.expandForDrop()
+        #expect(model.state == .expanded)
+        #expect(model.selectedTabID == "files")
+    }
+
+    @Test func dragKeepsTheSelectedTabWhenNoneTakesDrops() {
+        model.setTabs([
+            .init(id: "home", title: "主页", symbol: { "house" }, content: AnyView(EmptyView())),
+            .init(id: "battery", title: "电池", symbol: { "battery.75percent" }, placement: .trailing, content: AnyView(EmptyView())),
+        ])
+        model.selectedTabID = "battery"
+
+        model.expandForDrop()
+        #expect(model.state == .expanded)
         #expect(model.selectedTabID == "battery")
     }
 }

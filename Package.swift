@@ -7,7 +7,8 @@ import PackageDescription
 // and list an instance in Sources/NotchApp/FeatureCatalog.swift.
 let featureNames = [
     "Battery",
-    "Clock",
+    "Files",
+    "Home",
 ]
 
 let featureTargets: [Target] = featureNames.map { name in
