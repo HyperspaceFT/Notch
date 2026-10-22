@@ -25,7 +25,8 @@ desktop.ini
 *.swp
 *~
 
-# Personal agent configuration (AGENTS.md is shared, these are not)
+# Local agent configuration, kept out of the repository
+AGENTS.md
 AGENTS.override.md
 CLAUDE.local.md
 .claude/
