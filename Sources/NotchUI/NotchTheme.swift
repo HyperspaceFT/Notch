@@ -16,9 +16,9 @@ public enum NotchTheme {
     public static let expandedTopRadius: CGFloat = 14
     public static let expandedBottomRadius: CGFloat = 32
 
-    /// How much the collapsed or activity island grows on the sides and bottom
-    /// while the pointer rests on it. The top stays at the screen edge.
-    public static let hoverGrowth: CGFloat = 8
+    /// How much the collapsed or activity island grows while the pointer rests on
+    /// it: `width` on each side, `height` at the bottom. The top stays at the screen edge.
+    public static let hoverGrowth = CGSize(width: 11, height: 8)
 
     /// Transparent room around the expanded island so its shadow is not clipped.
     public static let shadowPadding: CGFloat = 24

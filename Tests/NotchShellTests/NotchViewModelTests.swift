@@ -80,12 +80,12 @@ struct NotchViewModelTests {
         let ring = NotchTheme.hoverGrowth
         model.setHovered(true)
         #expect(model.state == .collapsed)
-        #expect(model.bodySize == CGSize(width: 190 + ring * 2, height: 32 + ring))
+        #expect(model.bodySize == CGSize(width: 190 + ring.width * 2, height: 32 + ring.height))
         #expect(model.islandScreenFrame.maxY == 956)
 
         model.present(activity("a"))
         let activityWidth = 190 + NotchTheme.activityWingWidth * 2
-        #expect(model.bodySize == CGSize(width: activityWidth + ring * 2, height: 32 + ring))
+        #expect(model.bodySize == CGSize(width: activityWidth + ring.width * 2, height: 32 + ring.height))
 
         model.setHovered(false)
         #expect(model.bodySize == CGSize(width: activityWidth, height: 32))

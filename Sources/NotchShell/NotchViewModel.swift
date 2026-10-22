@@ -115,8 +115,8 @@ final class NotchViewModel {
         }
         guard isHovered else { return size }
         return CGSize(
-            width: size.width + NotchTheme.hoverGrowth * 2,
-            height: size.height + NotchTheme.hoverGrowth
+            width: size.width + NotchTheme.hoverGrowth.width * 2,
+            height: size.height + NotchTheme.hoverGrowth.height
         )
     }
 
