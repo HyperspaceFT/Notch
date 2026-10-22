@@ -4,3 +4,28 @@ build/
 .DS_Store
 xcuserdata/
 *.xcodeproj
+
+# Xcode / SwiftPM / SourceKit-LSP leftovers
+*.xcworkspace
+DerivedData/
+.index-build/
+*.dSYM/
+
+# macOS / Windows file system noise
+._*
+.AppleDouble
+.Spotlight-V100
+.Trashes
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Personal agent configuration (AGENTS.md is shared, these are not)
+AGENTS.override.md
+CLAUDE.local.md
+.claude/
