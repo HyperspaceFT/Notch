@@ -55,14 +55,15 @@ public final class BatteryFeature: NotchFeature {
         // Only the adapter being connected or removed is worth an activity;
         // routine percentage updates just refresh the expanded card.
         guard let previous, let current, previous.isOnACPower != current.isOnACPower else { return }
+        let bounce = ActivityBounce()
         context?.present(NotchActivity(
             id: "power-adapter",
             priority: .high,
             duration: Self.activityDuration
         ) {
-            BatteryActivityLeading(status: current)
+            BatteryActivityLeading(status: current, bounce: bounce)
         } trailing: {
-            BatteryActivityTrailing(status: current)
+            BatteryActivityTrailing(status: current, bounce: bounce)
         })
     }
 }
@@ -167,21 +168,49 @@ extension BatteryHealth {
 
 private struct BatteryActivityLeading: View {
     let status: PowerStatus
+    let bounce: ActivityBounce
 
     var body: some View {
-        Image(systemName: status.isOnACPower ? "bolt.fill" : "battery.75percent")
+        Image(systemName: status.isOnACPower ? "battery.100percent.bolt" : "battery.75percent")
             .foregroundStyle(status.isOnACPower ? NotchTheme.chargingColor : NotchTheme.primaryText)
-            .symbolEffect(.bounce, options: .nonRepeating)
+            .bounceIn(bounce)
     }
 }
 
 private struct BatteryActivityTrailing: View {
     let status: PowerStatus
+    let bounce: ActivityBounce
 
     var body: some View {
         Text("\(status.percent)%")
             .monospacedDigit()
             .foregroundStyle(status.isOnACPower ? NotchTheme.chargingColor : NotchTheme.primaryText)
+            .bounceIn(bounce)
+    }
+}
+
+/// The pop-in of one presentation of the activity, shared by both wings. Owned by
+/// the presentation rather than the views (`@State` needs a macro plugin the
+/// Command Line Tools do not ship).
+@MainActor
+@Observable
+private final class ActivityBounce {
+    var isSettled = false
+}
+
+private extension View {
+    /// Pops the view in as it appears. The spring overshoots once by a few percent;
+    /// the undershoot after it is too small to see, so it reads as a single gentle bounce.
+    func bounceIn(_ bounce: ActivityBounce) -> some View {
+        scaleEffect(bounce.isSettled ? 1 : 0.5)
+            .onAppear {
+                withAnimation(.spring(duration: 0.5, bounce: 0.45)) {
+                    bounce.isSettled = true
+                }
+            }
+            // A plug or unplug replacing the activity on screen keeps the wings'
+            // views; a new identity per presentation makes them appear, and bounce, again.
+            .id(ObjectIdentifier(bounce))
     }
 }
 

@@ -9,8 +9,10 @@ import SwiftUI
 final class SettingsWindowController {
     private var window: NSWindow?
     private var generalItem: NSTabViewItem?
+    private let launchAtLogin = LaunchAtLogin()
 
     func show() {
+        launchAtLogin.refresh()
         let window = window ?? makeWindow()
         // An accessory app is never active on its own; without this the window
         // would open behind the frontmost app.
@@ -19,7 +21,10 @@ final class SettingsWindowController {
     }
 
     private func makeWindow() -> NSWindow {
-        let general = NSHostingController(rootView: GeneralSettingsView(localization: .shared))
+        let general = NSHostingController(rootView: GeneralSettingsView(
+            localization: .shared,
+            launchAtLogin: launchAtLogin
+        ))
         // The window takes the pane's ideal size.
         general.sizingOptions = [.preferredContentSize]
         let generalItem = NSTabViewItem(viewController: general)
@@ -59,9 +64,17 @@ final class SettingsWindowController {
 
 private struct GeneralSettingsView: View {
     @Bindable var localization: Localization
+    @Bindable var launchAtLogin: LaunchAtLogin
 
     var body: some View {
         Form {
+            Toggle(isOn: $launchAtLogin.isEnabled) {
+                Text(localized(en: "Open at Login", zh: "登录时打开"))
+                if let note = launchAtLoginNote {
+                    Text(note)
+                }
+            }
+            .toggleStyle(.switch)
             Picker(localized(en: "Language", zh: "语言"), selection: $localization.override) {
                 Text(localized(en: "System", zh: "跟随系统"))
                     .tag(AppLanguage?.none)
@@ -75,5 +88,21 @@ private struct GeneralSettingsView: View {
         .formStyle(.grouped)
         .frame(width: 420)
         .fixedSize(horizontal: false, vertical: true)
+        // Coming back from System Settings, where the login item may have changed.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            launchAtLogin.refresh()
+        }
+    }
+
+    /// Shown under the switch: why turning it on or off failed, or what is left to do.
+    private var launchAtLoginNote: String? {
+        if let error = launchAtLogin.errorMessage { return error }
+        if launchAtLogin.status == .requiresApproval {
+            return localized(
+                en: "Allow Notch in System Settings → General → Login Items.",
+                zh: "请在「系统设置 → 通用 → 登录项」中允许 Notch。"
+            )
+        }
+        return nil
     }
 }

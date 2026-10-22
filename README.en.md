@@ -27,9 +27,9 @@ Built-in features:
 |---|---|
 | 🏠 Home | The first tab of the panel; shows the current time for now |
 | 📂 Files | On the left, an AirDrop zone: drop files on it to send them with AirDrop. On the right, a shelf: files dropped there can be dragged out again, or copied with the right-click **Copy** item and pasted elsewhere. With **Remove after pasting** on, files leave the shelf once they are dragged out or pasted (the originals are kept) |
-| 🔋 Battery | Plugging in or unplugging the power adapter briefly shows a charging notice on both sides of the notch. In the open panel, the battery icon right of the notch follows the charge level; its tab shows the time remaining and the battery health (maximum capacity, cycle count) |
+| 🔋 Battery | Plugging in the power adapter briefly shows a green charging battery left of the notch and the charge level right of it; unplugging shows a notice too. In the open panel, the battery icon right of the notch follows the charge level; its tab shows the time remaining and the battery health (maximum capacity, cycle count) |
 
-The interface is available in English and Simplified Chinese. It follows the system language by default, and you can switch it under **Settings…** in the right-click menu; the change applies right away.
+The interface is available in English and Simplified Chinese. It follows the system language by default, and you can switch it under **Settings…** in the right-click menu; the change applies right away. **Settings…** also has an **Open at Login** switch that starts Notch when you log in.
 
 More features are planned; see the [roadmap](#roadmap) below.
 
@@ -143,8 +143,8 @@ Write interface text with `localized(en:zh:)`, giving both the English and the C
 - [x] 📂 File shelf (drag files onto the notch to keep them)
 - [ ] 🔊 Replace the system volume / brightness HUD
 - [ ] 🎧 AirPods connection notice
-- [x] ⚙️ Settings window (only the language option for now)
-- [ ] 🚀 Launch at login
+- [x] ⚙️ Settings window (launch at login and language for now)
+- [x] 🚀 Launch at login
 - [ ] 🔄 Automatic updates
 
 ## Acknowledgements
