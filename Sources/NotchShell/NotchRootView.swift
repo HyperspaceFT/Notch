@@ -105,24 +105,18 @@ private struct ActivityWingsView: View {
 /// view below. Quitting lives in the island's right-click menu.
 private struct ExpandedIslandView: View {
     let model: NotchViewModel
+    /// Shared by the tab buttons and the selection highlight that slides between them.
+    @Namespace private var tabSelection
+
+    /// Tabs in header order, left to right.
+    private var orderedTabs: [NotchViewModel.Tab] {
+        model.tabs.filter { $0.placement == .leading } + model.tabs.filter { $0.placement == .trailing }
+    }
 
     var body: some View {
         VStack(spacing: 10) {
             header
-            Group {
-                if let tab = model.selectedTab {
-                    tab.content
-                        .id(tab.id)
-                        .transition(.blurReplace)
-                } else {
-                    Text("没有可显示的内容")
-                        .font(.system(size: 12))
-                        .foregroundStyle(NotchTheme.secondaryText)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .animation(NotchTheme.activityAnimation, value: model.selectedTabID)
+            content
         }
         .foregroundStyle(NotchTheme.primaryText)
         .padding(.horizontal, model.topCornerRadius + NotchTheme.contentPadding)
@@ -130,29 +124,89 @@ private struct ExpandedIslandView: View {
     }
 
     /// Sits in the same band as the hardware notch, so the tab buttons stay clear
-    /// of it: leading tabs to its left, trailing tabs to its right.
+    /// of it: leading tabs to its left, trailing tabs to its right. Only the
+    /// selected button has a glass background, one view that follows the selection.
     private var header: some View {
-        HStack(spacing: 0) {
-            tabButtons(.leading)
-            Spacer(minLength: model.geometry.notchRect.width)
-            tabButtons(.trailing)
+        GlassEffectContainer(spacing: 8) {
+            HStack(spacing: 0) {
+                tabButtons(.leading)
+                Spacer(minLength: model.geometry.notchRect.width)
+                tabButtons(.trailing)
+            }
+            .background {
+                if let selectedID = model.selectedTab?.id {
+                    Color.clear
+                        .glassEffect(.regular.tint(.white.opacity(0.18)), in: .circle)
+                        .matchedGeometryEffect(id: selectedID, in: tabSelection, isSource: false)
+                }
+            }
         }
         .frame(height: max(model.geometry.notchRect.height, 30))
     }
 
     private func tabButtons(_ placement: NotchTabPlacement) -> some View {
-        GlassEffectContainer(spacing: 8) {
-            HStack(spacing: 6) {
-                ForEach(model.tabs.filter { $0.placement == placement }) { tab in
-                    GlassIconButton(
-                        symbol: tab.symbol(),
-                        isSelected: tab.id == model.selectedTab?.id,
-                        help: tab.title
-                    ) {
+        HStack(spacing: 6) {
+            ForEach(model.tabs.filter { $0.placement == placement }) { tab in
+                TabButton(
+                    symbol: tab.symbol(),
+                    isSelected: tab.id == model.selectedTab?.id,
+                    help: tab.title
+                ) {
+                    withAnimation(NotchTheme.tabSwitchAnimation) {
                         model.selectedTabID = tab.id
                     }
                 }
+                .matchedGeometryEffect(id: tab.id, in: tabSelection)
             }
         }
+    }
+
+    /// Every tab's view stays in place and only the selected one shows, so on a
+    /// switch each view slides toward its own side of the newly selected tab.
+    @ViewBuilder
+    private var content: some View {
+        let tabs = orderedTabs
+        if tabs.isEmpty {
+            Text("没有可显示的内容")
+                .font(.system(size: 12))
+                .foregroundStyle(NotchTheme.secondaryText)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            let selectedIndex = tabs.firstIndex { $0.id == model.selectedTab?.id } ?? 0
+            ZStack {
+                ForEach(Array(tabs.enumerated()), id: \.element.id) { index, tab in
+                    let isSelected = index == selectedIndex
+                    tab.content
+                        .offset(x: CGFloat((index - selectedIndex).signum()) * NotchTheme.tabSwitchOffset)
+                        .opacity(isSelected ? 1 : 0)
+                        .blur(radius: isSelected ? 0 : 6)
+                        // Hidden tabs must not take clicks or drops meant for the visible one.
+                        .allowsHitTesting(isSelected)
+                        .accessibilityHidden(!isSelected)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+}
+
+/// A tab's icon. It draws no background of its own; the selected tab's glass
+/// highlight belongs to the header.
+private struct TabButton: View {
+    let symbol: String
+    let isSelected: Bool
+    let help: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(isSelected ? NotchTheme.primaryText : NotchTheme.secondaryText)
+                .frame(width: 28, height: 28)
+                .contentShape(.circle)
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 }

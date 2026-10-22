@@ -63,4 +63,9 @@ public enum NotchTheme {
     /// Pointer arriving on the island: overshoots the hover ring by about a
     /// quarter, then springs back. Leaving uses `collapseAnimation`.
     public static let hoverAnimation = Animation.bouncy(duration: 0.4, extraBounce: 0.3)
+    /// Switching tabs: the selection highlight slides to the new tab button while
+    /// the old content slides out and the new content slides in.
+    public static let tabSwitchAnimation = Animation.smooth(duration: 0.38)
+    /// How far tab content travels sideways while it fades in or out.
+    public static let tabSwitchOffset: CGFloat = 28
 }
