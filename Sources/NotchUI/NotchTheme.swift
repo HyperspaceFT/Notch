@@ -20,8 +20,14 @@ public enum NotchTheme {
     /// it: `width` on each side, `height` at the bottom. The top stays at the screen edge.
     public static let hoverGrowth = CGSize(width: 11, height: 8)
 
+    /// Blur radius and downward offset of the expanded island's drop shadow.
+    public static let expandedShadowRadius: CGFloat = 14
+    public static let expandedShadowOffset: CGFloat = 6
+
     /// Transparent room around the expanded island so its shadow is not clipped.
-    public static let shadowPadding: CGFloat = 24
+    /// The blur fades out completely only about three radii past the edge; less
+    /// room cuts it off at the panel edge.
+    public static let shadowPadding: CGFloat = expandedShadowRadius * 3
 
     /// Fixed size of the window hosting the island. Large enough for the expanded
     /// island including ears and shadow; the window never resizes.
@@ -29,7 +35,8 @@ public enum NotchTheme {
         CGSize(
             width: NotchShape.frameWidth(bodyWidth: expandedSize.width, topCornerRadius: expandedTopRadius)
                 + shadowPadding * 2,
-            height: expandedSize.height + shadowPadding
+            // The shadow is shifted down, so the bottom needs its offset on top.
+            height: expandedSize.height + shadowPadding + expandedShadowOffset
         )
     }
 

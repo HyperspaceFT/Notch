@@ -40,8 +40,8 @@ struct NotchRootView: View {
         // The hovered ring casts a lighter, tighter shadow than the expanded panel.
         .shadow(
             color: .black.opacity(isExpanded ? 0.5 : model.isHovered ? 0.35 : 0),
-            radius: isExpanded ? 14 : 8,
-            y: isExpanded ? 6 : 4
+            radius: isExpanded ? NotchTheme.expandedShadowRadius : 8,
+            y: isExpanded ? NotchTheme.expandedShadowOffset : 4
         )
         // The whole outline takes clicks, including the empty collapsed body.
         // The panel only passes them on while the island is hovered or expanded.
