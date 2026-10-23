@@ -61,17 +61,28 @@ struct NotchRootView: View {
         .background {
             shape.fill(NotchTheme.islandColor)
             // Under the content: it lights the island, not the cards on it.
-            IslandGlow(topCornerRadius: model.topCornerRadius, bottomCornerRadius: model.bottomCornerRadius)
-                .opacity(isExpanded && NotchAppearance.shared.isLightAndColorEnabled ? 1 : 0)
-                .allowsHitTesting(false)
+            // Mounted only while it shows, so its minute timer and blurs do not
+            // redraw the collapsed or hovered island.
+            if isExpanded && NotchAppearance.shared.isLightAndColorEnabled {
+                IslandGlow(topCornerRadius: model.topCornerRadius, bottomCornerRadius: model.bottomCornerRadius)
+                    .transition(.opacity)
+                    .allowsHitTesting(false)
+            }
         }
         .clipShape(shape)
-        // The hovered ring casts a lighter, tighter shadow than the expanded panel.
-        .shadow(
-            color: .black.opacity(isExpanded ? 0.5 : model.isHovered ? 0.35 : 0),
-            radius: isExpanded ? NotchTheme.expandedShadowRadius : 8,
-            y: isExpanded ? NotchTheme.expandedShadowOffset : 4
-        )
+        // Cast by the outline alone, under the island, not by the content: on
+        // macOS 26 a shadow derived from the content was partly erased and then
+        // cut off as the glow, clock, or glass redrew.
+        .background {
+            // The hovered ring casts a lighter, tighter shadow than the expanded panel.
+            shape
+                .fill(NotchTheme.islandColor)
+                .shadow(
+                    color: .black.opacity(isExpanded ? 0.5 : model.isHovered ? 0.35 : 0),
+                    radius: isExpanded ? NotchTheme.expandedShadowRadius : 8,
+                    y: isExpanded ? NotchTheme.expandedShadowOffset : 4
+                )
+        }
         // The whole outline takes clicks, including the empty collapsed body.
         // The panel only passes them on while the island is hovered or expanded.
         .contentShape(shape)
