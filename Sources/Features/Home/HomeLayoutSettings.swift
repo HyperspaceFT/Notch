@@ -23,9 +23,10 @@ public final class HomeLayoutSettings {
     /// second and the third add the same, the fourth less, so a full row does not
     /// stretch the island too far. One entry per module up to `maximumModuleCount`.
     public nonisolated static let extraWidths: [CGFloat] = [120, 120, 80]
-    /// What the island's body adds to Home's row: the top corner radius and the
-    /// content padding on each side.
-    public nonisolated static let margins: CGFloat = 2 * (NotchTheme.expandedTopRadius + NotchTheme.contentPadding)
+    /// What the island's body adds to Home's row: the content padding on each side
+    /// (the ears at the top corners lie outside the body), so the modules sit as
+    /// far from the sides as from the bottom.
+    public nonisolated static let margins: CGFloat = 2 * NotchTheme.contentPadding
 
     /// The widest the expanded island's body gets while Home shows `count`
     /// modules, which it reaches when they fill their row: the standard width for
@@ -38,8 +39,8 @@ public final class HomeLayoutSettings {
     }
 
     /// Home's row with `count` modules under a 32-point notch: as wide as the body at
-    /// `bodyWidth(forModuleCount:)` less `margins` (so a little narrower than the
-    /// island's content), as tall as the panel's header and margins leave: the most
+    /// `bodyWidth(forModuleCount:)` less `margins` (as wide as the island's
+    /// content), as tall as the panel's header and margins leave: the most
     /// room the modules get. Layouts are edited against the row for their own
     /// count; Home draws them in a row as wide, whose height follows the notch.
     public nonisolated static func referenceRow(forModuleCount count: Int) -> HomeRowMetrics {

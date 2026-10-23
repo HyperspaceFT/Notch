@@ -9,10 +9,10 @@ private let row = HomeRowMetrics(width: 456, height: 134, spacing: 10)
 /// `row` for every module count, for the rules that do not depend on the row widening.
 private func fixedRows(_ count: Int) -> HomeRowMetrics { row }
 /// The panel's rows as the island widens: 520 points for one module, 120 more for
-/// the second and the third, 80 more for the fourth, less the 32-point margins on
+/// the second and the third, 80 more for the fourth, less the 28-point margins on
 /// either side.
 private func panelRow(_ count: Int) -> HomeRowMetrics {
-    HomeRowMetrics(width: [456, 456, 576, 696, 776][min(count, 4)], height: 134, spacing: 10)
+    HomeRowMetrics(width: [492, 492, 612, 732, 812][min(count, 4)], height: 134, spacing: 10)
 }
 /// The clock: a square at its narrowest, 184 points at its widest.
 private let clock = HomeModuleSizing.resizable(minimum: .height(1), maximum: .points(184))
@@ -147,27 +147,27 @@ struct HomeLayoutTests {
     @Test func addingAModuleKeepsTheOthersWidthsAndGivesItTheAddedRoom() {
         var layout = HomeLayout(items: [.init(moduleID: "time", width: share(184))])
         layout.add("weather", sizings: sizings, rows: panelRow)
-        // The 576-point row: the clock keeps 184 points, the weather takes the rest.
-        #expect(isClose(layout.resolvedWidths(in: panelRow(2), sizings: sizings), [184, 382]))
+        // The 612-point row: the clock keeps 184 points, the weather takes the rest.
+        #expect(isClose(layout.resolvedWidths(in: panelRow(2), sizings: sizings), [184, 418]))
 
         layout.add("badge", sizings: sizings, rows: panelRow)
-        // The 696-point row has 110 points free after a gap; the badge takes its 100.
+        // The 732-point row has 110 points free after a gap; the badge takes its 100.
         #expect(layout.items.map(\.moduleID) == ["time", "weather", "badge"])
-        #expect(isClose(layout.resolvedWidths(in: panelRow(3), sizings: sizings), [184, 382, 100]))
+        #expect(isClose(layout.resolvedWidths(in: panelRow(3), sizings: sizings), [184, 418, 100]))
     }
 
     @Test func removingAModuleKeepsTheOthersWidths() {
         let full = HomeLayout(items: [
             .init(moduleID: "time", width: panelRow(3).fraction(forWidth: 184)),
-            .init(moduleID: "weather", width: panelRow(3).fraction(forWidth: 382)),
+            .init(moduleID: "weather", width: panelRow(3).fraction(forWidth: 418)),
             .init(moduleID: "badge", width: panelRow(3).fraction(forWidth: 100)),
         ])
         var layout = full
         layout.remove(at: 2, sizings: sizings, rows: panelRow)
-        #expect(isClose(layout.resolvedWidths(in: panelRow(2), sizings: sizings), [184, 382]))
+        #expect(isClose(layout.resolvedWidths(in: panelRow(2), sizings: sizings), [184, 418]))
         layout.remove(at: 0, sizings: sizings, rows: panelRow)
         #expect(layout.items.map(\.moduleID) == ["weather"])
-        #expect(isClose(layout.resolvedWidths(in: panelRow(1), sizings: sizings), [382]))
+        #expect(isClose(layout.resolvedWidths(in: panelRow(1), sizings: sizings), [418]))
 
         var middle = full
         middle.remove(at: 1, sizings: sizings, rows: panelRow)
@@ -180,7 +180,7 @@ struct HomeLayoutTests {
         wide["wide"] = .fixed(.points(320))
         let layout = HomeLayout(items: [.init(moduleID: "time", width: share(184))])
         // 320 points do not fit beside the clock's minimum of 134 in today's
-        // 456-point row, but they do in the 576-point row the two would share.
+        // 456-point row, but they do in the 612-point row the two would share.
         #expect(!layout.canAdd("wide", sizings: wide, rows: fixedRows))
         #expect(layout.canAdd("wide", sizings: wide, rows: panelRow))
 
@@ -195,10 +195,10 @@ struct HomeLayoutTests {
         three["third"] = .resizable(minimum: .fraction(1.0 / 3))
         let layout = HomeLayout.standard(moduleIDs: ["time", "weather", "third"], sizings: three, rows: panelRow)
         #expect(layout.items.map(\.moduleID) == ["time", "weather", "third"])
-        // In the 696-point row a third is (696 + 10) / 3 − 10 points; the clock
+        // In the 732-point row a third is (732 + 10) / 3 − 10 points; the clock
         // takes its 184, the third its minimum, and the weather what is left.
-        let third: CGFloat = 706.0 / 3 - 10
-        #expect(isClose(layout.resolvedWidths(in: panelRow(3), sizings: three), [184, 696 - 20 - 184 - third, third]))
+        let third: CGFloat = 742.0 / 3 - 10
+        #expect(isClose(layout.resolvedWidths(in: panelRow(3), sizings: three), [184, 732 - 20 - 184 - third, third]))
     }
 
     // MARK: Dragging
@@ -305,7 +305,7 @@ struct HomeLayoutSettingsTests {
 
         let settings = HomeLayoutSettings(defaults: defaults)
         settings.register(modules)
-        // The standard layout fills the 576-point row, so the island is at its widest for two.
+        // The standard layout fills the 612-point row, so the island is at its widest for two.
         #expect(settings.expandedWidth == 640)
         #expect(settings.currentRow == panelRow(2))
 
@@ -325,16 +325,16 @@ struct HomeLayoutSettingsTests {
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
 
-        #expect(HomeLayoutSettings.margins == 64)
+        #expect(HomeLayoutSettings.margins == 28)
         // The clock's 184 points, a gap, 300 points of weather, and the margins.
         let settings = try saved(defaults, [("time", 184), ("weather", 300)])
         #expect(abs(settings.contentWidth - (184 + 10 + 300)) < 0.01)
-        #expect(abs(settings.expandedWidth - (184 + 10 + 300 + 64)) < 0.01)
+        #expect(abs(settings.expandedWidth - (184 + 10 + 300 + 28)) < 0.01)
         // 134 and 200 points come to less than the standard width, which the island keeps.
         let short = try saved(defaults, [("time", 134), ("weather", 200)])
         #expect(short.expandedWidth == 520)
         // A full row reaches the widest island for two modules and no more.
-        let full = try saved(defaults, [("time", 184), ("weather", 382)])
+        let full = try saved(defaults, [("time", 184), ("weather", 418)])
         #expect(abs(full.expandedWidth - HomeLayoutSettings.bodyWidth(forModuleCount: 2)) < 0.01)
     }
 
@@ -366,11 +366,11 @@ struct HomeLayoutSettingsTests {
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
 
-        // Two modules in the 576-point row: the minimums (134, a third of 586 less
-        // a gap, and the gap) come to 329 points, under the 456 points of the
+        // Two modules in the 612-point row: the minimums (134, a third of 622 less
+        // a gap, and the gap) come to 341 points, under the 492 points of the
         // standard width less the margins, which is the shortest.
         let settings = try saved(defaults, [("time", 184), ("weather", 300)])
-        #expect(settings.contentWidthRange == 456...576)
+        #expect(settings.contentWidthRange == 492...612)
 
         // With a fixed badge, the modules at their widest come to 294 points:
         // there is nothing to scale.
@@ -398,19 +398,19 @@ struct HomeLayoutSettingsTests {
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
 
-        let settings = try saved(defaults, [("time", 184), ("weather", 300)])
+        let settings = try saved(defaults, [("time", 184), ("weather", 340)])
         var trailing = try #require(settings.beginResize(.trailingEdge))
         // The centered row widens on both sides: 10 points out ask for 20 more.
         // The clock is at its maximum, so the weather takes them.
         trailing.translation = 10
         settings.resize(trailing)
-        #expect(isClose(widths(settings), [184, 320]))
-        #expect(abs(settings.contentWidth - 514) < 0.01)
-        // Inward, both narrow in proportion: 494 to 474 points.
+        #expect(isClose(widths(settings), [184, 360]))
+        #expect(abs(settings.contentWidth - 554) < 0.01)
+        // Inward, both narrow in proportion: 534 to 514 points, 524 to 504 of modules.
         trailing.translation = -10
         settings.resize(trailing)
-        let scale: CGFloat = 464.0 / 484
-        #expect(isClose(widths(settings), [184 * scale, 300 * scale]))
+        let scale: CGFloat = 504.0 / 524
+        #expect(isClose(widths(settings), [184 * scale, 340 * scale]))
 
         // The leading edge mirrors it: out is to the left.
         var leading = try #require(settings.beginResize(.leadingEdge))
@@ -430,15 +430,15 @@ struct HomeLayoutSettingsTests {
 
         let settings = try saved(defaults, [("time", 184), ("weather", 300)])
         var resize = try #require(settings.beginResize(.trailingEdge))
-        // The full 576-point row, and no further.
+        // The full 612-point row, and no further.
         resize.translation = 100
         settings.resize(resize)
-        #expect(isClose(widths(settings), [184, 382]))
-        // 456 points, the standard width less the margins, and no shorter.
+        #expect(isClose(widths(settings), [184, 418]))
+        // 492 points, the standard width less the margins, and no shorter.
         resize.translation = -100
         settings.resize(resize)
-        #expect(abs(settings.contentWidth - 456) < 0.01)
-        let scale: CGFloat = 446.0 / 484
+        #expect(abs(settings.contentWidth - 492) < 0.01)
+        let scale: CGFloat = 482.0 / 484
         #expect(isClose(widths(settings), [184 * scale, 300 * scale]))
     }
 
@@ -464,9 +464,9 @@ struct HomeLayoutSettingsTests {
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
 
-        // 344 points, under the 456-point floor, so the range starts at 344.
+        // 344 points, under the 492-point floor, so the range starts at 344.
         let settings = try saved(defaults, [("time", 134), ("weather", 200)])
-        #expect(isClose(settings.contentWidthRange, 344...576))
+        #expect(isClose(settings.contentWidthRange, 344...612))
         var resize = try #require(settings.beginResize(.trailingEdge))
         resize.translation = 20
         settings.resize(resize)
@@ -549,24 +549,30 @@ struct HomeLayoutSettingsTests {
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
 
-        let settings = try saved(defaults, [("time", 184), ("weather", 300)])
+        // The 534 points of content: 39 points out ask for exactly the 612-point
+        // row, 38 for 2 points less; 21 points in ask for exactly the 492 points
+        // of the standard width less the margins, 20 for 2 points more.
+        let settings = try saved(defaults, [("time", 184), ("weather", 340)])
         var edge = try #require(settings.beginResize(.trailingEdge))
         #expect(settings.limit(for: edge) == nil)
-        // 41 points out ask for exactly the 576-point row; 40 for 2 points less.
-        edge.translation = 40
+        edge.translation = 38
         #expect(settings.limit(for: edge) == nil)
-        edge.translation = 41
-        #expect(settings.limit(for: edge) == .longest(576))
+        edge.translation = 39
+        #expect(settings.limit(for: edge) == .longest(612))
         edge.translation = 100
-        #expect(settings.limit(for: edge) == .longest(576))
+        #expect(settings.limit(for: edge) == .longest(612))
         edge.translation = -10
         #expect(settings.limit(for: edge) == nil)
+        edge.translation = -20
+        #expect(settings.limit(for: edge) == nil)
+        edge.translation = -21
+        #expect(settings.limit(for: edge) == .shortest(492))
         edge.translation = -100
-        #expect(settings.limit(for: edge) == .shortest(456))
+        #expect(settings.limit(for: edge) == .shortest(492))
         // The leading edge asks for more by going left.
         var leading = try #require(settings.beginResize(.leadingEdge))
         leading.translation = -100
-        #expect(settings.limit(for: leading) == .longest(576))
+        #expect(settings.limit(for: leading) == .longest(612))
 
         // The clock before the weather, at its maximum: dragging the boundary right
         // holds it there; left, it stops at its minimum.
@@ -579,7 +585,7 @@ struct HomeLayoutSettingsTests {
         #expect(settings.limit(for: boundary) == .narrowest(index: 0, width: 134))
 
         // The weather before the clock: the clock stops the boundary both ways.
-        let swapped = try saved(defaults, [("weather", 300), ("time", 184)])
+        let swapped = try saved(defaults, [("weather", 340), ("time", 184)])
         var other = try #require(swapped.beginResize(.boundary(0)))
         other.translation = 80
         #expect(swapped.limit(for: other) == .narrowest(index: 1, width: 134))

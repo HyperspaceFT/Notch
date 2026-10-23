@@ -11,7 +11,7 @@ public final class NotesFeature: NotchFeature {
     public let tabPlacement = NotchTabPlacement.trailing
 
     /// The narrowest the Home module may be. With the clock (134 pt), the weather
-    /// and the calendar (a third each) in a four-module row of 776 pt, 108 pt are
+    /// and the calendar (a third each) in a four-module row of 812 pt, 120 pt are
     /// left; a wider minimum would keep Notes out of that row.
     static let moduleMinimumWidth: CGFloat = 100
 

@@ -257,7 +257,7 @@ private struct ExpandedIslandView: View {
         // The expanded radius, not the current one: the content stays on screen
         // while the island collapses.
         .padding(.horizontal, NotchTheme.expandedTopRadius + NotchTheme.contentPadding)
-        .padding(.bottom, 14)
+        .padding(.bottom, NotchTheme.contentPadding)
         // Also catches a tab's availability putting another tab in the selected
         // one's place, which leaves `selectedTabID` alone.
         .onChange(of: model.selectedTab?.id) {

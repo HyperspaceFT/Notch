@@ -46,8 +46,9 @@ public enum NotchTheme {
         )
     }
 
-    /// Horizontal padding between the island body edge and expanded content.
-    public static let contentPadding: CGFloat = 18
+    /// Padding between the island body's sides and bottom and the expanded
+    /// content: the same all round, so cards sit as far from the sides as from the bottom.
+    public static let contentPadding: CGFloat = 14
 
     // MARK: Colors
 

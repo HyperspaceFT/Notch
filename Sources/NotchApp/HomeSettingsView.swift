@@ -148,7 +148,7 @@ private struct HomeLayoutPreview: View {
     private static let scale = maximumWidth
         / HomeLayoutSettings.referenceRow(forModuleCount: HomeLayoutSettings.maximumModuleCount).width
     /// The island's padding around the row, in points of the row.
-    private static let islandPadding: CGFloat = 12
+    private static let islandPadding: CGFloat = HomeLayoutSettings.margins / 2
     /// Below this, a width counts as at a limit.
     private static let minimumRoom: CGFloat = 0.01
     /// What one step of the accessibility adjustment moves a tile's boundary by.
