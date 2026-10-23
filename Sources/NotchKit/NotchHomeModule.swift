@@ -21,7 +21,7 @@ public struct NotchHomeModule: Identifiable {
     /// How wide the module may be.
     public let sizing: HomeModuleSizing
     /// The module at the size Home gives it: its width along the row by the row's
-    /// height. It draws its own background, usually a `NotchCard`, and may switch
+    /// height. It brings its own container, usually a `NotchCard`, and may switch
     /// to a different arrangement as the width grows.
     public let content: @MainActor (CGSize) -> AnyView
 

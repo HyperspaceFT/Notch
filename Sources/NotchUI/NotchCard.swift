@@ -1,6 +1,8 @@
 import SwiftUI
 
-/// A rounded container for grouping content inside the expanded island.
+/// A container for grouping content inside the expanded island. It draws no
+/// background: any gray over the island stands out against the pure-black
+/// hardware notch, where it reads as blue-gray.
 public struct NotchCard<Content: View>: View {
     private let title: String?
     private let content: Content
@@ -21,6 +23,5 @@ public struct NotchCard<Content: View>: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(NotchTheme.cardFill, in: .rect(cornerRadius: 16, style: .continuous))
     }
 }

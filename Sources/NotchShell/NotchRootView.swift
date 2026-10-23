@@ -33,7 +33,12 @@ struct NotchRootView: View {
                 }
             case .expanded:
                 ExpandedIslandView(model: model)
-                    .transition(.blurReplace(.upUp))
+                    // Drops out of the notch on its own spring; collapsing tucks it
+                    // back up with the state's animation.
+                    .transition(AsymmetricTransition(
+                        insertion: DropTransition().animation(NotchTheme.expandDropAnimation),
+                        removal: DropTransition()
+                    ))
             }
         }
         .frame(width: model.islandSize.width, height: model.islandSize.height, alignment: .top)
@@ -76,6 +81,19 @@ struct NotchRootView: View {
         case .collapsed: NotchTheme.collapseAnimation
         case .activity: NotchTheme.activityAnimation
         }
+    }
+}
+
+/// The expanded content outside its place: raised under the notch, narrowed
+/// toward the top, and blurred. The island's outline clips it, so on insertion it
+/// seems to fall out of the notch, and on removal to retract into it.
+private struct DropTransition: Transition {
+    func body(content: Content, phase: TransitionPhase) -> some View {
+        content
+            .scaleEffect(phase.isIdentity ? 1 : 0.94, anchor: .top)
+            .offset(y: phase.isIdentity ? 0 : -NotchTheme.expandDropDistance)
+            .blur(radius: phase.isIdentity ? 0 : 6)
+            .opacity(phase.isIdentity ? 1 : 0)
     }
 }
 
