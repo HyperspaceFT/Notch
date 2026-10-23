@@ -120,37 +120,6 @@ struct HomeLayout: Equatable, Sendable {
         items.insert(items.remove(at: source), at: destination)
     }
 
-    /// Sets a module's width, kept within its bounds. Growing it takes the free
-    /// space first, then narrows the modules after it, nearest first, each down to
-    /// its minimum; it never narrows the ones before it, so dragging a module's
-    /// trailing edge leaves everything left of it alone. Past that it stops
-    /// growing. Shrinking it leaves the space free (the island narrows).
-    mutating func setWidth(_ width: Double, at index: Int, sizings: [String: HomeModuleSizing], row: HomeRowMetrics) {
-        guard items.indices.contains(index), let sizing = sizings[items[index].moduleID] else { return }
-        let bounds = Self.bounds(of: sizing, in: row)
-        var target = min(max(width, bounds.lowerBound), bounds.upperBound)
-        let excess = totalWidth - items[index].width + target - 1
-        if excess > Self.tolerance {
-            let left = shrink(by: excess, order: Array(items.indices[(index + 1)...]), sizings: sizings, row: row)
-            target = max(target - left, bounds.lowerBound)
-        }
-        items[index].width = target
-    }
-
-    /// The widths the module at `index` can be set to: its bounds, capped by what
-    /// the modules before it leave at their current width and the ones after it
-    /// at their minimums. `setWidth` reaches every value in it, so an editor
-    /// bounded by this range stays in step with the layout.
-    func widthRange(at index: Int, sizings: [String: HomeModuleSizing], row: HomeRowMetrics) -> ClosedRange<Double>? {
-        guard items.indices.contains(index), let sizing = sizings[items[index].moduleID] else { return nil }
-        let bounds = Self.bounds(of: sizing, in: row)
-        let before = items[..<index].reduce(0.0) { $0 + $1.width }
-        let afterMinimum = items[(index + 1)...].reduce(0.0) { total, item in
-            total + (sizings[item.moduleID].map { Self.bounds(of: $0, in: row).lowerBound } ?? 0)
-        }
-        return bounds.lowerBound...max(bounds.lowerBound, min(bounds.upperBound, 1 - before - afterMinimum))
-    }
-
     /// Turns the shares measured against `old` into shares of `new` that keep each
     /// module's width in points.
     private mutating func refit(from old: HomeRowMetrics, to new: HomeRowMetrics) {
@@ -248,5 +217,87 @@ struct HomeLayout: Equatable, Sendable {
             widths = widths.map { $0 * scale }
         }
         return widths
+    }
+
+    // MARK: Dragging
+
+    /// The widths in points each module may take in `row`, in layout order: one
+    /// value for a fixed module, as `resolvedWidths(in:sizings:)` holds them.
+    func widthBounds(in row: HomeRowMetrics, sizings: [String: HomeModuleSizing]) -> [ClosedRange<CGFloat>] {
+        items.map { item in
+            sizings[item.moduleID].map { $0.minimumWidth(in: row)...$0.maximumWidth(in: row) } ?? 0...0
+        }
+    }
+
+    /// `widths` scaled together so that they add up to `total`: each one becomes
+    /// `width × s`, held within its bounds, with the same `s` for all of them. A
+    /// module that reaches a bound stays there while the others go on, and a fixed
+    /// module keeps its width. When `total` is out of reach, the widths come as
+    /// close to it as their bounds allow.
+    static func scaled(
+        _ widths: [CGFloat],
+        within bounds: [ClosedRange<CGFloat>],
+        toTotal total: CGFloat
+    ) -> [CGFloat] {
+        func scaledWidths(by scale: CGFloat) -> [CGFloat] {
+            zip(widths, bounds).map { width, bounds in
+                min(max(width * scale, bounds.lowerBound), bounds.upperBound)
+            }
+        }
+        guard abs(widths.reduce(0, +) - total) > 1e-9 else { return widths }
+        // The sum grows with the scale, from the minimums at 0 to the maximums
+        // once every module with a width reaches its own.
+        var low: CGFloat = 0
+        var high = zip(widths, bounds).reduce(CGFloat(1)) { high, entry in
+            entry.0 > 0 ? max(high, entry.1.upperBound / entry.0) : high
+        }
+        for _ in 0..<64 {
+            let middle = (low + high) / 2
+            if scaledWidths(by: middle).reduce(0, +) < total {
+                low = middle
+            } else {
+                high = middle
+            }
+        }
+        return scaledWidths(by: (low + high) / 2)
+    }
+
+    /// How far the boundary between the modules at `index` and `index + 1` can
+    /// move, in points, negative toward the leading side: the module before it
+    /// grows by as much as the one after it shrinks, both within their bounds.
+    /// `0...0` when there is no such boundary.
+    static func tradeRange(_ widths: [CGFloat], within bounds: [ClosedRange<CGFloat>], at index: Int) -> ClosedRange<CGFloat> {
+        guard index >= 0, index + 1 < widths.count, widths.count == bounds.count else { return 0...0 }
+        let (before, after) = (widths[index], widths[index + 1])
+        let (beforeBounds, afterBounds) = (bounds[index], bounds[index + 1])
+        let leading = min(before - beforeBounds.lowerBound, afterBounds.upperBound - after)
+        let trailing = min(beforeBounds.upperBound - before, after - afterBounds.lowerBound)
+        return min(-leading, 0)...max(trailing, 0)
+    }
+
+    /// Where the module at `index` lands when dragged `translation` points along a
+    /// row of modules `widths` wide with `spacing` between them: the slot whose
+    /// centre, with the others closed up around it, is nearest the dragged
+    /// module's centre.
+    static func reorderDestination(widths: [CGFloat], spacing: CGFloat, index: Int, translation: CGFloat) -> Int {
+        guard widths.indices.contains(index) else { return index }
+        let width = widths[index]
+        let centre = widths[..<index].reduce(0) { $0 + $1 + spacing } + width / 2 + translation
+        var others = widths
+        others.remove(at: index)
+        var best = index
+        var bestDistance = CGFloat.infinity
+        var leading: CGFloat = 0
+        for destination in widths.indices {
+            let distance = abs(leading + width / 2 - centre)
+            if distance < bestDistance {
+                best = destination
+                bestDistance = distance
+            }
+            if others.indices.contains(destination) {
+                leading += others[destination] + spacing
+            }
+        }
+        return best
     }
 }

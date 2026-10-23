@@ -12,6 +12,8 @@ public final class HomeLayoutSettings {
     public static let shared = HomeLayoutSettings(defaults: .standard)
 
     static let layoutKey = "NotchHomeLayout"
+    /// Below this many points, a handle's room counts as none.
+    private static let minimumRoom: CGFloat = 0.01
 
     /// The most modules Home shows at once.
     public nonisolated static let maximumModuleCount = HomeLayout.maximumCount
@@ -52,9 +54,6 @@ public final class HomeLayoutSettings {
     public struct Placement: Identifiable {
         public let module: NotchHomeModule
         public let width: Double
-        /// The shares the module can be set to now (see `HomeLayout.widthRange`); a
-        /// single value when it cannot be resized or the others leave no room.
-        public let range: ClosedRange<Double>
         public var id: String { module.id }
     }
 
@@ -65,14 +64,37 @@ public final class HomeLayoutSettings {
         public var id: String { module.id }
     }
 
-    /// A drag on a module's trailing edge, from `beginResize(at:)`; `resize(_:)`
-    /// applies it.
+    /// What a resize drags.
+    public enum ResizeHandle: Hashable, Sendable {
+        /// The island's leading edge, which scales the whole row.
+        case leadingEdge
+        /// The island's trailing edge, which scales the whole row.
+        case trailingEdge
+        /// The line between the module at the index and the one after it, which
+        /// trades width between the two.
+        case boundary(Int)
+    }
+
+    /// A drag on a handle, from `beginResize(_:)`; `resize(_:)` applies it.
     public struct Resize: Equatable, Sendable {
-        let index: Int
+        public let handle: ResizeHandle
         /// The layout when the drag began; every step starts from it.
         let start: HomeLayout
         /// How far the pointer has moved, in points of `currentRow`.
         public var translation: CGFloat
+    }
+
+    /// A limit a resize has reached (see `limit(for:)`). Widths are in points of
+    /// `currentRow`; the edges' are content widths, the modules and their gaps.
+    public enum ResizeLimit: Equatable, Sendable {
+        /// An edge drag asks for a longer row than `contentWidthRange` allows.
+        case longest(CGFloat)
+        /// An edge drag asks for a shorter row than `contentWidthRange` allows.
+        case shortest(CGFloat)
+        /// A boundary drag holds the module at `index` at its minimum.
+        case narrowest(index: Int, width: CGFloat)
+        /// A boundary drag holds the module at `index` at its maximum.
+        case widest(index: Int, width: CGFloat)
     }
 
     /// Every module Home can show, in the order Home registered them.
@@ -127,15 +149,40 @@ public final class HomeLayoutSettings {
         )
     }
 
+    /// The modules' widths in `currentRow` and the gaps between them.
+    public var contentWidth: CGFloat {
+        Self.contentWidth(of: layout.resolvedWidths(in: currentRow, sizings: sizings))
+    }
+
+    /// The content widths the edges can scale the row to (see `contentWidthRange(of:)`).
+    public var contentWidthRange: ClosedRange<CGFloat> {
+        contentWidthRange(of: layout)
+    }
+
+    /// How far the line after the module at `index` can move now, in points of
+    /// `currentRow`, negative toward the leading side; `nil` when there is no
+    /// module after it or neither neighbour can give or take width.
+    public func boundaryRange(at index: Int) -> ClosedRange<CGFloat>? {
+        let (widths, bounds) = widthsAndBounds(of: layout)
+        guard index >= 0, index + 1 < widths.count else { return nil }
+        let range = HomeLayout.tradeRange(widths, within: bounds, at: index)
+        return range.upperBound - range.lowerBound > Self.minimumRoom ? range : nil
+    }
+
+    /// Where the module at `index` lands when dragged `translation` points along a
+    /// row of modules `widths` wide (see `HomeLayout.reorderDestination`).
+    public nonisolated static func reorderDestination(
+        widths: [CGFloat],
+        spacing: CGFloat,
+        index: Int,
+        translation: CGFloat
+    ) -> Int {
+        HomeLayout.reorderDestination(widths: widths, spacing: spacing, index: index, translation: translation)
+    }
+
     public var placements: [Placement] {
-        let sizings = sizings
-        let row = currentRow
-        return layout.items.indices.compactMap { index in
-            let item = layout.items[index]
-            guard let module = module(item.moduleID),
-                  let range = layout.widthRange(at: index, sizings: sizings, row: row)
-            else { return nil }
-            return Placement(module: module, width: item.width, range: range)
+        layout.items.compactMap { item in
+            module(item.moduleID).map { Placement(module: $0, width: item.width) }
         }
     }
 
@@ -171,43 +218,131 @@ public final class HomeLayoutSettings {
         edit { $0.move(from: source, to: destination) }
     }
 
-    /// `width` is a share of `currentRow` (see `HomeLayout.setWidth`).
-    public func setWidth(_ width: Double, at index: Int) {
-        edit { $0.setWidth(width, at: index, sizings: sizings, row: currentRow) }
+    /// Starts a drag on `handle`; `nil` when it can move nothing: no modules, a row
+    /// whose content width cannot change, or no boundary there that can move.
+    public func beginResize(_ handle: ResizeHandle) -> Resize? {
+        guard !layout.items.isEmpty else { return nil }
+        switch handle {
+        case .leadingEdge, .trailingEdge:
+            let range = contentWidthRange
+            guard range.upperBound - range.lowerBound > Self.minimumRoom else { return nil }
+        case .boundary(let index):
+            guard boundaryRange(at: index) != nil else { return nil }
+        }
+        return Resize(handle: handle, start: layout, translation: 0)
     }
 
-    /// Starts a drag on the trailing edge of the module at `index`; `nil` when there
-    /// is no such module or it cannot be resized.
-    public func beginResize(at index: Int) -> Resize? {
-        guard layout.items.indices.contains(index),
-              sizings[layout.items[index].moduleID]?.isResizable == true
-        else { return nil }
-        return Resize(index: index, start: layout, translation: 0)
-    }
-
-    /// Sets the dragged module's width so that its trailing edge follows the
-    /// pointer, in a row drawn centered and as wide as its modules (as Home and the
-    /// settings preview draw it). While the row has free space, the row widens on
-    /// both sides as the module grows, so its trailing edge moves half as far as
-    /// the module grows: the module grows by twice the translation until the free
-    /// space is used up. Once the row is full, the module narrows the ones after it
-    /// and the edge moves as far as the module grows. Every step starts from the
-    /// layout the drag began with, so dragging back gives the later modules their
-    /// width back. Ignored once the modules changed since the drag began.
+    /// Applies a drag, in a row drawn centered and as wide as its modules (as Home
+    /// and the settings preview draw it), so that the dragged handle stays under
+    /// the pointer.
+    ///
+    /// An edge scales the whole row: the row widens or narrows on both sides, so
+    /// its content width changes by twice the translation, within
+    /// `contentWidthRange`, and the modules scale together in proportion, each
+    /// within its bounds (see `HomeLayout.scaled`). A boundary moves by the
+    /// translation: the module before it grows by as much as the one after it
+    /// shrinks, both within their bounds, and the row keeps its width.
+    ///
+    /// Every step starts from the layout the drag began with, its range included,
+    /// so dragging back restores it. Ignored once the modules changed since the
+    /// drag began.
     public func resize(_ resize: Resize) {
         guard resize.start.items.map(\.moduleID) == layout.items.map(\.moduleID) else { return }
-        let sizings = sizings
         let row = currentRow
-        let startWidths = resize.start.resolvedWidths(in: row, sizings: sizings)
-        guard startWidths.indices.contains(resize.index) else { return }
-        let free = max(row.width - Self.contentWidth(of: startWidths), 0)
-        let translation = resize.translation
-        let growth = translation <= free / 2 ? 2 * translation : translation + free / 2
-        let width = row.fraction(forWidth: startWidths[resize.index] + growth)
+        let (startWidths, bounds) = widthsAndBounds(of: resize.start)
+        var widths = startWidths
+        switch resize.handle {
+        case .leadingEdge, .trailingEdge:
+            let range = contentWidthRange(of: resize.start)
+            let target = min(max(requestedContentWidth(for: resize), range.lowerBound), range.upperBound)
+            widths = HomeLayout.scaled(startWidths, within: bounds, toTotal: target - Self.gaps(widths.count))
+        case .boundary(let index):
+            guard index >= 0, index + 1 < widths.count else { return }
+            let range = HomeLayout.tradeRange(startWidths, within: bounds, at: index)
+            let shift = min(max(resize.translation, range.lowerBound), range.upperBound)
+            widths[index] += shift
+            widths[index + 1] -= shift
+        }
         edit {
             $0 = resize.start
-            $0.setWidth(width, at: resize.index, sizings: sizings, row: row)
+            for index in $0.items.indices where abs(widths[index] - startWidths[index]) > 1e-6 {
+                $0.items[index].width = row.fraction(forWidth: widths[index])
+            }
         }
+    }
+
+    /// The limit `resize` has reached, if any: for an edge, the end of
+    /// `contentWidthRange` (from the layout the drag began with) once the drag asks
+    /// for it or past it; for a boundary, the bound of whichever neighbour stops it
+    /// once the drag reaches it. `nil` before the drag moves, while it moves back
+    /// from a limit, and once the modules changed since it began.
+    public func limit(for resize: Resize) -> ResizeLimit? {
+        guard resize.translation != 0,
+              resize.start.items.map(\.moduleID) == layout.items.map(\.moduleID)
+        else { return nil }
+        let (widths, bounds) = widthsAndBounds(of: resize.start)
+        switch resize.handle {
+        case .leadingEdge, .trailingEdge:
+            let start = Self.contentWidth(of: widths)
+            let requested = requestedContentWidth(for: resize)
+            let range = contentWidthRange(of: resize.start)
+            if requested > start, requested >= range.upperBound - Self.minimumRoom {
+                return .longest(range.upperBound)
+            }
+            if requested < start, requested <= range.lowerBound + Self.minimumRoom {
+                return .shortest(range.lowerBound)
+            }
+            return nil
+        case .boundary(let index):
+            guard index >= 0, index + 1 < widths.count else { return nil }
+            let range = HomeLayout.tradeRange(widths, within: bounds, at: index)
+            let (before, after) = (index, index + 1)
+            if resize.translation > 0, resize.translation >= range.upperBound - Self.minimumRoom {
+                // The module before grows and the one after shrinks: whichever has
+                // less room left is the one that stops.
+                return bounds[before].upperBound - widths[before] <= widths[after] - bounds[after].lowerBound
+                    ? .widest(index: before, width: bounds[before].upperBound)
+                    : .narrowest(index: after, width: bounds[after].lowerBound)
+            }
+            if resize.translation < 0, resize.translation <= range.lowerBound + Self.minimumRoom {
+                return widths[before] - bounds[before].lowerBound <= bounds[after].upperBound - widths[after]
+                    ? .narrowest(index: before, width: bounds[before].lowerBound)
+                    : .widest(index: after, width: bounds[after].upperBound)
+            }
+            return nil
+        }
+    }
+
+    /// The content width an edge drag asks for, before `contentWidthRange` holds it:
+    /// the width it began with, plus twice the translation outward.
+    private func requestedContentWidth(for resize: Resize) -> CGFloat {
+        let start = Self.contentWidth(of: widthsAndBounds(of: resize.start).widths)
+        let outward: CGFloat = resize.handle == .leadingEdge ? -1 : 1
+        return start + 2 * outward * resize.translation
+    }
+
+    /// The content widths `layout` can be scaled to in `currentRow`: no longer than
+    /// the row or the modules at their maximums, and no shorter than the modules at
+    /// their minimums or the standard width less `margins` (so that the island shows
+    /// no more than its margins when the modules could fill it), whichever is longer
+    /// but never past the upper end. A layout already shorter than that (saved
+    /// before, or left by a removal) may stay as short, so that dragging an edge
+    /// inward does not widen it.
+    private func contentWidthRange(of layout: HomeLayout) -> ClosedRange<CGFloat> {
+        let (widths, bounds) = widthsAndBounds(of: layout)
+        guard !widths.isEmpty else { return 0...0 }
+        let gaps = Self.gaps(widths.count)
+        let upper = min(currentRow.width, bounds.reduce(0) { $0 + $1.upperBound } + gaps)
+        let floor = NotchTheme.expandedSize.width - Self.margins
+        let lower = min(max(bounds.reduce(0) { $0 + $1.lowerBound } + gaps, floor), upper)
+        return min(lower, Self.contentWidth(of: widths))...upper
+    }
+
+    /// `layout`'s widths in points of `currentRow` and the widths each module may take there.
+    private func widthsAndBounds(of layout: HomeLayout) -> (widths: [CGFloat], bounds: [ClosedRange<CGFloat>]) {
+        let sizings = sizings
+        let row = currentRow
+        return (layout.resolvedWidths(in: row, sizings: sizings), layout.widthBounds(in: row, sizings: sizings))
     }
 
     private func edit(_ change: (inout HomeLayout) -> Void) {
@@ -223,7 +358,12 @@ public final class HomeLayoutSettings {
 
     /// Modules `widths` points wide side by side, with the gaps between them.
     private nonisolated static func contentWidth(of widths: [CGFloat]) -> CGFloat {
-        widths.reduce(0, +) + spacing * CGFloat(max(widths.count - 1, 0))
+        widths.reduce(0, +) + gaps(widths.count)
+    }
+
+    /// The gaps between `count` modules side by side.
+    private nonisolated static func gaps(_ count: Int) -> CGFloat {
+        spacing * CGFloat(max(count - 1, 0))
     }
 
     private var sizings: [String: HomeModuleSizing] {
