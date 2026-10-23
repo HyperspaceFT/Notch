@@ -38,7 +38,8 @@ public final class LocalCalendars {
     /// are read again and views showing them redraw.
     private var revision = 0
 
-    @ObservationIgnored private let store = EKEventStore()
+    /// Replaced when access is granted (see `apply(_:)`).
+    @ObservationIgnored private var store = EKEventStore()
     @ObservationIgnored private var observer: (any NSObjectProtocol)?
     @ObservationIgnored private var isRequesting = false
     @ObservationIgnored private var cache: (key: CacheKey, events: [AgendaEvent])?
@@ -59,6 +60,15 @@ public final class LocalCalendars {
     /// Follows changes to the Calendar app's data until `stop()`.
     func start() {
         guard observer == nil else { return }
+        observeStore()
+    }
+
+    func stop() {
+        stopObservingStore()
+        cache = nil
+    }
+
+    private func observeStore() {
         // Queue .main delivers the notification on the main thread, so the
         // block runs on the main actor.
         observer = NotificationCenter.default.addObserver(
@@ -72,12 +82,11 @@ public final class LocalCalendars {
         }
     }
 
-    func stop() {
+    private func stopObservingStore() {
         if let observer {
             NotificationCenter.default.removeObserver(observer)
         }
         observer = nil
-        cache = nil
     }
 
     /// Shows the system's prompt while the user has not decided yet.
@@ -85,11 +94,14 @@ public final class LocalCalendars {
         guard !isRequesting else { return }
         isRequesting = true
         // The completion runs on an arbitrary queue: it only hops back to the
-        // main actor, where the store lives, and re-reads the status there.
-        store.requestFullAccessToEvents { @Sendable [weak self] _, _ in
+        // main actor, where the store lives, and applies the answer there.
+        store.requestFullAccessToEvents { @Sendable [weak self] granted, _ in
             Task { @MainActor in
                 self?.isRequesting = false
-                self?.refreshAccess()
+                // The prompt's answer, not the status read again: right after the
+                // user allowed access, that status can still say not determined
+                // (seen with reminders on macOS 26), and the card would keep asking.
+                self?.apply(granted ? .granted : Self.currentAccess())
             }
         }
     }
@@ -98,11 +110,23 @@ public final class LocalCalendars {
     /// Settings. Only a real change notifies observers.
     public func refreshAccess() {
         let current = Self.currentAccess()
+        // Access never goes back to not determined by itself, so after a grant
+        // that reading is the stale one `requestAccess` works around.
+        guard !(current == .notDetermined && access == .granted) else { return }
+        apply(current)
+    }
+
+    private func apply(_ current: Access) {
         guard current != access else { return }
         access = current
         if current == .granted {
-            // A store created before access was granted may not see any data.
-            store.reset()
+            // A store created before access was granted may not see any data,
+            // and may keep answering from what it knew then, so read through a new one.
+            store = EKEventStore()
+            if observer != nil {
+                stopObservingStore()
+                observeStore()
+            }
             calendars = loadCalendars()
         } else {
             calendars = []
