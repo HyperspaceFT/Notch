@@ -47,6 +47,7 @@ private struct TimeModuleView: View {
                 VStack(spacing: 2) {
                     Text(context.date.formatted(showsSeconds ? Self.secondStyle : Self.minuteStyle))
                         .font(.system(size: 36, weight: .semibold, design: .rounded))
+                        .foregroundStyle(NotchTheme.headline())
                         .monospacedDigit()
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)

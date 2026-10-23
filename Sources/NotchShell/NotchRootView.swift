@@ -56,6 +56,13 @@ struct NotchRootView: View {
                     }
             }
         }
+        .overlay {
+            // Twice the rim's width: the clip below keeps only its inner half.
+            shape
+                .stroke(NotchTheme.islandRim, lineWidth: 2)
+                .opacity(isExpanded ? 1 : 0)
+                .allowsHitTesting(false)
+        }
         .background { shape.fill(NotchTheme.islandColor) }
         .clipShape(shape)
         // The hovered ring casts a lighter, tighter shadow than the expanded panel.

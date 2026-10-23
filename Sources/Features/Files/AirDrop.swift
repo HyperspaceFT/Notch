@@ -10,10 +10,12 @@ struct AirDropZone: View {
     @Bindable var target: DropTarget
 
     var body: some View {
-        NotchCard {
+        // AirDrop's own blue.
+        NotchCard(tint: .blue) {
             VStack(spacing: 6) {
                 Image(systemName: "dot.radiowaves.left.and.right")
                     .font(.system(size: 26, weight: .regular))
+                    .foregroundStyle(Color.blue.gradient)
                 Text(localized(en: "AirDrop", zh: "隔空投送"))
                     .font(.system(size: 12, weight: .semibold))
                 Text(localized(en: "Drop here to send", zh: "拖到这里发送"))

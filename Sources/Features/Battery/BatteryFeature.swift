@@ -112,8 +112,13 @@ extension PowerStatus {
     }
 
     var tint: Color {
+        cardTint ?? NotchTheme.primaryText
+    }
+
+    /// Tint of the remaining-time card: green on power, red when low, none otherwise.
+    var cardTint: Color? {
         if isCharging || isOnACPower { return NotchTheme.chargingColor }
-        return percent <= 20 ? .red : NotchTheme.primaryText
+        return percent <= 20 ? .red : nil
     }
 
     /// Title of the remaining-time card; its headline counts down to full while charging.
@@ -220,12 +225,12 @@ private struct BatteryExpandedView: View {
     var body: some View {
         if let status = model.status {
             HStack(spacing: 10) {
-                NotchCard(title: status.remainingTitle) {
+                NotchCard(title: status.remainingTitle, tint: status.cardTint) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(status.remainingHeadline)
                             .font(.system(size: 22, weight: .semibold, design: .rounded))
                             .monospacedDigit()
-                            .foregroundStyle(status.tint)
+                            .foregroundStyle(NotchTheme.headline(status.tint))
                             .contentTransition(.numericText())
                         Text(status.remainingCaption)
                             .font(.system(size: 12))
@@ -258,6 +263,7 @@ private struct BatteryHealthView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(health.maximumCapacity.map { "\($0)%" } ?? "—")
                         .font(.system(size: 22, weight: .semibold, design: .rounded))
+                        .foregroundStyle(NotchTheme.headline())
                         .monospacedDigit()
                     Text(localized(en: "Maximum Capacity", zh: "最大容量"))
                         .font(.system(size: 12))

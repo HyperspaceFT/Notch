@@ -15,9 +15,16 @@ struct WeatherModuleView: View {
     static let checkInterval: Duration = .seconds(60)
 
     var body: some View {
-        NotchCard {
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Redrawn every minute, so the hours move on and the shown period
+        // changes on time.
+        TimelineView(.everyMinute) { context in
+            let forecast = forecast(at: context.date)
+            let summary = forecast?.summary
+            // Tinted by the sky the summary shows.
+            NotchCard(tint: summary.flatMap { $0.condition.tint(isDay: $0.isDay) }) {
+                content(forecast)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
         .frame(width: size.width, height: size.height)
         // SwiftUI cancels this when the module leaves the screen, such as when the
@@ -30,23 +37,22 @@ struct WeatherModuleView: View {
         }
     }
 
+    /// What the module shows at `date`, once a report is ready.
+    private func forecast(at date: Date) -> WeatherForecast? {
+        guard model.status == .ready, let report = model.report else { return nil }
+        return WeatherForecast(
+            report: report,
+            mode: WeatherSettings.shared.schedule.mode(at: date, calendar: .current),
+            now: date
+        )
+    }
+
     @ViewBuilder
-    private var content: some View {
+    private func content(_ forecast: WeatherForecast?) -> some View {
         switch model.status {
         case .ready:
-            if let report = model.report {
-                // Redrawn every minute, so the hours move on and the shown period
-                // changes on time.
-                TimelineView(.everyMinute) { context in
-                    WeatherReportView(
-                        forecast: WeatherForecast(
-                            report: report,
-                            mode: WeatherSettings.shared.schedule.mode(at: context.date, calendar: .current),
-                            now: context.date
-                        ),
-                        arrangement: .forWidth(size.width)
-                    )
-                }
+            if let forecast {
+                WeatherReportView(forecast: forecast, arrangement: .forWidth(size.width))
             }
         case .loading:
             StatusView {
@@ -285,6 +291,7 @@ private struct SummaryTemperature: View {
         HStack(alignment: .firstTextBaseline, spacing: 1) {
             Text(temperatureText(summary.temperature))
                 .font(.system(size: size, weight: .semibold, design: .rounded))
+                .foregroundStyle(NotchTheme.headline())
             if let low = summary.low {
                 Text("/" + temperatureText(low))
                     .font(.system(size: size * 0.55, weight: .semibold, design: .rounded))
@@ -340,6 +347,20 @@ private struct ConditionSymbol: View {
             .symbolRenderingMode(.multicolor)
             .font(.system(size: size))
             .frame(height: size * 1.1)
+    }
+}
+
+private extension WeatherCondition {
+    /// The weather card's tint: warm sun, a night sky, rain, snow, or storm; none
+    /// for gray skies.
+    func tint(isDay: Bool) -> Color? {
+        switch self {
+        case .clear, .mostlyClear, .partlyCloudy: isDay ? .orange : .indigo
+        case .cloudy, .fog, .unknown: nil
+        case .drizzle, .lightRain, .rain, .heavyRain, .showers, .heavyShowers: .blue
+        case .freezingDrizzle, .freezingRain, .lightSnow, .snow, .heavySnow, .snowGrains, .snowShowers: .cyan
+        case .thunderstorms, .thunderstormsWithHail: .purple
+        }
     }
 }
 

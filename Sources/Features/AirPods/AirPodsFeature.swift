@@ -295,7 +295,11 @@ private struct AirPodsExpandedView: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            NotchCard(title: model.connection?.name ?? localized(en: "AirPods", zh: "AirPods")) {
+            NotchCard(
+                title: model.connection?.name ?? localized(en: "AirPods", zh: "AirPods"),
+                // Red once a part runs low, like that part's level.
+                tint: model.battery.lowestLevel.flatMap { $0 <= 20 ? .red : nil }
+            ) {
                 AirPodsBatteryView(model: model)
             }
             .frame(width: 190)
