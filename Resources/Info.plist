@@ -46,5 +46,9 @@
 	<string>Notch uses your approximate location to show the local weather on the Home tab.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Notch uses your approximate location to show the local weather on the Home tab.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Notch shows your reminders from the Reminders app in the island and lets you add, complete, and delete them.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Notch shows your reminders from the Reminders app in the island and lets you add, complete, and delete them.</string>
 </dict>
 </plist>

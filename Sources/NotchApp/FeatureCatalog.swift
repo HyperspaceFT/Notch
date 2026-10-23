@@ -5,6 +5,7 @@ import FilesFeature
 import HomeFeature
 import NotchKit
 import NotesFeature
+import RemindersFeature
 import SystemHUDFeature
 import WeatherFeature
 
@@ -30,6 +31,7 @@ enum FeatureCatalog {
             WeatherFeature(),
             CalendarFeature(),
             NotesFeature(),
+            RemindersFeature(),
         ]
         return [HomeFeature(moduleSources: features)] + features
     }
