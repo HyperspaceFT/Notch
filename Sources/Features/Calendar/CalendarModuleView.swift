@@ -130,6 +130,9 @@ private struct AgendaList: View {
     let now: Date
     let isWide: Bool
 
+    /// Height of the fade at the bottom, where a list longer than the card is cut off.
+    private static let fadeHeight: CGFloat = 18
+
     var body: some View {
         let language = Localization.shared.language
         ScrollView(.vertical) {
@@ -151,8 +154,18 @@ private struct AgendaList: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            // Room to scroll the last event clear of the fade.
+            .padding(.bottom, Self.fadeHeight)
         }
         .scrollIndicators(.hidden)
+        // Events cut off at the bottom fade out instead of ending at a hard edge.
+        .mask {
+            VStack(spacing: 0) {
+                Color.black
+                LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(height: Self.fadeHeight)
+            }
+        }
     }
 }
 
