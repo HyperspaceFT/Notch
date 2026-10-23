@@ -6,7 +6,8 @@ struct Coordinate: Equatable, Sendable {
     let longitude: Double
 }
 
-/// The current conditions and the next hours at one place, in degrees Celsius.
+/// The current conditions, the hours of today and tomorrow, and a summary of
+/// each of those days at one place, in degrees Celsius.
 struct WeatherReport: Equatable, Sendable {
     struct Reading: Equatable, Sendable {
         let time: Date
@@ -15,15 +16,46 @@ struct WeatherReport: Equatable, Sendable {
         let isDay: Bool
     }
 
+    /// One day's forecast.
+    struct Day: Equatable, Sendable {
+        /// Local midnight.
+        let start: Date
+        let condition: WeatherCondition
+        let high: Double
+        let low: Double
+        /// Percent; nil when the forecast gives none.
+        let precipitationChance: Int?
+    }
+
     let current: Reading
-    /// Hourly forecast from the start of the current hour, in order.
+    /// Hourly forecast from today's local midnight to the end of tomorrow, in order.
     let hours: [Reading]
-    let todayHigh: Double?
-    let todayLow: Double?
+    /// Index 0 is today, 1 tomorrow. A day the response lacks a time, code, high
+    /// or low for is left out.
+    let days: [Day]
+
+    var today: Day? { days.first }
+    var tomorrow: Day? { days.count > 1 ? days[1] : nil }
+    var todayHigh: Double? { today?.high }
+    var todayLow: Double? { today?.low }
 
     /// The forecast hours that start strictly after `now`, in order.
     func upcomingHours(after now: Date) -> [Reading] {
         hours.filter { $0.time > now }
+    }
+
+    /// The readings at the hours `WeatherFormat.dayHours(count:)` names on `day`,
+    /// in order. A reading within half an hour of the hour counts, since a day
+    /// with a clock change is not 24 hours long; hours without one are skipped.
+    func hours(on day: Day, count: Int) -> [Reading] {
+        WeatherFormat.dayHours(count: count).compactMap { hour in
+            let target = day.start.addingTimeInterval(TimeInterval(hour) * 3600)
+            let nearest = hours.min {
+                abs($0.time.timeIntervalSince(target)) < abs($1.time.timeIntervalSince(target))
+            }
+            guard let nearest, abs(nearest.time.timeIntervalSince(target)) <= 30 * 60 else { return nil }
+            return nearest
+        }
     }
 }
 
@@ -38,8 +70,10 @@ enum OpenMeteo {
             URLQueryItem(name: "longitude", value: rounded(coordinate.longitude)),
             URLQueryItem(name: "current", value: "temperature_2m,weather_code,is_day"),
             URLQueryItem(name: "hourly", value: "temperature_2m,weather_code,is_day"),
-            URLQueryItem(name: "daily", value: "temperature_2m_max,temperature_2m_min"),
-            URLQueryItem(name: "forecast_hours", value: "12"),
+            URLQueryItem(
+                name: "daily",
+                value: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
+            ),
             URLQueryItem(name: "forecast_days", value: "2"),
             URLQueryItem(name: "timezone", value: "auto"),
             URLQueryItem(name: "timeformat", value: "unixtime"),
@@ -58,7 +92,8 @@ enum OpenMeteo {
     }
 
     /// Reads a forecast response. Hours missing a temperature or code are left
-    /// out, and without daily data the report has no high or low.
+    /// out, and days missing a code, high or low are too; without daily data the
+    /// report has no days, so no high or low.
     static func decode(_ data: Data) throws -> WeatherReport {
         let response = try JSONDecoder().decode(Response.self, from: data)
         let current = WeatherReport.Reading(
@@ -82,12 +117,25 @@ enum OpenMeteo {
                 ))
             }
         }
-        return WeatherReport(
-            current: current,
-            hours: hours,
-            todayHigh: response.daily?.temperatureMax?.element(at: 0) ?? nil,
-            todayLow: response.daily?.temperatureMin?.element(at: 0) ?? nil
-        )
+        var days: [WeatherReport.Day] = []
+        if let daily = response.daily, let times = daily.time {
+            for (index, time) in times.enumerated() {
+                guard let time,
+                      let code = daily.weatherCode?.element(at: index) ?? nil,
+                      let high = daily.temperatureMax?.element(at: index) ?? nil,
+                      let low = daily.temperatureMin?.element(at: index) ?? nil
+                else { continue }
+                let chance = daily.precipitationChance?.element(at: index) ?? nil
+                days.append(WeatherReport.Day(
+                    start: Date(timeIntervalSince1970: time),
+                    condition: WeatherCondition(code: code),
+                    high: high,
+                    low: low,
+                    precipitationChance: chance.map { Int($0.rounded()) }
+                ))
+            }
+        }
+        return WeatherReport(current: current, hours: hours, days: days)
     }
 
     private static func rounded(_ degrees: Double) -> String {
@@ -124,12 +172,18 @@ enum OpenMeteo {
         }
 
         struct Daily: Decodable {
+            let time: [TimeInterval?]?
+            let weatherCode: [Int?]?
             let temperatureMax: [Double?]?
             let temperatureMin: [Double?]?
+            let precipitationChance: [Double?]?
 
             enum CodingKeys: String, CodingKey {
+                case time
+                case weatherCode = "weather_code"
                 case temperatureMax = "temperature_2m_max"
                 case temperatureMin = "temperature_2m_min"
+                case precipitationChance = "precipitation_probability_max"
             }
         }
 

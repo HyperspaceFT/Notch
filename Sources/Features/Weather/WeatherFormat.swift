@@ -18,6 +18,15 @@ enum WeatherFormat {
         case .simplifiedChinese: return "\(hour)时"
         }
     }
+
+    /// Hours of a day to show `count` of, spread evenly from 07:00 to 22:00 and rounded to whole hours.
+    static func dayHours(count: Int) -> [Int] {
+        guard count > 0 else { return [] }
+        if count == 1 { return [14] }
+        return (0..<count).map { index in
+            Int((7 + 15 * Double(index) / Double(count - 1)).rounded(.toNearestOrAwayFromZero))
+        }
+    }
 }
 
 /// How the module arranges itself at a given outer width.

@@ -4,9 +4,10 @@ import NotchKit
 import Observation
 import SwiftUI
 import SystemHUDFeature
+import WeatherFeature
 
 /// The settings window: a standalone window with one toolbar tab per pane
-/// (General, Island, and Home). Built on first use and kept for later openings.
+/// (General, Island, Home, and Weather). Built on first use and kept for later openings.
 @MainActor
 final class SettingsWindowController {
     private var window: NSWindow?
@@ -35,6 +36,9 @@ final class SettingsWindowController {
         }
         addPane(HomeSettingsView(settings: .shared), symbol: "house") {
             localized(en: "Home", zh: "主页")
+        }
+        addPane(WeatherSettingsView(settings: .shared), symbol: "cloud.sun") {
+            localized(en: "Weather", zh: "天气")
         }
 
         let tabs = NSTabViewController()
