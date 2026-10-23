@@ -11,6 +11,9 @@ struct NotesView: View {
     let focus: NotesEditorFocus
     let size: CGSize
 
+    /// Which tab this card is in and which one shows; nil outside the expanded panel.
+    @Environment(\.notchTabMorph) private var tabMorph
+
     static let wideThreshold: CGFloat = 280
     static let listWidth: CGFloat = 140
     /// A warm note-paper yellow.
@@ -47,7 +50,8 @@ struct NotesView: View {
                 set: { store.setText($0) }
             ),
             noteID: store.selectedID,
-            focusToken: focus.token
+            focusToken: focus.token,
+            isShown: tabMorph.map { $0.tabID == $0.shownTabID } ?? true
         )
         .overlay(alignment: .topLeading) {
             if store.selectedNote?.text.isEmpty ?? true {

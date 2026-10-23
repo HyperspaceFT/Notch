@@ -11,6 +11,9 @@ struct NoteTextView: NSViewRepresentable {
     let noteID: UUID?
     /// Changing it puts the caret in this editor.
     let focusToken: Int
+    /// Whether this editor's tab is the one shown. The other tabs stay mounted
+    /// under it, so a hidden editor is hidden in AppKit as well.
+    let isShown: Bool
 
     static let font = NSFont.systemFont(ofSize: 12)
 
@@ -51,6 +54,7 @@ struct NoteTextView: NSViewRepresentable {
         textView.string = text
 
         scrollView.documentView = textView
+        scrollView.isHidden = !isShown
         context.coordinator.noteID = noteID
         context.coordinator.focusToken = focusToken
         return scrollView
@@ -97,6 +101,15 @@ struct NoteTextView: NSViewRepresentable {
                 window.makeFirstResponder(textView)
             }
         }
+
+        // SwiftUI's opacity and hit testing keep another tab's editor from sight
+        // and clicks, not from AppKit: the pointer passing over it still brought
+        // up the system's Writing Tools button above the shown tab.
+        if !isShown, textView.window?.firstResponder === textView {
+            // Hidden, it would hand the keyboard to the next key view instead.
+            textView.window?.makeFirstResponder(nil)
+        }
+        scrollView.isHidden = !isShown
     }
 
     @MainActor
