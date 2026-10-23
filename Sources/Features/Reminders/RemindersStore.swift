@@ -31,7 +31,8 @@ final class RemindersStore {
         self?.complete(id)
     }
 
-    @ObservationIgnored private let store = EKEventStore()
+    /// Replaced when access is granted (see `apply(_:)`).
+    @ObservationIgnored private var store = EKEventStore()
     @ObservationIgnored private var observer: (any NSObjectProtocol)?
     @ObservationIgnored private var isRequesting = false
     /// Bumped by every fetch, so results a newer fetch superseded are dropped.
@@ -44,6 +45,16 @@ final class RemindersStore {
     /// Follows changes to the Reminders app's data until `stop()`.
     func start() {
         guard observer == nil else { return }
+        observeStore()
+    }
+
+    /// Writes the reminders still waiting to be completed, then stops following changes.
+    func stop() {
+        completions.flush()
+        stopObservingStore()
+    }
+
+    private func observeStore() {
         // Queue .main delivers the notification on the main thread, so the
         // block runs on the main actor.
         observer = NotificationCenter.default.addObserver(
@@ -57,9 +68,7 @@ final class RemindersStore {
         }
     }
 
-    /// Writes the reminders still waiting to be completed, then stops following changes.
-    func stop() {
-        completions.flush()
+    private func stopObservingStore() {
         if let observer {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -71,11 +80,14 @@ final class RemindersStore {
         guard !isRequesting else { return }
         isRequesting = true
         // The completion runs on an arbitrary queue: it only hops back to the
-        // main actor, where the store lives, and re-reads the status there.
-        store.requestFullAccessToReminders { @Sendable [weak self] _, _ in
+        // main actor, where the store lives, and applies the answer there.
+        store.requestFullAccessToReminders { @Sendable [weak self] granted, _ in
             Task { @MainActor in
                 self?.isRequesting = false
-                self?.refreshAccess()
+                // The prompt's answer, not the status read again: right after the
+                // user allowed access, that status still said not determined, and
+                // the card kept asking (macOS 26).
+                self?.apply(granted ? .granted : Self.currentAccess())
             }
         }
     }
@@ -84,11 +96,23 @@ final class RemindersStore {
     /// Settings. Only a real change notifies observers.
     func refreshAccess() {
         let current = Self.currentAccess()
+        // Access never goes back to not determined by itself, so after a grant
+        // that reading is the stale one `requestAccess` works around.
+        guard !(current == .notDetermined && access == .granted) else { return }
+        apply(current)
+    }
+
+    private func apply(_ current: Access) {
         guard current != access else { return }
         access = current
         if current == .granted {
-            // A store created before access was granted may not see any data.
-            store.reset()
+            // Read through a new store: one made before access was granted may
+            // keep answering from what it knew then, as the status above does.
+            store = EKEventStore()
+            if observer != nil {
+                stopObservingStore()
+                observeStore()
+            }
             fetch()
         } else {
             generation &+= 1

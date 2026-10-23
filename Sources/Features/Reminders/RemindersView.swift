@@ -3,8 +3,8 @@ import NotchUI
 import Observation
 import SwiftUI
 
-/// The reminders card at the size it is given, in the Reminders tab or on Home:
-/// a field to add one, then the incomplete reminders of every list. From
+/// The reminders module at the size Home gives it: a field to add one, then
+/// the incomplete reminders of every list. From
 /// `wideThreshold` on, a reminder's due date sits on its title's line; below
 /// it, under the title.
 struct RemindersView: View {
@@ -26,9 +26,6 @@ struct RemindersView: View {
             }
         }
         .frame(width: size.width, height: size.height)
-        // While the card grows from Home into the tab or back (`notchTabMorph`),
-        // its content is already laid out for the final size; this keeps it inside.
-        .clipShape(.rect(cornerRadius: 16, style: .continuous))
         // Never asks for access by itself, unlike the calendar module: that one
         // already prompts on the first expand, and two system prompts at once
         // would be confusing. Only the card's "Allow" asks.
