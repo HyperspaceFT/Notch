@@ -147,6 +147,15 @@ struct WeatherArrangementTests {
     }
 }
 
+@MainActor
+struct LocationProviderTests {
+    @Test func reusesFixesUpToTenMinutesOld() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        #expect(LocationProvider.isRecent(now.addingTimeInterval(-599), now: now))
+        #expect(!LocationProvider.isRecent(now.addingTimeInterval(-600), now: now))
+    }
+}
+
 struct WeatherRefreshPolicyTests {
     private let now = Date(timeIntervalSince1970: 1_000_000)
 

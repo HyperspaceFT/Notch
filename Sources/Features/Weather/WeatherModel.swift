@@ -31,6 +31,9 @@ final class WeatherModel {
         location.onAccessGranted = { [weak self] in
             self?.accessGranted()
         }
+        location.onLateFix = { [weak self] coordinate in
+            self?.lateFix(coordinate)
+        }
     }
 
     func refreshIfNeeded(now: Date = Date()) {
@@ -86,6 +89,14 @@ final class WeatherModel {
 
     /// Access was just granted: refresh now instead of after the retry delay.
     private func accessGranted() {
+        lastFailure = nil
+        refreshIfNeeded()
+    }
+
+    /// A fix came after its request had timed out: refresh now, which reuses it
+    /// as the manager's recent location, unless the report is fresh anyway.
+    private func lateFix(_ coordinate: Coordinate) {
+        lastCoordinate = coordinate
         lastFailure = nil
         refreshIfNeeded()
     }

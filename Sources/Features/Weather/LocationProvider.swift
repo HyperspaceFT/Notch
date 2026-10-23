@@ -15,11 +15,17 @@ enum LocationResult: Equatable, Sendable {
 final class LocationProvider: NSObject, CLLocationManagerDelegate {
     /// How long a request may wait, for the user's answer included, before it ends
     /// with `.failed`; without a limit, a prompt that never shows would stall it.
-    static let requestTimeout: Duration = .seconds(30)
+    /// Generous because a first fix can take most of a minute: about 50 seconds
+    /// on a MacBook right after access was granted.
+    static let requestTimeout: Duration = .seconds(120)
+    /// How old the manager's last fix may be to answer a request without a new one.
+    static let recentFixAge: TimeInterval = 10 * 60
 
     /// Called when access is granted while no request waits for it, such as in
     /// System Settings or after a request timed out on the prompt.
     var onAccessGranted: (@MainActor () -> Void)?
+    /// Called with a fix that arrives after its request ended, so it is not lost.
+    var onLateFix: (@MainActor (Coordinate) -> Void)?
 
     private var manager: CLLocationManager?
     private var pending: CheckedContinuation<LocationResult, Never>?
@@ -44,11 +50,23 @@ final class LocationProvider: NSObject, CLLocationManagerDelegate {
                 // Continues in `authorizationChanged` once the user answers.
                 manager.requestWhenInUseAuthorization()
             case .authorizedAlways:
-                manager.requestLocation()
+                if let location = manager.location, Self.isRecent(location.timestamp, now: Date()) {
+                    finish(.coordinate(Coordinate(
+                        latitude: location.coordinate.latitude,
+                        longitude: location.coordinate.longitude
+                    )))
+                } else {
+                    manager.requestLocation()
+                }
             default:
                 finish(.notAllowed)
             }
         }
+    }
+
+    /// Whether a fix taken at `timestamp` is recent enough to reuse at `now`.
+    static func isRecent(_ timestamp: Date, now: Date) -> Bool {
+        abs(now.timeIntervalSince(timestamp)) < recentFixAge
     }
 
     /// Drops the request in progress, which then ends with `.failed`.
@@ -111,7 +129,15 @@ final class LocationProvider: NSObject, CLLocationManagerDelegate {
             longitude: location.coordinate.longitude
         )
         Task { @MainActor [weak self] in
-            self?.finish(.coordinate(coordinate))
+            self?.received(coordinate)
+        }
+    }
+
+    private func received(_ coordinate: Coordinate) {
+        if pending != nil {
+            finish(.coordinate(coordinate))
+        } else {
+            onLateFix?(coordinate)
         }
     }
 
