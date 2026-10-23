@@ -11,6 +11,10 @@ struct HomeSettingsView: View {
         Form {
             Section {
                 HomeLayoutPreview(settings: settings)
+            } footer: {
+                Text(localized(en: "Drag a module sideways to change its width.", zh: "左右拖动模块可以调整长度。"))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
             Section {
                 let placements = settings.placements
@@ -65,7 +69,8 @@ struct HomeSettingsView: View {
     }
 }
 
-/// One module: its name, its order and removal buttons, and its width.
+/// One module: its name and its order buttons. Its width and removal are edited
+/// in the preview.
 private struct HomeModuleRow: View {
     let settings: HomeLayoutSettings
     let placement: HomeLayoutSettings.Placement
@@ -73,54 +78,35 @@ private struct HomeModuleRow: View {
     let isLast: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: placement.module.symbol)
-                    .frame(width: 20)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(placement.module.title())
-                    if let detail = placement.module.detail {
-                        Text(detail())
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+        HStack(spacing: 8) {
+            Image(systemName: placement.module.symbol)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(placement.module.title())
+                if let detail = placement.module.detail {
+                    Text(detail())
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                Spacer(minLength: 8)
-                // Up the list is left in the row, as the preview shows.
-                iconButton(localized(en: "Move Up", zh: "上移"), symbol: "chevron.up") {
-                    settings.move(from: index, to: index - 1)
-                }
-                .disabled(index == 0)
-                iconButton(localized(en: "Move Down", zh: "下移"), symbol: "chevron.down") {
-                    settings.move(from: index, to: index + 1)
-                }
-                .disabled(isLast)
-                iconButton(localized(en: "Remove", zh: "移除"), symbol: "minus.circle") {
-                    settings.remove(at: index)
+                if !placement.module.sizing.isResizable {
+                    Text(localized(en: "Fixed width", zh: "长度固定"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
-            .labelStyle(.iconOnly)
-            .buttonStyle(.borderless)
-
-            if placement.module.sizing.isResizable {
-                let width = placement.width
-                let range = placement.range
-                // Disabled while the other modules leave no room to grow; a slider
-                // needs a range that is not a single value.
-                let hasRoom = range.upperBound - range.lowerBound > 0.001
-                Slider(
-                    value: Binding(get: { width }, set: { [settings, index] in settings.setWidth($0, at: index) }),
-                    in: hasRoom ? range : range.lowerBound...(range.lowerBound + 0.001)
-                ) {
-                    Text(localized(en: "Width", zh: "长度"))
-                }
-                .disabled(!hasRoom)
-            } else {
-                Text(localized(en: "Fixed width", zh: "长度固定"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            Spacer(minLength: 8)
+            // Up the list is left in the row, as the preview shows.
+            iconButton(localized(en: "Move Up", zh: "上移"), symbol: "chevron.up") {
+                settings.move(from: index, to: index - 1)
             }
+            .disabled(index == 0)
+            iconButton(localized(en: "Move Down", zh: "下移"), symbol: "chevron.down") {
+                settings.move(from: index, to: index + 1)
+            }
+            .disabled(isLast)
         }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.borderless)
         .padding(.vertical, 2)
     }
 
@@ -130,45 +116,138 @@ private struct HomeModuleRow: View {
     }
 }
 
-/// The Home row in miniature, drawn like the panel: each module a tile as wide as
-/// it will be, free space left black. One scale for every module count, so the
-/// island widens as modules join, as the panel does.
+/// The Home row in miniature, drawn like the panel and edited in place: each
+/// module a tile as wide as it will be, in an island that hugs them as the panel
+/// does. One scale for every module count, so the island widens as modules join
+/// or grow, as the panel does. Dragging a resizable tile sideways moves its
+/// trailing edge (see `HomeLayoutSettings.resize`); the button in its corner
+/// removes it.
 private struct HomeLayoutPreview: View {
     let settings: HomeLayoutSettings
+    /// The drag in progress; back to nil when it ends.
+    @GestureState private var drag: HomeLayoutSettings.Resize?
 
     /// Width of the widest row, the one with the most modules.
     private static let maximumWidth: CGFloat = 340
     private static let scale = maximumWidth
         / HomeLayoutSettings.referenceRow(forModuleCount: HomeLayoutSettings.maximumModuleCount).width
+    /// Below this, a module's width range counts as a single value.
+    private static let minimumRoom = 0.001
+    /// What one step of the accessibility adjustment changes a width by.
+    private static let accessibilityStep: CGFloat = 10
 
     var body: some View {
         let row = settings.currentRow
         let scale = Self.scale
         let placed = settings.placedModules(in: row)
+        let placements = settings.placements
         HStack(spacing: row.spacing * scale) {
             if placed.isEmpty {
                 Text(localized(en: "Home is empty", zh: "主页没有模块"))
                     .font(.caption)
                     .foregroundStyle(NotchTheme.secondaryText)
             }
-            ForEach(placed) { entry in
-                VStack(spacing: 4) {
-                    Image(systemName: entry.module.symbol)
-                        .font(.system(size: 16))
-                    Text(entry.module.title())
-                        .font(.caption)
-                        .lineLimit(1)
+            ForEach(Array(placed.enumerated()), id: \.element.id) { index, entry in
+                if placements.indices.contains(index) {
+                    tile(entry, placement: placements[index], index: index, row: row)
                 }
-                .foregroundStyle(NotchTheme.primaryText)
-                .frame(width: entry.width * scale, height: row.height * scale)
-                .background(.white.opacity(0.12), in: .rect(cornerRadius: 16 * scale, style: .continuous))
             }
         }
-        .frame(width: row.width * scale, height: row.height * scale)
+        .frame(width: (settings.expandedWidth - HomeLayoutSettings.margins) * scale, height: row.height * scale)
         .padding(12 * scale)
         .background(NotchTheme.islandColor, in: .rect(cornerRadius: 22 * scale, style: .continuous))
         .frame(maxWidth: .infinity)
-        .animation(.snappy(duration: 0.25), value: placed.map { "\($0.id):\($0.width)" })
-        .accessibilityHidden(true)
+        // Tiles follow the pointer while dragging; an animation would trail it.
+        .animation(drag == nil ? .snappy(duration: 0.25) : nil, value: placed.map { "\($0.id):\($0.width)" })
+        .onChange(of: drag) { _, drag in
+            if let drag {
+                settings.resize(drag)
+            }
+        }
+    }
+
+    private func tile(
+        _ entry: HomeLayoutSettings.PlacedModule,
+        placement: HomeLayoutSettings.Placement,
+        index: Int,
+        row: HomeRowMetrics
+    ) -> some View {
+        let scale = Self.scale
+        let range = placement.range
+        let isResizable = entry.module.sizing.isResizable && range.upperBound - range.lowerBound > Self.minimumRoom
+        // Which way the trailing edge can still go: out only at the minimum, in
+        // only at the maximum.
+        let directions: FrameResizeDirection.Set = if placement.width <= range.lowerBound + Self.minimumRoom {
+            .outward
+        } else if placement.width >= range.upperBound - Self.minimumRoom {
+            .inward
+        } else {
+            .all
+        }
+        let removeTitle = localized(en: "Remove", zh: "移除")
+        let points = Int(entry.width.rounded())
+        return VStack(spacing: 4) {
+            Image(systemName: entry.module.symbol)
+                .font(.system(size: 16))
+            Text(entry.module.title())
+                .font(.caption)
+                .lineLimit(1)
+        }
+        .foregroundStyle(NotchTheme.primaryText)
+        .frame(width: entry.width * scale, height: row.height * scale)
+        .background(.white.opacity(0.12), in: .rect(cornerRadius: 16 * scale, style: .continuous))
+        .overlay(alignment: .trailing) {
+            if isResizable {
+                Capsule()
+                    .fill(.white.opacity(0.35))
+                    .frame(width: 2, height: row.height * scale * 0.3)
+                    .padding(.trailing, 3)
+            }
+        }
+        .contentShape(.rect)
+        .pointerStyle(isResizable ? .frameResize(position: .trailing, directions: directions) : nil)
+        .gesture(resizeGesture(at: index), isEnabled: isResizable)
+        .overlay(alignment: .topTrailing) {
+            Button {
+                settings.remove(at: index)
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(Color(white: 0.4))
+                    Image(systemName: "xmark")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 14, height: 14)
+            }
+            .buttonStyle(.plain)
+            .help(removeTitle)
+            .padding(3)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(entry.module.title())
+        .accessibilityValue(localized(en: "\(points) points", zh: "\(points) 点"))
+        .accessibilityAdjustableAction { direction in
+            let step = row.fraction(forWidth: Self.accessibilityStep) - row.fraction(forWidth: 0)
+            switch direction {
+            case .increment: settings.setWidth(placement.width + step, at: index)
+            case .decrement: settings.setWidth(placement.width - step, at: index)
+            @unknown default: break
+            }
+        }
+        .accessibilityAction(named: Text(removeTitle)) {
+            settings.remove(at: index)
+        }
+    }
+
+    /// Follows the pointer from where the drag began, in points of the row.
+    /// Side effects stay out of `updating`; `onChange(of: drag)` applies it.
+    private func resizeGesture(at index: Int) -> some Gesture {
+        DragGesture(minimumDistance: 1)
+            .updating($drag) { value, state, _ in
+                var resize = state ?? settings.beginResize(at: index)
+                resize?.translation = value.translation.width / Self.scale
+                state = resize
+            }
     }
 }

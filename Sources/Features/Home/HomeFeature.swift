@@ -10,8 +10,9 @@ public final class HomeFeature: NotchFeature {
     public let id = "home"
     public var title: String { localized(en: "Home", zh: "主页") }
     public let symbol = "house"
-    /// Wider for each module Home shows past the first; follows the settings
-    /// window while the island is open.
+    /// As wide as the modules Home shows, between the standard width and the
+    /// widest for their count (see `HomeLayoutSettings.expandedWidth`); follows
+    /// the settings window while the island is open.
     public var expandedWidth: CGFloat? { settings.expandedWidth }
 
     /// Features whose `makeHomeModules()` Home shows besides its clock.
@@ -36,8 +37,12 @@ private struct HomeExpandedView: View {
 
     var body: some View {
         GeometryReader { proxy in
+            // The row the layout is edited against, not the panel's width: the
+            // island hugs the modules, and while Home is hidden behind another tab
+            // the panel takes that tab's width, yet the modules keep their widths
+            // and their places relative to the center.
             let row = HomeRowMetrics(
-                width: proxy.size.width,
+                width: settings.currentRow.width,
                 height: proxy.size.height,
                 spacing: HomeLayoutSettings.spacing
             )
@@ -54,7 +59,8 @@ private struct HomeExpandedView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 } else {
-                    // A row narrower than the panel stays centered.
+                    // A row narrower than the panel (at the standard width) or
+                    // wider (behind a narrower tab) stays centered.
                     HStack(spacing: row.spacing) {
                         ForEach(placed) { entry in
                             entry.module.content(CGSize(width: entry.width, height: row.height))

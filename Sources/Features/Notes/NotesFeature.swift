@@ -21,11 +21,18 @@ public final class NotesFeature: NotchFeature {
         NotesStore.shared.flush()
     }
 
+    /// Ties the Home module to the tab: switching between Home and Notes grows
+    /// the module's card into the tab's and back (`notchTabMorph`).
+    static let morphID = "notes"
+
     public func makeExpandedView() -> AnyView? {
         let focus = NotesEditorFocus()
-        return AnyView(GeometryReader { proxy in
-            NotesView(store: .shared, focus: focus, size: proxy.size)
-        })
+        return AnyView(
+            GeometryReader { proxy in
+                NotesView(store: .shared, focus: focus, size: proxy.size)
+            }
+            .notchTabMorph(Self.morphID)
+        )
     }
 
     public func makeHomeModules() -> [NotchHomeModule] {
@@ -43,8 +50,15 @@ public final class NotesFeature: NotchFeature {
                     )
                 },
                 sizing: .resizable(minimum: .points(Self.moduleMinimumWidth), maximum: nil),
-                content: { size in
-                    AnyView(NotesView(store: .shared, focus: focus, size: size))
+                content: { _ in
+                    // Sized by what it is offered rather than by Home's size: while the
+                    // Notes tab shows, the card takes the tab card's frame.
+                    AnyView(
+                        GeometryReader { proxy in
+                            NotesView(store: .shared, focus: focus, size: proxy.size)
+                        }
+                        .notchTabMorph(Self.morphID)
+                    )
                 }
             ),
         ]

@@ -62,9 +62,14 @@ struct HomeLayoutTests {
         #expect(isClose(layout.resolvedWidths(in: row, sizings: sizings), [134, 262]))
     }
 
-    @Test func growingTakesTheFreeSpaceThenNarrowsTheOtherModules() {
+    @Test func growingTakesTheFreeSpaceThenNarrowsTheModulesAfterIt() {
         var layout = HomeLayout.standard(moduleIDs: ["time", "weather"], sizings: sizings, rows: fixedRows)
-        // The last module grows into the one before it, which stops at its minimum.
+        // The last module has no free space and nothing after it to narrow.
+        layout.setWidth(1, at: 1, sizings: sizings, row: row)
+        #expect(isClose(layout.items[0].width, share(184)))
+        #expect(isClose(layout.items[1].width, 1 - share(184)))
+        // Once the clock narrows, the weather grows into the space it leaves.
+        layout.setWidth(0, at: 0, sizings: sizings, row: row)
         layout.setWidth(1, at: 1, sizings: sizings, row: row)
         #expect(isClose(layout.items[0].width, share(134)))
         #expect(isClose(layout.items[1].width, 1 - share(134)))
@@ -74,18 +79,48 @@ struct HomeLayoutTests {
         #expect(isClose(layout.items[1].width, 1 - share(184)))
     }
 
-    @Test func widthRangeEndsWhereTheOthersReachTheirMinimum() throws {
+    @Test func growingNeverNarrowsTheModulesBeforeIt() {
+        var layout = HomeLayout(items: [
+            .init(moduleID: "time", width: share(184)),
+            .init(moduleID: "badge", width: share(100)),
+            .init(moduleID: "weather", width: 1.0 / 3),
+        ])
+        layout.setWidth(1, at: 2, sizings: sizings, row: row)
+        // The weather takes only the free space; the clock and the badge before it
+        // keep their widths, though the clock is above its minimum.
+        #expect(isClose(layout.items[0].width, share(184)))
+        #expect(isClose(layout.items[1].width, share(100)))
+        #expect(isClose(layout.items[2].width, 1 - share(184) - share(100)))
+    }
+
+    @Test func widthRangeEndsWhereTheModulesAfterReachTheirMinimum() throws {
         var layout = HomeLayout.standard(moduleIDs: ["time", "weather"], sizings: sizings, rows: fixedRows)
         let clockRange = try #require(layout.widthRange(at: 0, sizings: sizings, row: row))
         #expect(isClose(clockRange.lowerBound, share(134)))
         #expect(isClose(clockRange.upperBound, share(184)))
+        // The weather may not narrow the clock before it, so it has no room.
         let weatherRange = try #require(layout.widthRange(at: 1, sizings: sizings, row: row))
         #expect(isClose(weatherRange.lowerBound, 1.0 / 3))
-        #expect(isClose(weatherRange.upperBound, 1 - share(134)))
-        // Every value in the range is reached, so a slider over it stays in step.
-        layout.setWidth(weatherRange.upperBound, at: 1, sizings: sizings, row: row)
-        #expect(isClose(layout.items[1].width, weatherRange.upperBound))
+        #expect(isClose(weatherRange.upperBound, 1 - share(184)))
+        // With the clock narrowed, the weather may take the space it left.
+        layout.setWidth(0, at: 0, sizings: sizings, row: row)
+        let freedRange = try #require(layout.widthRange(at: 1, sizings: sizings, row: row))
+        #expect(isClose(freedRange.upperBound, 1 - share(134)))
+        // Every value in the range is reached, so an editor bounded by it stays in step.
+        layout.setWidth(freedRange.upperBound, at: 1, sizings: sizings, row: row)
+        #expect(isClose(layout.items[1].width, freedRange.upperBound))
         #expect(layout.widthRange(at: 2, sizings: sizings, row: row) == nil)
+
+        // In front of the weather, the clock's range ends where the weather reaches its minimum.
+        let swapped = HomeLayout(items: [
+            .init(moduleID: "weather", width: 1.0 / 3),
+            .init(moduleID: "time", width: share(184)),
+        ])
+        let frontRange = try #require(swapped.widthRange(at: 0, sizings: sizings, row: row))
+        #expect(isClose(frontRange.upperBound, 1 - share(134)))
+        var grown = swapped
+        grown.setWidth(frontRange.upperBound, at: 0, sizings: sizings, row: row)
+        #expect(isClose(grown.items[0].width, frontRange.upperBound))
 
         let full = HomeLayout(items: [
             .init(moduleID: "weather", width: 1.0 / 3),
@@ -291,10 +326,12 @@ struct HomeLayoutSettingsTests {
 
         let settings = HomeLayoutSettings(defaults: defaults)
         settings.register(modules)
+        // The standard layout fills the 576-point row, so the island is at its widest for two.
         #expect(settings.expandedWidth == 640)
         #expect(settings.currentRow == panelRow(2))
 
         settings.remove(at: 1)
+        // The clock alone, 184 points and the margins, is under the standard width.
         #expect(settings.expandedWidth == 520)
         #expect(settings.currentRow == panelRow(1))
         // The clock keeps its width in the narrower row.
@@ -302,6 +339,112 @@ struct HomeLayoutSettingsTests {
 
         settings.remove(at: 0)
         #expect(settings.expandedWidth == 520)
+    }
+
+    @Test func expandedWidthHugsTheModules() throws {
+        let suite = "HomeLayoutSettingsTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let settings = HomeLayoutSettings(defaults: defaults)
+        settings.register(modules)
+        #expect(HomeLayoutSettings.margins == 64)
+        // The clock's 184 points, a gap, 300 points of weather, and the margins.
+        settings.setWidth(panelRow(2).fraction(forWidth: 300), at: 1)
+        #expect(abs(settings.expandedWidth - (184 + 10 + 300 + 64)) < 0.01)
+        // Both at their minimums (134 and a third of 586 points less a gap) come
+        // to less than the standard width, which the island keeps.
+        settings.setWidth(0, at: 0)
+        settings.setWidth(0, at: 1)
+        #expect(settings.expandedWidth == 520)
+        // A full row reaches the widest island for two modules and no more.
+        settings.setWidth(1, at: 1)
+        #expect(abs(settings.expandedWidth - HomeLayoutSettings.bodyWidth(forModuleCount: 2)) < 0.01)
+    }
+
+    /// Weather then clock in the 576-point row, 300 and 184 points wide: 82 points free.
+    private func weatherBeforeClock(_ defaults: UserDefaults) -> HomeLayoutSettings {
+        let settings = HomeLayoutSettings(defaults: defaults)
+        settings.register(modules)
+        settings.move(from: 1, to: 0)
+        settings.setWidth(panelRow(2).fraction(forWidth: 300), at: 0)
+        return settings
+    }
+
+    @Test func resizingGrowsTwiceAsFarIntoTheFreeSpaceThenNarrowsTheModuleAfter() throws {
+        let suite = "HomeLayoutSettingsTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let settings = weatherBeforeClock(defaults)
+        #expect(isClose(settings.placedModules(in: panelRow(2)).map(\.width), [300, 184]))
+        var resize = try #require(settings.beginResize(at: 0))
+
+        // The centered row widens on both sides, so the module grows by twice the
+        // translation while there is free space.
+        resize.translation = 20
+        settings.resize(resize)
+        #expect(isClose(settings.placedModules(in: panelRow(2)).map(\.width), [340, 184]))
+        #expect(abs(settings.expandedWidth - (340 + 10 + 184 + 64)) < 0.01)
+        // Half the 82 free points fill the row.
+        resize.translation = 41
+        settings.resize(resize)
+        #expect(isClose(settings.placedModules(in: panelRow(2)).map(\.width), [382, 184]))
+        // Past that, it grows by the translation and narrows the clock after it.
+        resize.translation = 61
+        settings.resize(resize)
+        #expect(isClose(settings.placedModules(in: panelRow(2)).map(\.width), [402, 164]))
+        // Until the clock is at its minimum.
+        resize.translation = 100
+        settings.resize(resize)
+        #expect(isClose(settings.placedModules(in: panelRow(2)).map(\.width), [432, 134]))
+    }
+
+    @Test func resizingBackRestoresTheLayoutTheDragBeganWith() throws {
+        let suite = "HomeLayoutSettingsTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let settings = weatherBeforeClock(defaults)
+        var resize = try #require(settings.beginResize(at: 0))
+        resize.translation = 100
+        settings.resize(resize)
+        #expect(isClose(settings.placedModules(in: panelRow(2)).map(\.width), [432, 134]))
+        // The clock gets its width back as the drag returns.
+        resize.translation = 61
+        settings.resize(resize)
+        #expect(isClose(settings.placedModules(in: panelRow(2)).map(\.width), [402, 164]))
+        resize.translation = 0
+        settings.resize(resize)
+        #expect(isClose(settings.placedModules(in: panelRow(2)).map(\.width), [300, 184]))
+        // Shrinking narrows the row on both sides too: twice the translation.
+        resize.translation = -10
+        settings.resize(resize)
+        #expect(isClose(settings.placedModules(in: panelRow(2)).map(\.width), [280, 184]))
+    }
+
+    @Test func resizingIsIgnoredOnceTheModulesChanged() throws {
+        let suite = "HomeLayoutSettingsTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let badgeModule = NotchHomeModule(id: "badge", title: { "Badge" }, symbol: "star", sizing: badge) { _ in
+            AnyView(EmptyView())
+        }
+        let settings = HomeLayoutSettings(defaults: defaults)
+        settings.register(modules + [badgeModule])
+        #expect(settings.placements.map(\.id) == ["time", "weather", "badge"])
+        // Nothing to drag past the end or on a fixed module.
+        #expect(settings.beginResize(at: 3) == nil)
+        #expect(settings.beginResize(at: 2) == nil)
+
+        var resize = try #require(settings.beginResize(at: 1))
+        settings.remove(at: 2)
+        let widths = settings.placedModules(in: settings.currentRow).map(\.width)
+        resize.translation = -20
+        settings.resize(resize)
+        #expect(settings.placements.map(\.id) == ["time", "weather"])
+        #expect(isClose(settings.placedModules(in: settings.currentRow).map(\.width), widths))
     }
 
     @Test func followsTheStandardLayoutUntilChangedThenKeepsTheChange() throws {

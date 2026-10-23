@@ -215,6 +215,18 @@ final class NotchViewModel {
         }
     }
 
+    /// The bottom corners as `NotchShape` draws them: round at `bottomCornerRadius`,
+    /// and while hovered stretched by the ring the island grows by
+    /// (`NotchTheme.hoverGrowth`), so they keep the center of the corners they grew from.
+    var bottomCornerRadii: CGSize {
+        let radius = bottomCornerRadius
+        guard isHovered else { return CGSize(width: radius, height: radius) }
+        return CGSize(
+            width: radius + NotchTheme.hoverGrowth.width,
+            height: radius + NotchTheme.hoverGrowth.height
+        )
+    }
+
     /// Frame size of the `NotchShape`, i.e. the body plus both ears.
     var islandSize: CGSize {
         CGSize(

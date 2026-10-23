@@ -8,8 +8,9 @@ import NotchKit
 /// measured against the row it is edited for. That row widens with the number of
 /// modules, so editing takes `rows`, the row for a given count; a module joining
 /// or leaving keeps the others at their width in points. Home resolves the shares
-/// against the row it actually gets with `resolvedWidths(in:sizings:)`; a row
-/// that is not filled leaves the free space empty.
+/// against the row it actually gets with `resolvedWidths(in:sizings:)`. Free
+/// space in the row is not drawn: the island hugs its modules, up to the row's
+/// width (see `HomeLayoutSettings.expandedWidth`).
 struct HomeLayout: Equatable, Sendable {
     struct Item: Equatable, Codable, Sendable {
         var moduleID: String
@@ -120,33 +121,34 @@ struct HomeLayout: Equatable, Sendable {
     }
 
     /// Sets a module's width, kept within its bounds. Growing it takes the free
-    /// space first, then narrows the modules after it, then the ones before it,
-    /// nearest first, each down to its minimum; past that it stops growing.
-    /// Shrinking it leaves the space free.
+    /// space first, then narrows the modules after it, nearest first, each down to
+    /// its minimum; it never narrows the ones before it, so dragging a module's
+    /// trailing edge leaves everything left of it alone. Past that it stops
+    /// growing. Shrinking it leaves the space free (the island narrows).
     mutating func setWidth(_ width: Double, at index: Int, sizings: [String: HomeModuleSizing], row: HomeRowMetrics) {
         guard items.indices.contains(index), let sizing = sizings[items[index].moduleID] else { return }
         let bounds = Self.bounds(of: sizing, in: row)
         var target = min(max(width, bounds.lowerBound), bounds.upperBound)
         let excess = totalWidth - items[index].width + target - 1
         if excess > Self.tolerance {
-            let order = Array(items.indices[(index + 1)...]) + Array(items.indices[..<index].reversed())
-            let left = shrink(by: excess, order: order, sizings: sizings, row: row)
+            let left = shrink(by: excess, order: Array(items.indices[(index + 1)...]), sizings: sizings, row: row)
             target = max(target - left, bounds.lowerBound)
         }
         items[index].width = target
     }
 
     /// The widths the module at `index` can be set to: its bounds, capped by what
-    /// the other modules leave at their minimums. `setWidth` reaches every value
-    /// in it, so a slider over this range stays in step with the layout.
+    /// the modules before it leave at their current width and the ones after it
+    /// at their minimums. `setWidth` reaches every value in it, so an editor
+    /// bounded by this range stays in step with the layout.
     func widthRange(at index: Int, sizings: [String: HomeModuleSizing], row: HomeRowMetrics) -> ClosedRange<Double>? {
         guard items.indices.contains(index), let sizing = sizings[items[index].moduleID] else { return nil }
         let bounds = Self.bounds(of: sizing, in: row)
-        let othersMinimum = items.indices.reduce(0.0) { total, other in
-            guard other != index, let sizing = sizings[items[other].moduleID] else { return total }
-            return total + Self.bounds(of: sizing, in: row).lowerBound
+        let before = items[..<index].reduce(0.0) { $0 + $1.width }
+        let afterMinimum = items[(index + 1)...].reduce(0.0) { total, item in
+            total + (sizings[item.moduleID].map { Self.bounds(of: $0, in: row).lowerBound } ?? 0)
         }
-        return bounds.lowerBound...max(bounds.lowerBound, min(bounds.upperBound, 1 - othersMinimum))
+        return bounds.lowerBound...max(bounds.lowerBound, min(bounds.upperBound, 1 - before - afterMinimum))
     }
 
     /// Turns the shares measured against `old` into shares of `new` that keep each

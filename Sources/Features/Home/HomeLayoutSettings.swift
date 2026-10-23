@@ -17,27 +17,32 @@ public final class HomeLayoutSettings {
     public nonisolated static let maximumModuleCount = HomeLayout.maximumCount
     /// Gap between modules in Home's row.
     public nonisolated static let spacing: CGFloat = 10
-    /// How much wider the island grows for each module past the first, in order:
-    /// the second and the third add the same, the fourth less, so a full row does
-    /// not stretch the island too far. One entry per module up to `maximumModuleCount`.
+    /// How much room the row gains for each module past the first, in order: the
+    /// second and the third add the same, the fourth less, so a full row does not
+    /// stretch the island too far. One entry per module up to `maximumModuleCount`.
     public nonisolated static let extraWidths: [CGFloat] = [120, 120, 80]
+    /// What the island's body adds to Home's row: the top corner radius and the
+    /// content padding on each side.
+    public nonisolated static let margins: CGFloat = 2 * (NotchTheme.expandedTopRadius + NotchTheme.contentPadding)
 
-    /// Body width of the expanded island while Home shows `count` modules: the
-    /// standard width for one module or none, plus `extraWidths` for each further
-    /// one, up to `maximumModuleCount`.
+    /// The widest the expanded island's body gets while Home shows `count`
+    /// modules, which it reaches when they fill their row: the standard width for
+    /// one module or none, plus `extraWidths` for each further one, up to
+    /// `maximumModuleCount`. Narrower modules give a narrower island (see
+    /// `expandedWidth`).
     public nonisolated static func bodyWidth(forModuleCount count: Int) -> CGFloat {
         let extraModules = max(min(count, maximumModuleCount) - 1, 0)
         return NotchTheme.expandedSize.width + extraWidths.prefix(extraModules).reduce(0, +)
     }
 
     /// Home's row with `count` modules under a 32-point notch: as wide as the body at
-    /// `bodyWidth(forModuleCount:)` less the top corner radius and the content padding
-    /// on each side (so a little narrower than the island's content), as tall as the panel's
-    /// header and margins leave. Layouts are edited against the row for their own
-    /// count; Home draws them in the row it actually gets, whose height follows the notch.
+    /// `bodyWidth(forModuleCount:)` less `margins` (so a little narrower than the
+    /// island's content), as tall as the panel's header and margins leave: the most
+    /// room the modules get. Layouts are edited against the row for their own
+    /// count; Home draws them in a row as wide, whose height follows the notch.
     public nonisolated static func referenceRow(forModuleCount count: Int) -> HomeRowMetrics {
         HomeRowMetrics(
-            width: bodyWidth(forModuleCount: count) - 2 * (NotchTheme.expandedTopRadius + NotchTheme.contentPadding),
+            width: bodyWidth(forModuleCount: count) - margins,
             height: 134,
             spacing: spacing
         )
@@ -58,6 +63,16 @@ public final class HomeLayoutSettings {
         public let module: NotchHomeModule
         public let width: CGFloat
         public var id: String { module.id }
+    }
+
+    /// A drag on a module's trailing edge, from `beginResize(at:)`; `resize(_:)`
+    /// applies it.
+    public struct Resize: Equatable, Sendable {
+        let index: Int
+        /// The layout when the drag began; every step starts from it.
+        let start: HomeLayout
+        /// How far the pointer has moved, in points of `currentRow`.
+        public var translation: CGFloat
     }
 
     /// Every module Home can show, in the order Home registered them.
@@ -100,9 +115,16 @@ public final class HomeLayoutSettings {
         Self.referenceRow(forModuleCount: layout.items.count)
     }
 
-    /// Body width of the expanded island for the modules Home shows now.
+    /// Body width of the expanded island for the modules Home shows now: it hugs
+    /// them, their widths in `currentRow` and the gaps between them plus
+    /// `margins`, no narrower than the standard width every tab has and no wider
+    /// than `bodyWidth(forModuleCount:)`.
     public var expandedWidth: CGFloat {
-        Self.bodyWidth(forModuleCount: layout.items.count)
+        let content = Self.contentWidth(of: placedModules(in: currentRow).map(\.width))
+        return min(
+            max(content + Self.margins, NotchTheme.expandedSize.width),
+            Self.bodyWidth(forModuleCount: layout.items.count)
+        )
     }
 
     public var placements: [Placement] {
@@ -154,6 +176,40 @@ public final class HomeLayoutSettings {
         edit { $0.setWidth(width, at: index, sizings: sizings, row: currentRow) }
     }
 
+    /// Starts a drag on the trailing edge of the module at `index`; `nil` when there
+    /// is no such module or it cannot be resized.
+    public func beginResize(at index: Int) -> Resize? {
+        guard layout.items.indices.contains(index),
+              sizings[layout.items[index].moduleID]?.isResizable == true
+        else { return nil }
+        return Resize(index: index, start: layout, translation: 0)
+    }
+
+    /// Sets the dragged module's width so that its trailing edge follows the
+    /// pointer, in a row drawn centered and as wide as its modules (as Home and the
+    /// settings preview draw it). While the row has free space, the row widens on
+    /// both sides as the module grows, so its trailing edge moves half as far as
+    /// the module grows: the module grows by twice the translation until the free
+    /// space is used up. Once the row is full, the module narrows the ones after it
+    /// and the edge moves as far as the module grows. Every step starts from the
+    /// layout the drag began with, so dragging back gives the later modules their
+    /// width back. Ignored once the modules changed since the drag began.
+    public func resize(_ resize: Resize) {
+        guard resize.start.items.map(\.moduleID) == layout.items.map(\.moduleID) else { return }
+        let sizings = sizings
+        let row = currentRow
+        let startWidths = resize.start.resolvedWidths(in: row, sizings: sizings)
+        guard startWidths.indices.contains(resize.index) else { return }
+        let free = max(row.width - Self.contentWidth(of: startWidths), 0)
+        let translation = resize.translation
+        let growth = translation <= free / 2 ? 2 * translation : translation + free / 2
+        let width = row.fraction(forWidth: startWidths[resize.index] + growth)
+        edit {
+            $0 = resize.start
+            $0.setWidth(width, at: resize.index, sizings: sizings, row: row)
+        }
+    }
+
     private func edit(_ change: (inout HomeLayout) -> Void) {
         var layout = layout
         change(&layout)
@@ -163,6 +219,11 @@ public final class HomeLayoutSettings {
         if let data = try? JSONEncoder().encode(layout.items) {
             defaults.set(data, forKey: Self.layoutKey)
         }
+    }
+
+    /// Modules `widths` points wide side by side, with the gaps between them.
+    private nonisolated static func contentWidth(of widths: [CGFloat]) -> CGFloat {
+        widths.reduce(0, +) + spacing * CGFloat(max(widths.count - 1, 0))
     }
 
     private var sizings: [String: HomeModuleSizing] {

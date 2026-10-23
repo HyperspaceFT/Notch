@@ -5,27 +5,38 @@ import SwiftUI
 /// The top edge is flush with the top of the screen. At the two top corners the
 /// outline flares outward with small concave "ears" (radius `topCornerRadius`),
 /// so the island looks like it grows out of the menu bar. The bottom corners are
-/// convex and rounded with `bottomCornerRadius`.
+/// convex and rounded with `bottomCornerRadii`.
 ///
 /// The ears sit inside the shape's rect: the island body is the rect inset
 /// horizontally by `topCornerRadius` on each side. Use
 /// `NotchShape.frameWidth(bodyWidth:topCornerRadius:)` to size the frame.
 ///
-/// Both radii are animatable so the outline morphs smoothly between states.
+/// All radii are animatable so the outline morphs smoothly between states.
 public struct NotchShape: Shape {
     public var topCornerRadius: CGFloat
-    public var bottomCornerRadius: CGFloat
+    /// How far each bottom corner reaches along the bottom edge (`width`) and up
+    /// the side (`height`); equal for a round corner. The hovered island grows
+    /// more to the sides than down and stretches its corners by the same amounts,
+    /// so they keep the center of the corners they grew from.
+    public var bottomCornerRadii: CGSize
 
     public init(topCornerRadius: CGFloat, bottomCornerRadius: CGFloat) {
-        self.topCornerRadius = topCornerRadius
-        self.bottomCornerRadius = bottomCornerRadius
+        self.init(
+            topCornerRadius: topCornerRadius,
+            bottomCornerRadii: CGSize(width: bottomCornerRadius, height: bottomCornerRadius)
+        )
     }
 
-    public var animatableData: AnimatablePair<CGFloat, CGFloat> {
-        get { AnimatablePair(topCornerRadius, bottomCornerRadius) }
+    public init(topCornerRadius: CGFloat, bottomCornerRadii: CGSize) {
+        self.topCornerRadius = topCornerRadius
+        self.bottomCornerRadii = bottomCornerRadii
+    }
+
+    public var animatableData: AnimatablePair<CGFloat, CGSize.AnimatableData> {
+        get { AnimatablePair(topCornerRadius, bottomCornerRadii.animatableData) }
         set {
             topCornerRadius = newValue.first
-            bottomCornerRadius = newValue.second
+            bottomCornerRadii.animatableData = newValue.second
         }
     }
 
@@ -35,15 +46,21 @@ public struct NotchShape: Shape {
     }
 
     /// The radii as drawn in `rect`. Clamped so extreme sizes during a morph never
-    /// produce a self-intersecting path.
-    static func clampedRadii(top: CGFloat, bottom: CGFloat, in rect: CGRect) -> (top: CGFloat, bottom: CGFloat) {
+    /// produce a self-intersecting path; the bottom corners shrink in proportion,
+    /// so a round one stays round.
+    static func clampedRadii(top: CGFloat, bottom: CGSize, in rect: CGRect) -> (top: CGFloat, bottom: CGSize) {
         let top = max(0, min(top, rect.width / 4, rect.height / 2))
-        let bottom = max(0, min(bottom, (rect.width - top * 2) / 2, rect.height - top))
-        return (top, bottom)
+        let room = CGSize(width: (rect.width - top * 2) / 2, height: rect.height - top)
+        let scale = min(
+            1,
+            bottom.width > 0 ? room.width / bottom.width : 1,
+            bottom.height > 0 ? room.height / bottom.height : 1
+        )
+        return (top, CGSize(width: max(0, bottom.width * scale), height: max(0, bottom.height * scale)))
     }
 
     public func path(in rect: CGRect) -> Path {
-        let (top, bottom) = Self.clampedRadii(top: topCornerRadius, bottom: bottomCornerRadius, in: rect)
+        let (top, bottom) = Self.clampedRadii(top: topCornerRadius, bottom: bottomCornerRadii, in: rect)
 
         var path = Path()
         path.move(to: CGPoint(x: rect.minX, y: rect.minY))
@@ -52,16 +69,16 @@ public struct NotchShape: Shape {
             to: CGPoint(x: rect.minX + top, y: rect.minY + top),
             control: CGPoint(x: rect.minX + top, y: rect.minY)
         )
-        path.addLine(to: CGPoint(x: rect.minX + top, y: rect.maxY - bottom))
+        path.addLine(to: CGPoint(x: rect.minX + top, y: rect.maxY - bottom.height))
         // Bottom-left convex corner.
         path.addQuadCurve(
-            to: CGPoint(x: rect.minX + top + bottom, y: rect.maxY),
+            to: CGPoint(x: rect.minX + top + bottom.width, y: rect.maxY),
             control: CGPoint(x: rect.minX + top, y: rect.maxY)
         )
-        path.addLine(to: CGPoint(x: rect.maxX - top - bottom, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.maxX - top - bottom.width, y: rect.maxY))
         // Bottom-right convex corner.
         path.addQuadCurve(
-            to: CGPoint(x: rect.maxX - top, y: rect.maxY - bottom),
+            to: CGPoint(x: rect.maxX - top, y: rect.maxY - bottom.height),
             control: CGPoint(x: rect.maxX - top, y: rect.maxY)
         )
         path.addLine(to: CGPoint(x: rect.maxX - top, y: rect.minY + top))
@@ -75,10 +92,11 @@ public struct NotchShape: Shape {
     }
 }
 
-/// Part of the island outline (`NotchShape`) as an open path, split where the
-/// sides reach `horizon`, a share of the height from the top. The lower arc runs
-/// left to right around the bottom and the upper arc right to left across the
-/// top, so the two together go once around the island.
+/// Part of the island outline (`NotchShape`, with round bottom corners as the
+/// expanded island has) as an open path, split where the sides reach `horizon`,
+/// a share of the height from the top. The lower arc runs left to right around
+/// the bottom and the upper arc right to left across the top, so the two
+/// together go once around the island.
 public struct NotchEdge: Shape {
     public enum Arc: Sendable {
         /// From the left side at `horizon` down around the bottom and up the
@@ -110,22 +128,26 @@ public struct NotchEdge: Shape {
     }
 
     public func path(in rect: CGRect) -> Path {
-        let (top, bottom) = NotchShape.clampedRadii(top: topCornerRadius, bottom: bottomCornerRadius, in: rect)
+        let (top, bottom) = NotchShape.clampedRadii(
+            top: topCornerRadius,
+            bottom: CGSize(width: bottomCornerRadius, height: bottomCornerRadius),
+            in: rect
+        )
         // Below the ears, and above the bottom corners.
-        let split = min(max(rect.minY + rect.height * horizon, rect.minY + top), rect.maxY - bottom)
+        let split = min(max(rect.minY + rect.height * horizon, rect.minY + top), rect.maxY - bottom.height)
 
         var path = Path()
         switch arc {
         case .lower:
             path.move(to: CGPoint(x: rect.minX + top, y: split))
-            path.addLine(to: CGPoint(x: rect.minX + top, y: rect.maxY - bottom))
+            path.addLine(to: CGPoint(x: rect.minX + top, y: rect.maxY - bottom.height))
             path.addQuadCurve(
-                to: CGPoint(x: rect.minX + top + bottom, y: rect.maxY),
+                to: CGPoint(x: rect.minX + top + bottom.width, y: rect.maxY),
                 control: CGPoint(x: rect.minX + top, y: rect.maxY)
             )
-            path.addLine(to: CGPoint(x: rect.maxX - top - bottom, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.maxX - top - bottom.width, y: rect.maxY))
             path.addQuadCurve(
-                to: CGPoint(x: rect.maxX - top, y: rect.maxY - bottom),
+                to: CGPoint(x: rect.maxX - top, y: rect.maxY - bottom.height),
                 control: CGPoint(x: rect.maxX - top, y: rect.maxY)
             )
             path.addLine(to: CGPoint(x: rect.maxX - top, y: split))

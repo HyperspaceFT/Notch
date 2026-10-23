@@ -12,7 +12,7 @@ struct NotchRootView: View {
     var body: some View {
         let shape = NotchShape(
             topCornerRadius: model.topCornerRadius,
-            bottomCornerRadius: model.bottomCornerRadius
+            bottomCornerRadii: model.bottomCornerRadii
         )
         let isExpanded = model.state == .expanded
 
@@ -239,6 +239,8 @@ private struct ExpandedIslandView: View {
     let model: NotchViewModel
     /// Shared by the tab buttons and the selection highlight that slides between them.
     @Namespace private var tabSelection
+    /// Shared by the views in different tabs that grow into one another (`notchTabMorph`).
+    @Namespace private var tabMorph
 
     /// Visible tabs in header order, left to right.
     private var orderedTabs: [NotchViewModel.Tab] {
@@ -306,7 +308,8 @@ private struct ExpandedIslandView: View {
     }
 
     /// Every tab's view stays in place and only the selected one shows, so on a
-    /// switch each view slides toward its own side of the newly selected tab.
+    /// switch each view slides toward its own side of the newly selected tab;
+    /// views tied with `notchTabMorph` grow into one another instead.
     @ViewBuilder
     private var content: some View {
         let tabs = orderedTabs
@@ -321,6 +324,10 @@ private struct ExpandedIslandView: View {
                 ForEach(Array(tabs.enumerated()), id: \.element.id) { index, tab in
                     let isSelected = index == selectedIndex
                     tab.content
+                        .environment(
+                            \.notchTabMorph,
+                            NotchTabMorph(namespace: tabMorph, tabID: tab.id, shownTabID: tabs[selectedIndex].id)
+                        )
                         .offset(x: CGFloat((index - selectedIndex).signum()) * NotchTheme.tabSwitchOffset)
                         .opacity(isSelected ? 1 : 0)
                         .blur(radius: isSelected ? 0 : 6)

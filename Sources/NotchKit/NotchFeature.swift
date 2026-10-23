@@ -29,8 +29,8 @@ public protocol NotchFeature: AnyObject {
     var opensOnDrag: Bool { get }
     /// Body width of the expanded island while this feature's tab is selected.
     /// Read while the panel draws, so it may follow observable state (e.g. how
-    /// many modules Home shows). `nil` uses the standard width; the shell keeps
-    /// it between the standard and the maximum width (see `NotchTheme`).
+    /// wide the modules Home shows are). `nil` uses the standard width; the shell
+    /// keeps it between the standard and the maximum width (see `NotchTheme`).
     var expandedWidth: CGFloat? { get }
 
     /// Called once when the shell starts. Keep the context to present activities later.

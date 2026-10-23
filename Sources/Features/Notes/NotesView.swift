@@ -35,6 +35,9 @@ struct NotesView: View {
             }
         }
         .frame(width: size.width, height: size.height)
+        // While the card grows from Home into the tab or back (`notchTabMorph`),
+        // its content is already laid out for the final size; this keeps it inside.
+        .clipShape(.rect(cornerRadius: 16, style: .continuous))
     }
 
     private var editor: some View {

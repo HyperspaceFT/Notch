@@ -82,13 +82,19 @@ struct NotchViewModelTests {
         #expect(model.state == .collapsed)
         #expect(model.bodySize == CGSize(width: 190 + ring.width * 2, height: 32 + ring.height))
         #expect(model.islandScreenFrame.maxY == 956)
+        // The bottom corners grow by the ring too, keeping the center of the unhovered ones.
+        let collapsed = NotchTheme.collapsedBottomRadius
+        #expect(model.bottomCornerRadii == CGSize(width: collapsed + ring.width, height: collapsed + ring.height))
 
         model.present(activity("a"))
         let activityWidth = 190 + NotchTheme.activityWingWidth * 2
         #expect(model.bodySize == CGSize(width: activityWidth + ring.width * 2, height: 32 + ring.height))
+        let wings = NotchTheme.activityBottomRadius
+        #expect(model.bottomCornerRadii == CGSize(width: wings + ring.width, height: wings + ring.height))
 
         model.setHovered(false)
         #expect(model.bodySize == CGSize(width: activityWidth, height: 32))
+        #expect(model.bottomCornerRadii == CGSize(width: wings, height: wings))
     }
 
     @Test func expandedIslandIgnoresHover() {
@@ -96,6 +102,8 @@ struct NotchViewModelTests {
         model.setHovered(true)
         #expect(!model.isHovered)
         #expect(model.bodySize == NotchTheme.expandedSize)
+        let radius = NotchTheme.expandedBottomRadius
+        #expect(model.bottomCornerRadii == CGSize(width: radius, height: radius))
     }
 
     @Test func expandedContentDropsOnceShownAndOutlivesTheCollapse() async throws {
