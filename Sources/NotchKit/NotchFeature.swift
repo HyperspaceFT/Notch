@@ -27,6 +27,11 @@ public protocol NotchFeature: AnyObject {
     /// Whether content (such as files) dragged onto the notch opens the island on
     /// this feature's tab. For features whose tab takes drops; the first one wins.
     var opensOnDrag: Bool { get }
+    /// Body width of the expanded island while this feature's tab is selected.
+    /// Read while the panel draws, so it may follow observable state (e.g. how
+    /// many modules Home shows). `nil` uses the standard width; the shell keeps
+    /// it between the standard and the maximum width (see `NotchTheme`).
+    var expandedWidth: CGFloat? { get }
 
     /// Called once when the shell starts. Keep the context to present activities later.
     func activate(context: any NotchContext)
@@ -53,6 +58,7 @@ extension NotchFeature {
     public var tabPlacement: NotchTabPlacement { .leading }
     public var opensOnDrag: Bool { false }
     public var isTabAvailable: Bool { true }
+    public var expandedWidth: CGFloat? { nil }
     public func activate(context: any NotchContext) {}
     public func deactivate() {}
     public func makeExpandedView() -> AnyView? { nil }

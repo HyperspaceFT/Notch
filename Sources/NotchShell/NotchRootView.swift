@@ -40,7 +40,9 @@ struct NotchRootView: View {
                 ExpandedIslandView(model: model)
                     // Laid out at the expanded size even while the outline is
                     // smaller, so nothing reflows as the island opens or closes.
-                    .frame(width: Self.expandedIslandWidth, height: NotchTheme.expandedSize.height)
+                    // Its width follows the selected tab, which opening and
+                    // closing leave alone.
+                    .frame(width: expandedIslandWidth, height: NotchTheme.expandedSize.height)
                     // Collapsing, and expanding again before that has finished,
                     // turn the content around with the state's animation.
                     .modifier(DropEffect(isDropped: model.isExpandedContentDropped))
@@ -90,16 +92,19 @@ struct NotchRootView: View {
         .animation(animation(for: model.state), value: model.state)
         .animation(NotchTheme.activityAnimation, value: model.currentActivity.map { "\($0.featureID).\($0.id)" })
         .animation(model.isHovered ? NotchTheme.hoverAnimation : NotchTheme.collapseAnimation, value: model.isHovered)
+        // A tab switch animates the width with its own transaction; this covers
+        // the selected tab asking for another width, e.g. Home gaining a module
+        // in the settings window while the island is open.
+        .animation(NotchTheme.tabSwitchAnimation, value: model.expandedBodyWidth)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         // The panel overlaps the notch; without this SwiftUI would push content below it.
         .ignoresSafeArea()
     }
 
-    /// Frame width of the expanded island, ears included.
-    private static let expandedIslandWidth = NotchShape.frameWidth(
-        bodyWidth: NotchTheme.expandedSize.width,
-        topCornerRadius: NotchTheme.expandedTopRadius
-    )
+    /// Frame width of the expanded island, ears included, at the selected tab's width.
+    private var expandedIslandWidth: CGFloat {
+        NotchShape.frameWidth(bodyWidth: model.expandedBodyWidth, topCornerRadius: NotchTheme.expandedTopRadius)
+    }
 
     private func animation(for state: NotchViewModel.State) -> Animation {
         switch state {

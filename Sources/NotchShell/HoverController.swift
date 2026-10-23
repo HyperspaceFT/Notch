@@ -40,6 +40,12 @@ final class HoverController {
     private var monitors: [Any] = []
     private var pending: Pending?
     private var pendingTask: Task<Void, Never>?
+    /// The expanded island's frame the last time the pointer was inside it. Its width
+    /// follows the selected tab, so a click on a tab button near the edge of a wide
+    /// tab can leave the pointer outside the narrower new frame; that is not a
+    /// departure. Replaced as soon as the pointer is inside the current frame again,
+    /// and cleared whenever the island is not expanded.
+    private var frameWithPointer: CGRect?
 
     init(model: NotchViewModel) {
         self.model = model
@@ -77,6 +83,7 @@ final class HoverController {
         }
         monitors = []
         cancelPending()
+        frameWithPointer = nil
     }
 
     private func handle(_ type: NSEvent.EventType) {
@@ -95,18 +102,20 @@ final class HoverController {
         let location = NSEvent.mouseLocation
 
         if model.isExpanded {
-            if isInsideIsland(location, margin: Self.exitMargin) {
+            if isInsideExpandedIsland(location) {
                 cancelPending(.collapse)
             } else {
                 schedule(.collapse, after: Self.collapseDelay)
             }
         } else if model.isHovered {
+            frameWithPointer = nil
             // No debounce: while hovered the whole panel takes the mouse, so any
             // lingering would swallow clicks meant for the menu bar beside it.
             if !isInsideIsland(location, margin: Self.hoverExitMargin) {
                 model.setHovered(false)
             }
         } else {
+            frameWithPointer = nil
             if isInsideHotZone(location) {
                 schedule(dragging && isDraggingContent ? .dropExpand : .hover, after: Self.hoverDelay)
             } else {
@@ -133,6 +142,24 @@ final class HoverController {
         model.islandScreenFrame
             .insetBy(dx: -margin, dy: -margin)
             .contains(point)
+    }
+
+    /// Whether `point` is within `margin` of the `current` expanded frame or of the
+    /// `remembered` one, the frame before the island resized under the pointer.
+    nonisolated static func isInsideExpanded(_ point: CGPoint, current: CGRect, remembered: CGRect?, margin: CGFloat) -> Bool {
+        if current.insetBy(dx: -margin, dy: -margin).contains(point) { return true }
+        return remembered?.insetBy(dx: -margin, dy: -margin).contains(point) ?? false
+    }
+
+    /// The expanded island's exit test; refreshes `frameWithPointer` while the
+    /// pointer is inside the current frame.
+    private func isInsideExpandedIsland(_ point: CGPoint) -> Bool {
+        let current = model.islandScreenFrame
+        if isInsideIsland(point, margin: Self.exitMargin) {
+            frameWithPointer = current
+            return true
+        }
+        return Self.isInsideExpanded(point, current: current, remembered: frameWithPointer, margin: Self.exitMargin)
     }
 
     private func schedule(_ action: Pending, after delay: Duration) {
@@ -166,7 +193,8 @@ final class HoverController {
                 NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
             }
         case .collapse:
-            if model.isExpanded, !isInsideIsland(location, margin: Self.exitMargin) {
+            if model.isExpanded, !isInsideExpandedIsland(location) {
+                frameWithPointer = nil
                 model.setExpanded(false)
             }
         }

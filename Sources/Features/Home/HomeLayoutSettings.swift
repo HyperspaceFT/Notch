@@ -14,19 +14,34 @@ public final class HomeLayoutSettings {
     static let layoutKey = "NotchHomeLayout"
 
     /// The most modules Home shows at once.
-    public static let maximumModuleCount = HomeLayout.maximumCount
+    public nonisolated static let maximumModuleCount = HomeLayout.maximumCount
     /// Gap between modules in Home's row.
-    public static let spacing: CGFloat = 10
-    /// Home's row under a 32-point notch, the height the panel's header and
-    /// margins leave. Layouts are edited against it; Home draws them in the row it
-    /// actually gets, whose height follows the notch.
-    public static let referenceRow = HomeRowMetrics(
-        width: NotchTheme.expandedSize.width - 2 * (NotchTheme.expandedTopRadius + NotchTheme.contentPadding),
-        height: 134,
-        spacing: spacing
-    )
+    public nonisolated static let spacing: CGFloat = 10
+    /// How much wider the island grows for each module past the first.
+    public nonisolated static let extraWidthPerModule: CGFloat = 120
 
-    /// A module in the layout, with its width as a share of the reference row.
+    /// Body width of the expanded island while Home shows `count` modules: the
+    /// standard width for one module or none, `extraWidthPerModule` more for each
+    /// further one, up to `maximumModuleCount`.
+    public nonisolated static func bodyWidth(forModuleCount count: Int) -> CGFloat {
+        let extraModules = max(min(count, maximumModuleCount) - 1, 0)
+        return NotchTheme.expandedSize.width + extraWidthPerModule * CGFloat(extraModules)
+    }
+
+    /// Home's row with `count` modules under a 32-point notch: as wide as the body at
+    /// `bodyWidth(forModuleCount:)` less the top corner radius and the content padding
+    /// on each side (so a little narrower than the island's content), as tall as the panel's
+    /// header and margins leave. Layouts are edited against the row for their own
+    /// count; Home draws them in the row it actually gets, whose height follows the notch.
+    public nonisolated static func referenceRow(forModuleCount count: Int) -> HomeRowMetrics {
+        HomeRowMetrics(
+            width: bodyWidth(forModuleCount: count) - 2 * (NotchTheme.expandedTopRadius + NotchTheme.contentPadding),
+            height: 134,
+            spacing: spacing
+        )
+    }
+
+    /// A module in the layout, with its width as a share of `currentRow`.
     public struct Placement: Identifiable {
         public let module: NotchHomeModule
         public let width: Double
@@ -70,20 +85,31 @@ public final class HomeLayoutSettings {
         assert(Set(modules.map(\.id)).count == modules.count, "Duplicate NotchHomeModule id")
         self.modules = modules
         if isCustomized {
-            layout.normalize(sizings: sizings, row: Self.referenceRow)
+            layout.normalize(sizings: sizings, rows: Self.referenceRow(forModuleCount:))
         } else {
-            layout = .standard(moduleIDs: modules.map(\.id), sizings: sizings, row: Self.referenceRow)
+            layout = .standard(moduleIDs: modules.map(\.id), sizings: sizings, rows: Self.referenceRow(forModuleCount:))
         }
     }
 
     // MARK: Reading
 
+    /// The row the layout is edited against: the reference row for its module count.
+    public var currentRow: HomeRowMetrics {
+        Self.referenceRow(forModuleCount: layout.items.count)
+    }
+
+    /// Body width of the expanded island for the modules Home shows now.
+    public var expandedWidth: CGFloat {
+        Self.bodyWidth(forModuleCount: layout.items.count)
+    }
+
     public var placements: [Placement] {
         let sizings = sizings
+        let row = currentRow
         return layout.items.indices.compactMap { index in
             let item = layout.items[index]
             guard let module = module(item.moduleID),
-                  let range = layout.widthRange(at: index, sizings: sizings, row: Self.referenceRow)
+                  let range = layout.widthRange(at: index, sizings: sizings, row: row)
             else { return nil }
             return Placement(module: module, width: item.width, range: range)
         }
@@ -104,26 +130,26 @@ public final class HomeLayoutSettings {
 
     /// Whether `moduleID` can join the layout now (see `HomeLayout.canAdd`).
     public func canAdd(_ moduleID: String) -> Bool {
-        layout.canAdd(moduleID, sizings: sizings, row: Self.referenceRow)
+        layout.canAdd(moduleID, sizings: sizings, rows: Self.referenceRow(forModuleCount:))
     }
 
     // MARK: Editing
 
     public func add(_ moduleID: String) {
-        edit { $0.add(moduleID, sizings: sizings, row: Self.referenceRow) }
+        edit { $0.add(moduleID, sizings: sizings, rows: Self.referenceRow(forModuleCount:)) }
     }
 
     public func remove(at index: Int) {
-        edit { $0.remove(at: index) }
+        edit { $0.remove(at: index, sizings: sizings, rows: Self.referenceRow(forModuleCount:)) }
     }
 
     public func move(from source: Int, to destination: Int) {
         edit { $0.move(from: source, to: destination) }
     }
 
-    /// `width` is a share of the reference row (see `HomeLayout.setWidth`).
+    /// `width` is a share of `currentRow` (see `HomeLayout.setWidth`).
     public func setWidth(_ width: Double, at index: Int) {
-        edit { $0.setWidth(width, at: index, sizings: sizings, row: Self.referenceRow) }
+        edit { $0.setWidth(width, at: index, sizings: sizings, row: currentRow) }
     }
 
     private func edit(_ change: (inout HomeLayout) -> Void) {

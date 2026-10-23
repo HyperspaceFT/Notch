@@ -36,6 +36,10 @@
 	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Notch uses Bluetooth to show your AirPods' connection, battery, and controls in the notch.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Notch shows your upcoming events from the Calendar app on the Home tab.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Notch shows your upcoming events from the Calendar app on the Home tab.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSLocationUsageDescription</key>

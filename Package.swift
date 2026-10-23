@@ -8,6 +8,7 @@ import PackageDescription
 let featureNames = [
     "AirPods",
     "Battery",
+    "Calendar",
     "Files",
     "Home",
     "SystemHUD",
@@ -47,6 +48,7 @@ let package = Package(
         .testTarget(name: "AirPodsFeatureTests", dependencies: ["AirPodsFeature"]),
         .testTarget(name: "WeatherFeatureTests", dependencies: ["WeatherFeature"]),
         .testTarget(name: "HomeFeatureTests", dependencies: ["HomeFeature"]),
+        .testTarget(name: "CalendarFeatureTests", dependencies: ["CalendarFeature"]),
     ] + featureTargets,
     swiftLanguageModes: [.v6]
 )

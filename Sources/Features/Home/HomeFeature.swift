@@ -10,6 +10,9 @@ public final class HomeFeature: NotchFeature {
     public let id = "home"
     public var title: String { localized(en: "Home", zh: "主页") }
     public let symbol = "house"
+    /// Wider for each module Home shows past the first; follows the settings
+    /// window while the island is open.
+    public var expandedWidth: CGFloat? { settings.expandedWidth }
 
     /// Features whose `makeHomeModules()` Home shows besides its clock.
     private let moduleSources: [any NotchFeature]

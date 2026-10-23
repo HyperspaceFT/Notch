@@ -1,5 +1,6 @@
 import AirPodsFeature
 import BatteryFeature
+import CalendarFeature
 import FilesFeature
 import HomeFeature
 import NotchKit
@@ -26,6 +27,7 @@ enum FeatureCatalog {
             BatteryFeature(),
             SystemHUDFeature(),
             WeatherFeature(),
+            CalendarFeature(),
         ]
         return [HomeFeature(moduleSources: features)] + features
     }

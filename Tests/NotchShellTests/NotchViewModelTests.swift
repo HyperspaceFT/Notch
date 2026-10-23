@@ -300,4 +300,64 @@ struct NotchViewModelTests {
         #expect(model.state == .expanded)
         #expect(model.selectedTabID == "shelf")
     }
+
+    /// Lets a test change the width a tab asks for after it is set, as a feature's
+    /// observable state would.
+    private final class Width {
+        var value: CGFloat?
+
+        init(_ value: CGFloat?) {
+            self.value = value
+        }
+    }
+
+    @Test func expandedWidthFollowsTheSelectedTab() {
+        let home = Width(640)
+        model.setTabs([
+            .init(id: "home", title: { "主页" }, symbol: { "house" }, expandedWidth: { home.value }, content: AnyView(EmptyView())),
+            .init(id: "files", title: { "文件" }, symbol: { "folder" }, content: AnyView(EmptyView())),
+        ])
+        model.setExpanded(true)
+        #expect(model.bodySize == CGSize(width: 640, height: 190))
+
+        home.value = 880
+        #expect(model.bodySize.width == 880)
+
+        // A tab that asks for nothing gets the standard width.
+        model.selectedTabID = "files"
+        #expect(model.bodySize == CGSize(width: 520, height: 190))
+
+        model.selectedTabID = "home"
+        home.value = nil
+        #expect(model.bodySize.width == 520)
+    }
+
+    @Test func expandedWidthStaysBetweenTheStandardAndTheMaximum() {
+        let home = Width(2000)
+        model.setTabs([
+            .init(id: "home", title: { "主页" }, symbol: { "house" }, expandedWidth: { home.value }, content: AnyView(EmptyView())),
+        ])
+        model.setExpanded(true)
+        #expect(model.bodySize.width == 880)
+
+        home.value = 300
+        #expect(model.bodySize.width == 520)
+    }
+
+    @Test func aWideTabLeavesTheCollapsedAndActivitySizesAlone() {
+        model.setTabs([
+            .init(id: "home", title: { "主页" }, symbol: { "house" }, expandedWidth: { 760 }, content: AnyView(EmptyView())),
+        ])
+        #expect(model.bodySize == CGSize(width: 190, height: 32))
+
+        model.present(activity("a"))
+        #expect(model.bodySize == CGSize(width: 190 + NotchTheme.activityWingWidth * 2, height: 32))
+
+        model.setExpanded(true)
+        #expect(model.bodySize == CGSize(width: 760, height: 190))
+        #expect(model.islandSize.width == NotchShape.frameWidth(bodyWidth: 760, topCornerRadius: NotchTheme.expandedTopRadius))
+
+        model.setExpanded(false)
+        #expect(model.bodySize == CGSize(width: 190 + NotchTheme.activityWingWidth * 2, height: 32))
+    }
 }

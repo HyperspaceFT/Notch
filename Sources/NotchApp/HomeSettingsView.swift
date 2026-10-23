@@ -131,15 +131,19 @@ private struct HomeModuleRow: View {
 }
 
 /// The Home row in miniature, drawn like the panel: each module a tile as wide as
-/// it will be, free space left black.
+/// it will be, free space left black. One scale for every module count, so the
+/// island widens as modules join, as the panel does.
 private struct HomeLayoutPreview: View {
     let settings: HomeLayoutSettings
 
-    private static let width: CGFloat = 340
+    /// Width of the widest row, the one with the most modules.
+    private static let maximumWidth: CGFloat = 340
+    private static let scale = maximumWidth
+        / HomeLayoutSettings.referenceRow(forModuleCount: HomeLayoutSettings.maximumModuleCount).width
 
     var body: some View {
-        let row = HomeLayoutSettings.referenceRow
-        let scale = Self.width / row.width
+        let row = settings.currentRow
+        let scale = Self.scale
         let placed = settings.placedModules(in: row)
         HStack(spacing: row.spacing * scale) {
             if placed.isEmpty {
@@ -160,7 +164,7 @@ private struct HomeLayoutPreview: View {
                 .background(.white.opacity(0.12), in: .rect(cornerRadius: 16 * scale, style: .continuous))
             }
         }
-        .frame(width: Self.width, height: row.height * scale)
+        .frame(width: row.width * scale, height: row.height * scale)
         .padding(12 * scale)
         .background(NotchTheme.islandColor, in: .rect(cornerRadius: 22 * scale, style: .continuous))
         .frame(maxWidth: .infinity)

@@ -6,8 +6,12 @@ public enum NotchTheme {
 
     /// Width of each wing beside the hardware notch while an activity is shown.
     public static let activityWingWidth: CGFloat = 72
-    /// Body size of the expanded island (excluding the ears).
+    /// Standard body size of the expanded island (excluding the ears). A tab may
+    /// widen it (`NotchFeature.expandedWidth`) up to `maximumExpandedWidth`; the
+    /// height never changes.
     public static let expandedSize = CGSize(width: 520, height: 190)
+    /// Body width of the widest expanded island (excluding the ears).
+    public static let maximumExpandedWidth: CGFloat = 880
 
     public static let collapsedTopRadius: CGFloat = 6
     public static let collapsedBottomRadius: CGFloat = 10
@@ -29,11 +33,12 @@ public enum NotchTheme {
     /// room cuts it off at the panel edge.
     public static let shadowPadding: CGFloat = expandedShadowRadius * 3
 
-    /// Fixed size of the window hosting the island. Large enough for the expanded
-    /// island including ears and shadow; the window never resizes.
+    /// Fixed size of the window hosting the island. Large enough for the widest
+    /// expanded island including ears and shadow; the window never resizes, even
+    /// when the island widens with the selected tab.
     public static var panelSize: CGSize {
         CGSize(
-            width: NotchShape.frameWidth(bodyWidth: expandedSize.width, topCornerRadius: expandedTopRadius)
+            width: NotchShape.frameWidth(bodyWidth: maximumExpandedWidth, topCornerRadius: expandedTopRadius)
                 + shadowPadding * 2,
             // The shadow is shifted down, so the bottom needs its offset on top.
             height: expandedSize.height + shadowPadding + expandedShadowOffset

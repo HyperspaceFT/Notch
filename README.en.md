@@ -26,15 +26,16 @@ Built-in features:
 | Feature | Description |
 |---|---|
 | 🎧 AirPods | Connecting AirPods briefly shows an AirPods icon left of the notch and the battery level right of it. While they are connected, an AirPods tab appears in the open panel just left of the notch: it shows the left, right, and case battery levels and adjusts the AirPods' volume and noise-control mode (Noise Cancellation / Transparency / Adaptive, depending on the model). When the sound switches back to the Mac's own speakers (for example, when the AirPods disconnect), a Mac icon and the current volume briefly show beside the notch too; this part needs no Bluetooth access. macOS's own connection notice cannot be hidden and still appears. Needs Bluetooth access; noise control uses undocumented system interfaces and may stop working after a macOS update |
-| 🏠 Home | The home tab of the panel: a row of modules, left to right; for now there are two, the time and the weather. At its narrowest the time is a square with hours, minutes, and the date; wider, it adds seconds. At its narrowest the weather takes a third of the row, with the current weather on top and the next three hours below; wider, the current weather sits on the left and more hours appear on the right as it grows. In the **Home** pane of **Settings…** you pick the modules (up to four), their order, and their widths |
+| 🏠 Home | The home tab of the panel: a row of modules, left to right; for now there are three, the time, the weather, and the calendar. At its narrowest the time is a square with hours, minutes, and the date; wider, it adds seconds. At its narrowest the weather takes a third of the row, with the current weather on top and the next three hours below; wider, the current weather sits on the left and more hours appear on the right as it grows. With two or more modules, the open island widens with their number: 520 points for one module, 120 more for each additional one, 880 for four, and the modules widen in proportion; other tabs keep the original width, and switching tabs animates between the two. In the **Home** pane of **Settings…** you pick the modules (up to four), their order, and their widths |
 | 🌤️ Weather | The weather module on Home: the current temperature and conditions, today's high and low, and the next few hours, in the temperature unit macOS is set to. The day splits into three periods, each showing today's weather, the next few hours, or tomorrow's weather (by default today from 5 to 10, the next hours from 10 to 19, and tomorrow from 19 until 5 the next morning); drag the 24-hour ring in the **Weather** pane of **Settings…** to change them. Needs Location access and uses only your approximate location; the data comes from [Open-Meteo](https://open-meteo.com), and requests carry only the latitude and longitude rounded to two decimals. It also fetches the local sunrise and sunset, which light the island's edge (see **Light and Color** below). Updates only while the panel is open, at most every 15 minutes |
+| 📅 Calendar | The calendar module on Home: the events of the next few days, today included (3 by default, 1 to 14), grouped by day. All-day events come first each day, an event in progress is marked **Now**, and events that have ended drop off; the card takes the color of the next event's calendar. Events come from two sources: the macOS Calendar app, including accounts added in **System Settings → Internet Accounts** such as iCloud, Google, or Exchange, where you choose which calendars show; and subscription links, such as Google Calendar's **Secret address in iCal format** or an Outlook **Publish a calendar** ICS link, read-only. All of this is set in the **Calendar** pane of **Settings…**. Reading the Calendar app needs Calendars access, which you can decline if you only use links; a subscription link works like a password, so it is kept on this Mac only, downloaded calendars are not written to the disk cache, and they update only while the panel is open, at most every 15 minutes |
 | 📂 Files | On the left, an AirDrop zone: drop files on it to send them with AirDrop. On the right, a shelf: files dropped there can be dragged out again, or copied with the right-click **Copy** item and pasted elsewhere. With **Remove after pasting** on, files leave the shelf once they are dragged out or pasted (the originals are kept) |
 | 🔋 Battery | Plugging in the power adapter briefly shows a green charging battery left of the notch and the charge level right of it; unplugging shows a notice too. In the open panel, the battery icon right of the notch follows the charge level; its tab shows the time remaining and the battery health (maximum capacity, cycle count) |
 | 🔊 Volume & Brightness | The volume and brightness keys show Notch's own notice beside the notch instead of the system one: an icon on the left and a ring with the current level on the right; hold Option + Shift for finer steps. Needs Accessibility access (see the installation steps below), and can be turned off in the **Island** pane of **Settings…** |
 
 The interface is available in English and Simplified Chinese. It follows the system language by default, and you can switch it under **Settings…** in the right-click menu; the change applies right away. **Settings…** also has an **Open at Login** switch that starts Notch when you log in.
 
-The **General** pane of **Settings…** has a **Light and Color** switch (on by default). Cards are lit from above with a fine rim; the weather, charging, low-battery, and AirDrop cards take a color from what they show; and large numbers get a slight sheen. Once open, the island's edge follows the sky: by day a soft halo marks where the sun stands (rising on the left side, at the bottom center at noon, setting on the right), turning more orange the closer it is to sunrise or sunset; after sunset moonlight takes over, climbing the right side and crossing the top from right to left (partly hidden behind the notch around midnight) to come down the left side at sunrise, so the light goes once around the island a day; the fuller the moon, the brighter and larger its halo. Sunrise and sunset come from the Weather module and are kept, so they still serve while the weather has not refreshed; until they are first fetched, Notch assumes sunrise at 6:00 and sunset at 18:00. With the switch off, cards are plain gray.
+The **General** pane of **Settings…** has a **Light and Color** switch (on by default). Cards are lit from above with a fine rim; the weather, calendar, charging, low-battery, and AirDrop cards take a color from what they show; and large numbers get a slight sheen. Once open, the island's edge follows the sky: by day a soft halo marks where the sun stands (rising on the left side, at the bottom center at noon, setting on the right), turning more orange the closer it is to sunrise or sunset; after sunset moonlight takes over, climbing the right side and crossing the top from right to left (partly hidden behind the notch around midnight) to come down the left side at sunrise, so the light goes once around the island a day; the fuller the moon, the brighter and larger its halo. Sunrise and sunset come from the Weather module and are kept, so they still serve while the weather has not refreshed; until they are first fetched, Notch assumes sunrise at 6:00 and sunset at 18:00. With the switch off, cards are plain gray.
 
 More features are planned; see the [roadmap](#roadmap) below.
 
@@ -50,7 +51,7 @@ Download the latest `Notch-x.y.z.zip` from the [Releases](https://github.com/Hyp
 1. Unzip it and drag `Notch.app` into your Applications folder;
 2. Double-click it. The app is not notarized by Apple, so macOS blocks it and says it cannot verify the developer; click **Done**;
 3. Open **System Settings → Privacy & Security**, scroll to the bottom, click **Open Anyway**, and enter your password. It opens normally from then on;
-4. On first launch macOS asks for Accessibility access (used to take over the volume and brightness keys). Click **Open System Settings** and turn Notch on in the list. It also asks for Bluetooth access (used to show your AirPods' connection and battery); click **Allow**. The first time you open the notch, it asks for Location access (used to show the local weather); click **Allow**.
+4. On first launch macOS asks for Accessibility access (used to take over the volume and brightness keys). Click **Open System Settings** and turn Notch on in the list. It also asks for Bluetooth access (used to show your AirPods' connection and battery); click **Allow**. The first time you open the notch, it asks for Location access (used to show the local weather) and Calendars access (used to show events from the Calendar app); click **Allow**.
 
 Or remove the download quarantine flag in Terminal and open it directly:
 
@@ -133,6 +134,7 @@ Sources/
 ├── NotchShell/      # The shell: window, screen/notch placement, hover, state machine, root view
 ├── Features/        # One folder per feature, depending only on NotchKit + NotchUI
 │   ├── Battery/
+│   ├── Calendar/
 │   ├── Files/
 │   ├── Home/
 │   ├── SystemHUD/
@@ -168,19 +170,20 @@ A new feature takes three steps:
 
 Features talk to the shell through `NotchContext`, e.g. `present(_:)` shows a live activity and `dismiss(activityID:)` removes it. See `Sources/Features/Battery` for an example.
 
-A feature can also implement `makeHomeModules()` to offer modules for the Home tab (`NotchHomeModule`), stating their minimum and maximum widths, or a fixed width, with `HomeModuleSizing`; the user can then place them on Home in the **Home** pane of **Settings…**. See `Sources/Features/Weather` for an example.
+A feature can also implement `makeHomeModules()` to offer modules for the Home tab (`NotchHomeModule`), stating their minimum and maximum widths, or a fixed width, with `HomeModuleSizing`; the user can then place them on Home in the **Home** pane of **Settings…**. See `Sources/Features/Weather` for an example. A feature whose tab needs more room can give the open island's width with `expandedWidth` (520 to 880 points); that is how Home widens with its modules.
 
 Write interface text with `localized(en:zh:)`, giving both the English and the Chinese, and read it while the view draws (for example, make `title` a computed property) so it updates as soon as the language changes.
 
 ## Roadmap
 
 - [ ] 🎵 Now Playing / media controls
-- [ ] 📅 Calendar and Reminders
+- [ ] ✅ Reminders
 - [x] 📂 File shelf (drag files onto the notch to keep them)
 - [x] 🔊 Replace the system volume / brightness HUD
 - [x] 🎧 AirPods connection notice and headphone settings (battery, volume, noise control)
 - [x] 🌤️ Weather, a customizable Home layout (pick, order, and size modules), and weather periods
-- [x] ⚙️ Settings window (launch at login, Light and Color, the volume/brightness HUD switch, the Home layout, weather periods, and language for now)
+- [x] 📅 Calendar (the Calendar app and subscription links for Google, Outlook, and other calendars), with Home widening by its modules
+- [x] ⚙️ Settings window (launch at login, Light and Color, the volume/brightness HUD switch, the Home layout, weather periods, the calendar, and language for now)
 - [x] 🚀 Launch at login
 - [ ] 🔄 Automatic updates
 

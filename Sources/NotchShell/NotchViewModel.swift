@@ -38,6 +38,10 @@ final class NotchViewModel {
         /// Read while the panel draws, so the tab can hide while the feature has
         /// nothing to show (e.g. its device is disconnected).
         let isAvailable: @MainActor () -> Bool
+        /// Body width of the expanded island while this tab is selected; `nil` for
+        /// the standard width. Read while the panel draws, so it can follow the
+        /// feature's observable state.
+        let expandedWidth: @MainActor () -> CGFloat?
         let content: AnyView
 
         init(
@@ -47,6 +51,7 @@ final class NotchViewModel {
             placement: NotchTabPlacement = .leading,
             opensOnDrag: Bool = false,
             isAvailable: @escaping @MainActor () -> Bool = { true },
+            expandedWidth: @escaping @MainActor () -> CGFloat? = { nil },
             content: AnyView
         ) {
             self.id = id
@@ -55,6 +60,7 @@ final class NotchViewModel {
             self.placement = placement
             self.opensOnDrag = opensOnDrag
             self.isAvailable = isAvailable
+            self.expandedWidth = expandedWidth
             self.content = content
         }
     }
@@ -154,6 +160,15 @@ final class NotchViewModel {
         return visible.first { $0.id == selectedTabID } ?? visible.first
     }
 
+    /// Body width of the expanded island: what the selected tab asks for, kept
+    /// between the standard and the maximum width. Also read while collapsed, so
+    /// the expanded content keeps its layout while it rises and drops.
+    var expandedBodyWidth: CGFloat {
+        let standard = NotchTheme.expandedSize.width
+        guard let width = selectedTab?.expandedWidth() else { return standard }
+        return min(max(width, standard), NotchTheme.maximumExpandedWidth)
+    }
+
     /// Size of the island body (without the ears) for the current state.
     var bodySize: CGSize {
         let notch = geometry.notchRect.size
@@ -164,7 +179,7 @@ final class NotchViewModel {
         case .activity:
             size = CGSize(width: notch.width + NotchTheme.activityWingWidth * 2, height: notch.height)
         case .expanded:
-            return NotchTheme.expandedSize
+            return CGSize(width: expandedBodyWidth, height: NotchTheme.expandedSize.height)
         }
         guard isHovered else { return size }
         return CGSize(

@@ -1,4 +1,5 @@
 import AppKit
+import CalendarFeature
 import HomeFeature
 import NotchKit
 import NotchUI
@@ -8,7 +9,7 @@ import SystemHUDFeature
 import WeatherFeature
 
 /// The settings window: a standalone window with one toolbar tab per pane
-/// (General, Island, Home, and Weather). Built on first use and kept for later openings.
+/// (General, Island, Home, Weather, and Calendar). Built on first use and kept for later openings.
 @MainActor
 final class SettingsWindowController {
     private var window: NSWindow?
@@ -20,6 +21,7 @@ final class SettingsWindowController {
     func show() {
         launchAtLogin.refresh()
         SystemHUDSettings.shared.refreshAccessibilityAccess()
+        LocalCalendars.shared.refreshAccess()
         let window = window ?? makeWindow()
         // An accessory app is never active on its own; without this the window
         // would open behind the frontmost app.
@@ -40,6 +42,9 @@ final class SettingsWindowController {
         }
         addPane(WeatherSettingsView(settings: .shared), symbol: "cloud.sun") {
             localized(en: "Weather", zh: "天气")
+        }
+        addPane(CalendarSettingsView(settings: .shared, local: .shared, feeds: .shared), symbol: "calendar") {
+            localized(en: "Calendar", zh: "日历")
         }
 
         let tabs = NSTabViewController()
