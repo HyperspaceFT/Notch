@@ -4,6 +4,7 @@ import FilesFeature
 import HomeFeature
 import NotchKit
 import SystemHUDFeature
+import WeatherFeature
 
 /// The one place that lists enabled features. Order = tab order in the expanded
 /// panel, on each side of the notch (see `NotchFeature.tabPlacement`); a tab whose
@@ -13,15 +14,19 @@ import SystemHUDFeature
 /// 1. Create Sources/Features/<Name>/ with a type conforming to `NotchFeature`.
 /// 2. Add "<Name>" to `featureNames` in Package.swift.
 /// 3. Import `<Name>Feature` above and add an instance below.
+///
+/// Home comes first and is handed every other feature, so the modules any of them
+/// offers through `makeHomeModules()` can be placed on the Home tab.
 @MainActor
 enum FeatureCatalog {
     static func makeFeatures() -> [any NotchFeature] {
-        [
-            HomeFeature(),
+        let features: [any NotchFeature] = [
             FilesFeature(),
             AirPodsFeature(),
             BatteryFeature(),
             SystemHUDFeature(),
+            WeatherFeature(),
         ]
+        return [HomeFeature(moduleSources: features)] + features
     }
 }

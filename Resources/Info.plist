@@ -38,5 +38,9 @@
 	<string>Notch uses Bluetooth to show your AirPods' connection, battery, and controls in the notch.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSLocationUsageDescription</key>
+	<string>Notch uses your approximate location to show the local weather on the Home tab.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Notch uses your approximate location to show the local weather on the Home tab.</string>
 </dict>
 </plist>

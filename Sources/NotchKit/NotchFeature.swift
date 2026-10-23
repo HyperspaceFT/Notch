@@ -35,6 +35,10 @@ public protocol NotchFeature: AnyObject {
     /// Content of this feature's tab in the expanded panel; `nil` means no tab.
     /// Called once after activation; the returned view should observe its own state.
     func makeExpandedView() -> AnyView?
+    /// Modules this feature offers for the Home tab (see `NotchHomeModule`); empty
+    /// by default. Home asks once, after every feature is activated; the modules'
+    /// views should observe their own state.
+    func makeHomeModules() -> [NotchHomeModule]
 }
 
 /// Where a feature's tab button sits in the expanded panel's header.
@@ -52,4 +56,5 @@ extension NotchFeature {
     public func activate(context: any NotchContext) {}
     public func deactivate() {}
     public func makeExpandedView() -> AnyView? { nil }
+    public func makeHomeModules() -> [NotchHomeModule] { [] }
 }

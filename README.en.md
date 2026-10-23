@@ -26,7 +26,8 @@ Built-in features:
 | Feature | Description |
 |---|---|
 | 🎧 AirPods | Connecting AirPods briefly shows an AirPods icon left of the notch and the battery level right of it. While they are connected, an AirPods tab appears in the open panel just left of the notch: it shows the left, right, and case battery levels and adjusts the AirPods' volume and noise-control mode (Noise Cancellation / Transparency / Adaptive, depending on the model). When the sound switches back to the Mac's own speakers (for example, when the AirPods disconnect), a Mac icon and the current volume briefly show beside the notch too; this part needs no Bluetooth access. macOS's own connection notice cannot be hidden and still appears. Needs Bluetooth access; noise control uses undocumented system interfaces and may stop working after a macOS update |
-| 🏠 Home | The home tab of the panel; shows the current time for now |
+| 🏠 Home | The home tab of the panel: a row of modules, left to right; for now there are two, the time and the weather. At its narrowest the time is a square with hours, minutes, and the date; wider, it adds seconds. At its narrowest the weather takes a third of the row, with the current weather on top and the next three hours below; wider, the current weather sits on the left and more hours appear on the right as it grows. In the **Home** pane of **Settings…** you pick the modules (up to four), their order, and their widths |
+| 🌤️ Weather | The weather module on Home: the current temperature and conditions, today's high and low, and the next few hours, in the temperature unit macOS is set to. Needs Location access and uses only your approximate location; the data comes from [Open-Meteo](https://open-meteo.com), and requests carry only the latitude and longitude rounded to two decimals. Updates only while the panel is open, at most every 15 minutes |
 | 📂 Files | On the left, an AirDrop zone: drop files on it to send them with AirDrop. On the right, a shelf: files dropped there can be dragged out again, or copied with the right-click **Copy** item and pasted elsewhere. With **Remove after pasting** on, files leave the shelf once they are dragged out or pasted (the originals are kept) |
 | 🔋 Battery | Plugging in the power adapter briefly shows a green charging battery left of the notch and the charge level right of it; unplugging shows a notice too. In the open panel, the battery icon right of the notch follows the charge level; its tab shows the time remaining and the battery health (maximum capacity, cycle count) |
 | 🔊 Volume & Brightness | The volume and brightness keys show Notch's own notice beside the notch instead of the system one: an icon on the left and a ring with the current level on the right; hold Option + Shift for finer steps. Needs Accessibility access (see the installation steps below), and can be turned off in the **Island** pane of **Settings…** |
@@ -47,7 +48,7 @@ Download the latest `Notch-x.y.z.zip` from the [Releases](https://github.com/Hyp
 1. Unzip it and drag `Notch.app` into your Applications folder;
 2. Double-click it. The app is not notarized by Apple, so macOS blocks it and says it cannot verify the developer; click **Done**;
 3. Open **System Settings → Privacy & Security**, scroll to the bottom, click **Open Anyway**, and enter your password. It opens normally from then on;
-4. On first launch macOS asks for Accessibility access (used to take over the volume and brightness keys). Click **Open System Settings** and turn Notch on in the list. It also asks for Bluetooth access (used to show your AirPods' connection and battery); click **Allow**.
+4. On first launch macOS asks for Accessibility access (used to take over the volume and brightness keys). Click **Open System Settings** and turn Notch on in the list. It also asks for Bluetooth access (used to show your AirPods' connection and battery); click **Allow**. The first time you open the notch, it asks for Location access (used to show the local weather); click **Allow**.
 
 Or remove the download quarantine flag in Terminal and open it directly:
 
@@ -125,14 +126,15 @@ The project is one Swift Package, split into a shell plus pluggable features, wi
 
 ```
 Sources/
-├── NotchKit/        # The features' contract: NotchFeature, NotchActivity, NotchContext, interface language
+├── NotchKit/        # The features' contract: NotchFeature, NotchActivity, NotchContext, Home modules, interface language
 ├── NotchUI/         # Design system: notch shape, theme, animations, Liquid Glass buttons, shared controls
 ├── NotchShell/      # The shell: window, screen/notch placement, hover, state machine, root view
 ├── Features/        # One folder per feature, depending only on NotchKit + NotchUI
 │   ├── Battery/
 │   ├── Files/
 │   ├── Home/
-│   └── SystemHUD/
+│   ├── SystemHUD/
+│   └── Weather/
 └── NotchApp/        # Executable entry point and settings window; FeatureCatalog.swift lists the enabled features
 Tests/               # Unit tests
 Resources/Info.plist # App info template
@@ -164,6 +166,8 @@ A new feature takes three steps:
 
 Features talk to the shell through `NotchContext`, e.g. `present(_:)` shows a live activity and `dismiss(activityID:)` removes it. See `Sources/Features/Battery` for an example.
 
+A feature can also implement `makeHomeModules()` to offer modules for the Home tab (`NotchHomeModule`), stating their minimum and maximum widths, or a fixed width, with `HomeModuleSizing`; the user can then place them on Home in the **Home** pane of **Settings…**. See `Sources/Features/Weather` for an example.
+
 Write interface text with `localized(en:zh:)`, giving both the English and the Chinese, and read it while the view draws (for example, make `title` a computed property) so it updates as soon as the language changes.
 
 ## Roadmap
@@ -173,7 +177,8 @@ Write interface text with `localized(en:zh:)`, giving both the English and the C
 - [x] 📂 File shelf (drag files onto the notch to keep them)
 - [x] 🔊 Replace the system volume / brightness HUD
 - [x] 🎧 AirPods connection notice and headphone settings (battery, volume, noise control)
-- [x] ⚙️ Settings window (launch at login, the volume/brightness HUD switch, and language for now)
+- [x] 🌤️ Weather, and a customizable Home layout (pick, order, and size modules)
+- [x] ⚙️ Settings window (launch at login, the volume/brightness HUD switch, the Home layout, and language for now)
 - [x] 🚀 Launch at login
 - [ ] 🔄 Automatic updates
 

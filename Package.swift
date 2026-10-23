@@ -11,6 +11,7 @@ let featureNames = [
     "Files",
     "Home",
     "SystemHUD",
+    "Weather",
 ]
 
 let featureTargets: [Target] = featureNames.map { name in
@@ -44,6 +45,8 @@ let package = Package(
         .testTarget(name: "NotchShellTests", dependencies: ["NotchShell", "NotchKit"]),
         .testTarget(name: "SystemHUDFeatureTests", dependencies: ["SystemHUDFeature"]),
         .testTarget(name: "AirPodsFeatureTests", dependencies: ["AirPodsFeature"]),
+        .testTarget(name: "WeatherFeatureTests", dependencies: ["WeatherFeature"]),
+        .testTarget(name: "HomeFeatureTests", dependencies: ["HomeFeature"]),
     ] + featureTargets,
     swiftLanguageModes: [.v6]
 )

@@ -1,11 +1,12 @@
 import AppKit
+import HomeFeature
 import NotchKit
 import Observation
 import SwiftUI
 import SystemHUDFeature
 
 /// The settings window: a standalone window with one toolbar tab per pane
-/// (General and Island). Built on first use and kept for later openings.
+/// (General, Island, and Home). Built on first use and kept for later openings.
 @MainActor
 final class SettingsWindowController {
     private var window: NSWindow?
@@ -31,6 +32,9 @@ final class SettingsWindowController {
         ) { localized(en: "General", zh: "通用") }
         addPane(IslandSettingsView(systemHUD: .shared), symbol: "capsule") {
             localized(en: "Island", zh: "灵动岛")
+        }
+        addPane(HomeSettingsView(settings: .shared), symbol: "house") {
+            localized(en: "Home", zh: "主页")
         }
 
         let tabs = NSTabViewController()
