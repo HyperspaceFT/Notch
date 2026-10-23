@@ -49,35 +49,34 @@ public enum NotchTheme {
     public static let islandColor = Color.black
     public static let primaryText = Color.white
     public static let secondaryText = Color.white.opacity(0.6)
-    /// Card background, lit from above: lighter at the top than at the bottom,
-    /// about as bright overall as a flat 7% white.
-    public static var cardFill: LinearGradient {
+    /// Card background without light and color (`NotchAppearance`).
+    public static let cardFill = Color.white.opacity(0.07)
+    /// Card background with light and color: lit from above, lighter at the top
+    /// than at the bottom, about as bright overall as `cardFill`.
+    public static var litCardFill: LinearGradient {
         LinearGradient(colors: [.white.opacity(0.1), .white.opacity(0.045)], startPoint: .top, endPoint: .bottom)
     }
-    /// Hairline around a card, brightest where the light catches its top edge.
+    /// Hairline around a lit card, brightest where the light catches its top edge.
     public static var cardRim: LinearGradient {
         LinearGradient(colors: [.white.opacity(0.18), .white.opacity(0.04)], startPoint: .top, endPoint: .bottom)
     }
     /// How strongly a card's tint washes it, at its top-leading corner.
     public static let cardTintOpacity: Double = 0.24
-    /// Faint rim along the expanded island's sides and bottom. Clear over the top
-    /// third, so the band beside the hardware notch stays pure black.
-    public static var islandRim: LinearGradient {
-        LinearGradient(
-            stops: [
-                .init(color: .white.opacity(0), location: 0.3),
-                .init(color: .white.opacity(0.16), location: 1),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
     public static let chargingColor = Color.green
 
-    /// Large numbers such as the clock: `color` fading slightly toward the
-    /// bottom, for a soft sheen.
+    /// Large numbers such as the clock. With light and color, `color` fades
+    /// slightly toward the bottom, for a soft sheen; without, it is flat.
+    @MainActor
     public static func headline(_ color: Color = primaryText) -> LinearGradient {
-        LinearGradient(colors: [color, color.opacity(0.72)], startPoint: .top, endPoint: .bottom)
+        let bottom = NotchAppearance.shared.isLightAndColorEnabled ? color.opacity(0.72) : color
+        return LinearGradient(colors: [color, bottom], startPoint: .top, endPoint: .bottom)
+    }
+
+    /// A symbol in its own color, such as AirDrop's blue, with light and color;
+    /// primary text without.
+    @MainActor
+    public static func accent(_ color: Color) -> AnyShapeStyle {
+        NotchAppearance.shared.isLightAndColorEnabled ? AnyShapeStyle(color.gradient) : AnyShapeStyle(primaryText)
     }
 
     // MARK: Animations

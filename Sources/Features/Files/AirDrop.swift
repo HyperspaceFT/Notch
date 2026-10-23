@@ -15,7 +15,7 @@ struct AirDropZone: View {
             VStack(spacing: 6) {
                 Image(systemName: "dot.radiowaves.left.and.right")
                     .font(.system(size: 26, weight: .regular))
-                    .foregroundStyle(Color.blue.gradient)
+                    .foregroundStyle(NotchTheme.accent(.blue))
                 Text(localized(en: "AirDrop", zh: "隔空投送"))
                     .font(.system(size: 12, weight: .semibold))
                 Text(localized(en: "Drop here to send", zh: "拖到这里发送"))

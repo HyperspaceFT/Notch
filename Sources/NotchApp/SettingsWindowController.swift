@@ -1,6 +1,7 @@
 import AppKit
 import HomeFeature
 import NotchKit
+import NotchUI
 import Observation
 import SwiftUI
 import SystemHUDFeature
@@ -28,7 +29,7 @@ final class SettingsWindowController {
 
     private func makeWindow() -> NSWindow {
         addPane(
-            GeneralSettingsView(localization: .shared, launchAtLogin: launchAtLogin),
+            GeneralSettingsView(localization: .shared, launchAtLogin: launchAtLogin, appearance: .shared),
             symbol: "gearshape"
         ) { localized(en: "General", zh: "通用") }
         addPane(IslandSettingsView(systemHUD: .shared), symbol: "capsule") {
@@ -95,6 +96,7 @@ final class SettingsWindowController {
 private struct GeneralSettingsView: View {
     @Bindable var localization: Localization
     @Bindable var launchAtLogin: LaunchAtLogin
+    @Bindable var appearance: NotchAppearance
 
     var body: some View {
         Form {
@@ -103,6 +105,14 @@ private struct GeneralSettingsView: View {
                 if let note = launchAtLoginNote {
                     Text(note)
                 }
+            }
+            .toggleStyle(.switch)
+            Toggle(isOn: $appearance.isLightAndColorEnabled) {
+                Text(localized(en: "Light and Color", zh: "光影与色彩"))
+                Text(localized(
+                    en: "Gives cards depth and colors them by what they show. The open island's edge follows the local sun and moon phase, with sunrise and sunset from the weather.",
+                    zh: "为卡片加入立体光影和随内容变化的颜色。展开时，岛的边缘会随当地的太阳位置和月相变化，日出日落时间来自天气。"
+                ))
             }
             .toggleStyle(.switch)
             Picker(localized(en: "Language", zh: "语言"), selection: $localization.override) {

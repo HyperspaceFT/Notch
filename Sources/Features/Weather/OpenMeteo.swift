@@ -1,4 +1,5 @@
 import Foundation
+import NotchKit
 
 /// A place on Earth, in degrees.
 struct Coordinate: Equatable, Sendable {
@@ -33,6 +34,9 @@ struct WeatherReport: Equatable, Sendable {
     /// Index 0 is today, 1 tomorrow. A day the response lacks a time, code, high
     /// or low for is left out.
     let days: [Day]
+    /// Sunrise and sunset of each day the response has both for, in order. A
+    /// polar day or night has none.
+    var sunTimes: [SunTimes] = []
 
     var today: Day? { days.first }
     var tomorrow: Day? { days.count > 1 ? days[1] : nil }
@@ -72,7 +76,7 @@ enum OpenMeteo {
             URLQueryItem(name: "hourly", value: "temperature_2m,weather_code,is_day"),
             URLQueryItem(
                 name: "daily",
-                value: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
+                value: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset"
             ),
             URLQueryItem(name: "forecast_days", value: "2"),
             URLQueryItem(name: "timezone", value: "auto"),
@@ -93,7 +97,8 @@ enum OpenMeteo {
 
     /// Reads a forecast response. Hours missing a temperature or code are left
     /// out, and days missing a code, high or low are too; without daily data the
-    /// report has no days, so no high or low.
+    /// report has no days, so no high or low. Sun times are read apart from the
+    /// rest of a day, so a day without a forecast still has them.
     static func decode(_ data: Data) throws -> WeatherReport {
         let response = try JSONDecoder().decode(Response.self, from: data)
         let current = WeatherReport.Reading(
@@ -135,7 +140,19 @@ enum OpenMeteo {
                 ))
             }
         }
-        return WeatherReport(current: current, hours: hours, days: days)
+        var sunTimes: [SunTimes] = []
+        if let sunrises = response.daily?.sunrise, let sunsets = response.daily?.sunset {
+            for (sunrise, sunset) in zip(sunrises, sunsets) {
+                guard let sunrise, let sunset,
+                      let times = SunTimes(
+                          sunrise: Date(timeIntervalSince1970: sunrise),
+                          sunset: Date(timeIntervalSince1970: sunset)
+                      )
+                else { continue }
+                sunTimes.append(times)
+            }
+        }
+        return WeatherReport(current: current, hours: hours, days: days, sunTimes: sunTimes)
     }
 
     private static func rounded(_ degrees: Double) -> String {
@@ -177,6 +194,8 @@ enum OpenMeteo {
             let temperatureMax: [Double?]?
             let temperatureMin: [Double?]?
             let precipitationChance: [Double?]?
+            let sunrise: [TimeInterval?]?
+            let sunset: [TimeInterval?]?
 
             enum CodingKeys: String, CodingKey {
                 case time
@@ -184,6 +203,8 @@ enum OpenMeteo {
                 case temperatureMax = "temperature_2m_max"
                 case temperatureMin = "temperature_2m_min"
                 case precipitationChance = "precipitation_probability_max"
+                case sunrise
+                case sunset
             }
         }
 

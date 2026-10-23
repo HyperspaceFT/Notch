@@ -1,4 +1,5 @@
 import Foundation
+import NotchKit
 import Observation
 
 /// The last weather report and what the module shows about it. Refreshes only
@@ -107,6 +108,8 @@ final class WeatherModel {
         lastFailure = nil
         self.report = report
         status = .ready
+        // The island's edge follows the sun at the same place.
+        Daylight.shared.update(report.sunTimes)
     }
 
     /// Keeps the previous report, if any, on screen while it is recent enough.

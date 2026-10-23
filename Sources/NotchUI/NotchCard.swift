@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// A rounded container for grouping content inside the expanded island, lit from
-/// above. A tint washes it from the top-leading corner with a color that says
-/// something about the content, such as the sky or a charging battery.
+/// A rounded container for grouping content inside the expanded island. With
+/// light and color (`NotchAppearance`) it is lit from above, and a tint washes it
+/// from the top-leading corner with a color that says something about the
+/// content, such as the sky or a charging battery; without, it is flat gray.
 public struct NotchCard<Content: View>: View {
     private let title: String?
     private let tint: Color?
@@ -27,24 +28,32 @@ public struct NotchCard<Content: View>: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background {
             let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
-            // Clear rather than absent without a tint, so a tint fades in and out.
-            let tint = tint ?? .clear
-            shape
-                .fill(NotchTheme.cardFill)
-                .overlay {
-                    shape.fill(LinearGradient(
-                        stops: [
-                            .init(color: tint.opacity(NotchTheme.cardTintOpacity), location: 0),
-                            .init(color: tint.opacity(0), location: 0.8),
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ))
-                }
-                .overlay {
-                    shape.strokeBorder(NotchTheme.cardRim, lineWidth: 1)
-                }
-                .animation(.smooth, value: tint)
+            if NotchAppearance.shared.isLightAndColorEnabled {
+                litBackground(shape)
+            } else {
+                shape.fill(NotchTheme.cardFill)
+            }
         }
+    }
+
+    private func litBackground(_ shape: RoundedRectangle) -> some View {
+        // Clear rather than absent without a tint, so a tint fades in and out.
+        let tint = tint ?? .clear
+        return shape
+            .fill(NotchTheme.litCardFill)
+            .overlay {
+                shape.fill(LinearGradient(
+                    stops: [
+                        .init(color: tint.opacity(NotchTheme.cardTintOpacity), location: 0),
+                        .init(color: tint.opacity(0), location: 0.8),
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ))
+            }
+            .overlay {
+                shape.strokeBorder(NotchTheme.cardRim, lineWidth: 1)
+            }
+            .animation(.smooth, value: tint)
     }
 }

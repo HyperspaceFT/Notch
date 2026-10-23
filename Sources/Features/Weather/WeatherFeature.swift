@@ -2,7 +2,8 @@ import NotchKit
 import SwiftUI
 
 /// Offers a Home module with the current weather and the next hours at the
-/// user's approximate location, from Open-Meteo. Has no tab of its own.
+/// user's approximate location, from Open-Meteo. Has no tab of its own. Each
+/// report's sunrise and sunset go to `Daylight`, which lights the island's edge.
 @MainActor
 public final class WeatherFeature: NotchFeature {
     public let id = "weather"

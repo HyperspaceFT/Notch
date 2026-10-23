@@ -64,6 +64,25 @@ struct OpenMeteoDecodingTests {
         #expect(report.tomorrow == nil)
     }
 
+    @Test func sunTimesAreReadForEachDayThatHasBoth() throws {
+        // The second day lacks a sunset; the third is a polar night, where the
+        // sun "rises" and "sets" at the same moment. Neither has a forecast.
+        let json = """
+        {"current":{"time":100,"temperature_2m":1.5,"weather_code":0,"is_day":1},
+         "daily":{"time":[0,86400,172800,259200],"weather_code":[1,2,null,3],
+                  "temperature_2m_max":[5.0,6.0,7.0,8.0],"temperature_2m_min":[1.0,2.0,3.0,4.0],
+                  "sunrise":[25000,111400,172800,284000],"sunset":[62000,null,172800,320000]}}
+        """
+        let report = try OpenMeteo.decode(Data(json.utf8))
+        #expect(report.sunTimes.map(\.sunrise) == [25000, 284000].map { Date(timeIntervalSince1970: $0) })
+        #expect(report.sunTimes.map(\.sunset) == [62000, 320000].map { Date(timeIntervalSince1970: $0) })
+        #expect(report.days.count == 3)
+    }
+
+    @Test func aResponseWithoutSunTimesHasNone() throws {
+        #expect(try OpenMeteo.decode(Data(twoDayResponse.utf8)).sunTimes.isEmpty)
+    }
+
     @Test func nullPrecipitationChanceIsNil() throws {
         let json = """
         {"current":{"time":100,"temperature_2m":1.5,"weather_code":0,"is_day":1},
@@ -148,7 +167,7 @@ struct OpenMeteoURLTests {
         #expect(items["longitude"] == "13.42")
         #expect(items["current"] == "temperature_2m,weather_code,is_day")
         #expect(items["hourly"] == "temperature_2m,weather_code,is_day")
-        #expect(items["daily"] == "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max")
+        #expect(items["daily"] == "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset")
         #expect(items["forecast_hours"] == nil)
         #expect(items["forecast_days"] == "2")
         #expect(items["timezone"] == "auto")
