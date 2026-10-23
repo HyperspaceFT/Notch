@@ -3,6 +3,7 @@ import CalendarFeature
 import HomeFeature
 import NotchKit
 import NotchUI
+import NowPlayingFeature
 import Observation
 import SwiftUI
 import SystemHUDFeature
@@ -34,7 +35,7 @@ final class SettingsWindowController {
             GeneralSettingsView(localization: .shared, launchAtLogin: launchAtLogin, appearance: .shared),
             symbol: "gearshape"
         ) { localized(en: "General", zh: "通用") }
-        addPane(IslandSettingsView(systemHUD: .shared), symbol: "capsule") {
+        addPane(IslandSettingsView(systemHUD: .shared, nowPlaying: .shared), symbol: "capsule") {
             localized(en: "Island", zh: "灵动岛")
         }
         addPane(HomeSettingsView(settings: .shared), symbol: "house") {
@@ -152,9 +153,11 @@ private struct GeneralSettingsView: View {
     }
 }
 
-/// What the island shows: for now, whether it replaces the system volume and brightness HUD.
+/// What the island shows: whether it replaces the system volume and brightness HUD,
+/// and where Now Playing reads the track from.
 private struct IslandSettingsView: View {
     @Bindable var systemHUD: SystemHUDSettings
+    @Bindable var nowPlaying: NowPlayingSettings
 
     var body: some View {
         Form {
@@ -171,6 +174,28 @@ private struct IslandSettingsView: View {
             if needsAccessibilityAccess {
                 Button(localized(en: "Open Accessibility Settings…", zh: "打开辅助功能设置…")) {
                     systemHUD.requestAccessibilityAccess()
+                }
+            }
+            Section {
+                Toggle(isOn: $nowPlaying.usesMediaRemote) {
+                    Text(localized(en: "Read Now Playing from Any App", zh: "读取任意 App 的正在播放"))
+                    Text(localized(
+                        en: "Shows what any app plays, browser tabs such as YouTube or Bilibili included, through the bundled third-party mediaremote-adapter. When off, only Music and Spotify are shown.",
+                        zh: "通过随 App 附带的第三方组件 mediaremote-adapter，显示任意 App（包括浏览器里的 YouTube、哔哩哔哩）正在播放的内容。关闭时只显示「音乐」和 Spotify。"
+                    ))
+                }
+                .toggleStyle(.switch)
+                // The risk, spelled out under the switch so it is read before turning it on.
+                Label {
+                    Text(localized(
+                        en: "This is a risky feature. Since macOS 15.4 only Apple-signed programs may read what is playing. To get around that, Notch has the system's own /usr/bin/perl load a prebuilt third-party library (mediaremote-adapter): code that is not Apple's then runs under an Apple identity and passes a privacy restriction macOS sets on purpose. Notch cannot check what that library does beyond its published source, and any macOS update may block it. Although most notch apps on the market use this method, that does not stop it from being a fairly dangerous way to do it.",
+                        zh: "这是一项有一定风险的功能。macOS 15.4 起，只有 Apple 签名的程序才能读取正在播放的信息。为了绕过这一限制，Notch 会让系统自带的 /usr/bin/perl 加载一个第三方预编译库（mediaremote-adapter）：不属于 Apple 的代码因此以 Apple 程序的身份运行，绕开了 macOS 有意设置的隐私限制。除了它公开的源码，Notch 无法核实这个库实际做了什么，而且任何一次 macOS 更新都可能让它失效。虽说市面上绝大多数的 Notch 均采用了此方法，但是这并不妨碍该方法是一种较为危险的实现。"
+                    ))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.yellow)
                 }
             }
         }

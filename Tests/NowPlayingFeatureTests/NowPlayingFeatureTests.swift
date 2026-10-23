@@ -1,0 +1,250 @@
+import Foundation
+import Testing
+@testable import NowPlayingFeature
+
+struct PlaybackSnapshotTests {
+    @Test func emptyTitleMeansNothingPlaying() {
+        #expect(PlaybackSnapshot(player: .music, isPlaying: true, title: "") == nil)
+        #expect(PlaybackSnapshot(player: .music, isPlaying: true, title: "", artist: "Artist", trackID: "ID") == nil)
+    }
+
+    @Test func playerStateEnumeratorsMapToPlayingPausedOrNone() {
+        // Enumerators from Music's and Spotify's .sdef: kPSP playing, kPSp paused, kPSS stopped.
+        #expect(PlayerState(enumCode: fourCharCode("kPSP")) == .playing)
+        #expect(PlayerState(enumCode: fourCharCode("kPSp")) == .paused)
+        #expect(PlayerState(enumCode: fourCharCode("kPSS")) == .none)
+        #expect(PlayerState(enumCode: 0) == .none)
+    }
+
+    @Test func fourCharCodePacksASCIIBigEndian() {
+        #expect(fourCharCode("core") == 0x636f_7265)
+        #expect(fourCharCode("ID  ") == 0x4944_2020)
+    }
+
+    @Test func emptyOptionalFieldsAreDropped() throws {
+        let snapshot = try #require(PlaybackSnapshot(
+            player: .music,
+            isPlaying: false,
+            title: "Song",
+            artist: "Artist",
+            album: "",
+            trackID: "ABC123",
+            artworkURL: ""
+        ))
+        #expect(!snapshot.isPlaying)
+        #expect(snapshot.title == "Song")
+        #expect(snapshot.artist == "Artist")
+        #expect(snapshot.album == nil)
+        #expect(snapshot.trackKey == "com.apple.Music|ABC123")
+        #expect(snapshot.artworkURL == nil)
+    }
+
+    @Test func keepsSpotifyArtworkAddress() throws {
+        let snapshot = try #require(PlaybackSnapshot(
+            player: .spotify,
+            isPlaying: true,
+            title: "Song",
+            artist: "Artist",
+            album: "Album",
+            trackID: "spotify:track:1",
+            artworkURL: "https://i.scdn.co/image/x"
+        ))
+        #expect(snapshot.isPlaying)
+        #expect(snapshot.trackKey == "com.spotify.client|spotify:track:1")
+        #expect(snapshot.artworkURL == "https://i.scdn.co/image/x")
+    }
+
+    @Test func keyFallsBackToTitleArtistAlbumWithoutAnID() throws {
+        let snapshot = try #require(PlaybackSnapshot(player: .music, isPlaying: true, title: "Song", artist: "Artist", trackID: ""))
+        #expect(snapshot.trackKey == "com.apple.Music|Song|Artist|")
+    }
+
+    @Test func notificationTextIsAFallbackSnapshot() throws {
+        let snapshot = try #require(PlaybackSnapshot(
+            player: .spotify,
+            notificationInfo: ["Player State": "Playing", "Name": "Song", "Artist": "Artist", "Album": "Album"]
+        ))
+        #expect(snapshot.isPlaying)
+        #expect(snapshot.title == "Song")
+        #expect(PlaybackSnapshot(player: .music, notificationInfo: ["Player State": "Stopped", "Name": "Song"]) == nil)
+    }
+
+    @Test func stableHashIsFNV1a() {
+        // Published FNV-1a 64-bit test vectors.
+        #expect(PlaybackSnapshot.stableHash("") == 0xcbf2_9ce4_8422_2325)
+        #expect(PlaybackSnapshot.stableHash("a") == 0xaf63_dc4c_8601_ec8c)
+        #expect(PlaybackSnapshot.stableHash("foobar") == 0x8594_4171_f739_67e8)
+    }
+
+    @Test func prefersTheShownPlayerWhilePlayingElseAnyPlayingOne() throws {
+        let music = try #require(PlaybackSnapshot(player: .music, isPlaying: false, title: "A"))
+        let spotify = try #require(PlaybackSnapshot(player: .spotify, isPlaying: true, title: "B"))
+        #expect(PlaybackSnapshot.current(from: [.music: music, .spotify: spotify], preferring: .music) == spotify)
+        #expect(PlaybackSnapshot.current(from: [.music: music], preferring: .music) == music)
+        #expect(PlaybackSnapshot.current(from: [:], preferring: .music) == nil)
+    }
+
+    @Test func eventErrorsMapToStates() {
+        #expect(PlayerScripting.stateRead(forError: -1728) == .snapshot(nil))
+        #expect(PlayerScripting.stateRead(forError: -600) == .snapshot(nil))
+        #expect(PlayerScripting.stateRead(forError: -609) == .snapshot(nil))
+        #expect(PlayerScripting.stateRead(forError: -1743) == .notAuthorized)
+        #expect(PlayerScripting.stateRead(forError: -1712) == .unavailable)
+    }
+}
+
+struct PresenceTrackerTests {
+    let start = Date(timeIntervalSinceReferenceDate: 1_000)
+
+    func snapshot(playing: Bool, title: String = "Song") -> PlaybackSnapshot? {
+        PlaybackSnapshot(player: .music, isPlaying: playing, title: title, trackID: "1")
+    }
+
+    @Test func playingTrackIsVisible() {
+        var tracker = PresenceTracker()
+        tracker.update(snapshot(playing: true), now: start)
+        #expect(tracker.isVisible(at: start))
+        #expect(tracker.hideDate == nil)
+    }
+
+    @Test func pausedTrackLingersThirtySecondsThenHides() {
+        var tracker = PresenceTracker()
+        tracker.update(snapshot(playing: true), now: start)
+        tracker.update(snapshot(playing: false), now: start + 5)
+        #expect(tracker.isVisible(at: start + 5))
+        #expect(tracker.isVisible(at: start + 34))
+        #expect(!tracker.isVisible(at: start + 35))
+        #expect(tracker.hideDate == start + 35)
+    }
+
+    @Test func laterPausedReadingsDoNotRestartTheLinger() {
+        var tracker = PresenceTracker()
+        tracker.update(snapshot(playing: true), now: start)
+        tracker.update(snapshot(playing: false), now: start)
+        tracker.update(snapshot(playing: false), now: start + 20)
+        #expect(!tracker.isVisible(at: start + 31))
+    }
+
+    @Test func resumingWithinTheLingerStaysVisible() {
+        var tracker = PresenceTracker()
+        tracker.update(snapshot(playing: true), now: start)
+        tracker.update(snapshot(playing: false), now: start + 1)
+        tracker.update(snapshot(playing: true), now: start + 10)
+        #expect(tracker.isVisible(at: start + 100))
+        #expect(tracker.hideDate == nil)
+    }
+
+    @Test func nothingPlayingHidesImmediately() {
+        var tracker = PresenceTracker()
+        tracker.update(snapshot(playing: true), now: start)
+        tracker.update(nil, now: start + 1)
+        #expect(!tracker.isVisible(at: start + 1))
+    }
+
+    @Test func untitledTrackIsHidden() {
+        var tracker = PresenceTracker()
+        tracker.update(snapshot(playing: true, title: ""), now: start)
+        #expect(!tracker.isVisible(at: start))
+    }
+}
+
+struct PulseRhythmTests {
+    @Test func sameSeedAndTimeGiveTheSameLevels() {
+        let a = PulseRhythm(seed: 42)
+        let b = PulseRhythm(seed: 42)
+        for time in stride(from: 0.0, through: 5, by: 0.37) {
+            #expect(a.levels(at: time, count: 5) == b.levels(at: time, count: 5))
+        }
+    }
+
+    @Test func differentSeedsDiffer() {
+        let a = PulseRhythm(seed: 1)
+        let b = PulseRhythm(seed: 2)
+        let times = stride(from: 0.0, through: 5, by: 0.25)
+        #expect(times.contains { a.levels(at: $0, count: 5) != b.levels(at: $0, count: 5) })
+    }
+
+    @Test func levelsStayWithinZeroAndOne() {
+        for seed: UInt64 in [0, 1, 7, 0xdead_beef, .max] {
+            let rhythm = PulseRhythm(seed: seed)
+            for time in stride(from: 0.0, through: 30, by: 0.013) {
+                let levels = rhythm.levels(at: time, count: 5)
+                #expect(levels.count == 5)
+                #expect(levels.allSatisfy { (0...1).contains($0) })
+            }
+        }
+    }
+
+    @Test func tempoIsBetween93And129BPM() {
+        for seed in UInt64(0)..<200 {
+            let tempo = PulseRhythm(seed: seed &* 0x9e37_79b9).tempo
+            #expect(tempo >= 93 && tempo <= 129)
+        }
+    }
+}
+
+struct ArtworkPaletteTests {
+    func pixels(_ colors: [(r: UInt8, g: UInt8, b: UInt8, count: Int)]) -> [UInt8] {
+        colors.flatMap { color in
+            Array(repeating: [color.r, color.g, color.b, 255], count: color.count).flatMap { $0 }
+        }
+    }
+
+    /// Distance on the hue circle, 0…0.5.
+    func hueDistance(_ a: Double, _ b: Double) -> Double {
+        let distance = abs(a - b).truncatingRemainder(dividingBy: 1)
+        return min(distance, 1 - distance)
+    }
+
+    @Test func grayCoverGivesLightGrays() {
+        let bytes = pixels([(128, 128, 128, 400)])
+        let palette = ArtworkPalette.extract(fromRGBA: bytes, width: 20, height: 20)
+        #expect(palette.primary.saturation < 0.1)
+        #expect(palette.secondary.saturation < 0.1)
+        #expect(palette.primary.brightness >= 0.8)
+        #expect(palette.secondary.brightness >= 0.8)
+    }
+
+    @Test func mostlyRedWithSomeBlue() {
+        let bytes = pixels([(230, 30, 30, 300), (30, 60, 230, 100)])
+        let palette = ArtworkPalette.extract(fromRGBA: bytes, width: 20, height: 20)
+        #expect(hueDistance(palette.primary.hue, 0) < 0.04)
+        // Pure blue is at 240°.
+        #expect(hueDistance(palette.secondary.hue, 240.0 / 360) < 0.06)
+    }
+
+    @Test func darkSaturatedCoverIsBrightenedForTheBlackIsland() {
+        let bytes = pixels([(100, 10, 10, 400)])
+        let palette = ArtworkPalette.extract(fromRGBA: bytes, width: 20, height: 20)
+        #expect(palette.primary.brightness >= 0.8)
+        #expect(palette.secondary.brightness >= 0.8)
+        #expect(palette.primary.saturation <= 0.85)
+    }
+
+    @Test func singleHueGetsANeighbouringSecondColor() {
+        let bytes = pixels([(30, 200, 60, 400)])
+        let palette = ArtworkPalette.extract(fromRGBA: bytes, width: 20, height: 20)
+        let shift = hueDistance(palette.primary.hue, palette.secondary.hue)
+        #expect(abs(shift - 25.0 / 360) < 0.01)
+    }
+}
+
+@MainActor
+struct NowPlayingSettingsTests {
+    private func freshDefaults() -> UserDefaults {
+        let suite = "NowPlayingSettingsTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        return defaults
+    }
+
+    @Test func mediaRemoteIsOffUntilTurnedOn() {
+        #expect(!NowPlayingSettings(defaults: freshDefaults()).usesMediaRemote)
+    }
+
+    @Test func switchIsRemembered() {
+        let defaults = freshDefaults()
+        NowPlayingSettings(defaults: defaults).usesMediaRemote = true
+        #expect(NowPlayingSettings(defaults: defaults).usesMediaRemote)
+    }
+}

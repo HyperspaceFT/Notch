@@ -38,6 +38,14 @@ plutil -replace CFBundleShortVersionString -string "$VERSION" "$APP/Contents/Inf
 plutil -replace CFBundleVersion -string "$BUILD_NUMBER" "$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
 
+# The MediaRemote adapter the Now Playing feature runs through /usr/bin/perl to read what
+# any app (a browser tab included) plays. Keep its original signature: it is not re-signed.
+ADAPTER="$ROOT/Vendor/MediaRemoteAdapter"
+mkdir -p "$APP/Contents/Frameworks"
+ditto --noextattr --noqtn "$ADAPTER/MediaRemoteAdapter.framework" "$APP/Contents/Frameworks/MediaRemoteAdapter.framework"
+cp "$ADAPTER/mediaremote-adapter.pl" "$APP/Contents/Resources/mediaremote-adapter.pl"
+cp "$ADAPTER/LICENSE" "$APP/Contents/Resources/MediaRemoteAdapter-LICENSE"
+
 # An ad-hoc signature changes with every build, and macOS then treats the app as
 # new and drops its Accessibility access; a certificate's signature stays the same.
 # Listed without -v: the self-signed certificate is untrusted, which signing allows.

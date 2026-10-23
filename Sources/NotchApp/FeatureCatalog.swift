@@ -5,6 +5,7 @@ import FilesFeature
 import HomeFeature
 import NotchKit
 import NotesFeature
+import NowPlayingFeature
 import RemindersFeature
 import SystemHUDFeature
 import WeatherFeature
@@ -28,6 +29,7 @@ enum FeatureCatalog {
             AirPodsFeature(),
             BatteryFeature(),
             SystemHUDFeature(),
+            NowPlayingFeature(),
             WeatherFeature(),
             CalendarFeature(),
             NotesFeature(),
