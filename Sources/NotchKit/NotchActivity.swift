@@ -29,6 +29,10 @@ public struct NotchActivity: Identifiable {
     public var priority: Priority
     /// Seconds until the activity disappears on its own; `nil` keeps it until dismissed.
     public var duration: TimeInterval?
+    /// Width of each wing; `nil` uses the shell's standard width
+    /// (`NotchTheme.activityWingWidth`). Narrower content asks for less, so the
+    /// island grows only as far as it needs.
+    public var wingWidth: CGFloat?
     /// Content left of the hardware notch.
     public var leading: AnyView
     /// Content right of the hardware notch.
@@ -39,6 +43,7 @@ public struct NotchActivity: Identifiable {
         featureID: String = "",
         priority: Priority = .normal,
         duration: TimeInterval? = nil,
+        wingWidth: CGFloat? = nil,
         @ViewBuilder leading: () -> Leading,
         @ViewBuilder trailing: () -> Trailing
     ) {
@@ -46,6 +51,7 @@ public struct NotchActivity: Identifiable {
         self.featureID = featureID
         self.priority = priority
         self.duration = duration
+        self.wingWidth = wingWidth
         self.leading = AnyView(leading())
         self.trailing = AnyView(trailing())
     }

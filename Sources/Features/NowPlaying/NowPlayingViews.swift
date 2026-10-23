@@ -2,9 +2,10 @@ import NotchKit
 import NotchUI
 import SwiftUI
 
-/// Room between the wings' content and the island's outer edge, so the rounded
-/// bottom corners never clip it (also while the hover ring has not grown yet).
-private let outerInset: CGFloat = 10
+/// Width of each Now Playing wing, narrower than the standard one: the cover and
+/// the wave each sit centered in it, as far from the notch as from the island's
+/// edge, which also keeps them clear of the rounded bottom corners.
+let nowPlayingWingWidth: CGFloat = 38
 
 /// Left wing: the cover, like a record sleeve. It glows in its own colors while
 /// playing, sinks back while paused, and flips over when the track changes.
@@ -17,18 +18,14 @@ struct NowPlayingSleeve: View {
     var body: some View {
         GeometryReader { proxy in
             let side = max(min(Self.maximumSide, proxy.size.height - 10), 0)
-            HStack(spacing: 0) {
-                ZStack {
-                    // One view per cover: a new track inserts a new one and
-                    // removes the old, and the transition flips between them.
-                    sleeve(side: side)
-                        .id(model.coverKey)
-                        .transition(.flip)
-                }
-                .animation(.smooth(duration: 0.24), value: model.coverKey)
-                Spacer(minLength: 0)
+            ZStack {
+                // One view per cover: a new track inserts a new one and
+                // removes the old, and the transition flips between them.
+                sleeve(side: side)
+                    .id(model.coverKey)
+                    .transition(.flip)
             }
-            .padding(.leading, outerInset)
+            .animation(.smooth(duration: 0.24), value: model.coverKey)
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
     }
@@ -94,42 +91,54 @@ private extension AnyTransition {
     }
 }
 
-/// Right wing: five bars dancing to the track's own made-up rhythm (see
-/// `PulseRhythm`), in the cover's colors. Pausing settles them into a row of
-/// dots; hovering turns them into a play or pause button, which they are.
+/// Right wing: three thin strands of a wave, braided around one line and swinging
+/// to the track's own made-up beat (see `PulseRhythm`), in the cover's colors.
+/// Pausing calms them into a single flat line; hovering turns them into a play or
+/// pause button, which they are.
 struct NowPlayingPulse: View {
     let model: NowPlayingModel
 
     var body: some View {
-        HStack(spacing: 0) {
-            Spacer(minLength: 0)
-            Button {
-                model.togglePlayPause()
-            } label: {
-                PulseIcon(model: model)
-            }
-            .buttonStyle(PulseButtonStyle())
-            .onHover { model.isPulseHovered = $0 }
-            .accessibilityLabel(model.isPlaying ? localized(en: "Pause", zh: "暂停") : localized(en: "Play", zh: "播放"))
+        Button {
+            model.togglePlayPause()
+        } label: {
+            WaveIcon(model: model)
         }
-        .padding(.trailing, outerInset)
+        .buttonStyle(PulseButtonStyle())
+        .onHover { model.isPulseHovered = $0 }
+        .accessibilityLabel(model.isPlaying ? localized(en: "Pause", zh: "暂停") : localized(en: "Play", zh: "播放"))
     }
 }
 
-private struct PulseIcon: View {
+private struct WaveIcon: View {
     let model: NowPlayingModel
+
+    static let width: CGFloat = 22
+    static let height: CGFloat = 16
 
     var body: some View {
         let isPlaying = model.isPlaying
         let isHovered = model.isPulseHovered
         let rhythm = model.rhythm
+        let styles = strandStyles
         ZStack {
             TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isPlaying)) { timeline in
-                PulseBars(
-                    levels: rhythm.levels(at: timeline.date.timeIntervalSinceReferenceDate, count: PulseBars.barCount),
-                    amplitude: isPlaying ? 1 : 0
-                )
-                .fill(barStyle)
+                let time = timeline.date.timeIntervalSinceReferenceDate
+                let levels = rhythm.levels(at: time, count: WaveStrand.voices.count)
+                ZStack {
+                    ForEach(WaveStrand.voices.indices, id: \.self) { index in
+                        WaveStrand(
+                            voice: WaveStrand.voices[index],
+                            level: levels[index],
+                            time: time,
+                            tempo: rhythm.tempo,
+                            amplitude: isPlaying ? 1 : 0
+                        )
+                        .stroke(styles[index], style: StrokeStyle(lineWidth: WaveStrand.lineWidth, lineCap: .round))
+                        // Where strands cross they add up and glow, as light does on black.
+                        .blendMode(.plusLighter)
+                    }
+                }
             }
             .blur(radius: isHovered ? 4 : 0)
             .opacity(isHovered ? 0 : 1)
@@ -141,22 +150,20 @@ private struct PulseIcon: View {
                 .scaleEffect(isHovered ? 1 : 0.6)
                 .opacity(isHovered ? 1 : 0)
         }
-        .frame(width: PulseBars.width, height: PulseBars.maximumHeight)
-        // The whole bars region takes the click, not only the bars themselves.
+        .frame(width: Self.width, height: Self.height)
+        // The whole wave region takes the click, not only the strands themselves.
         .contentShape(Rectangle())
-        .animation(.spring(duration: 0.5, bounce: 0.3), value: isPlaying)
+        .animation(.spring(duration: 0.6, bounce: 0.25), value: isPlaying)
         .animation(.smooth(duration: 0.2), value: isHovered)
     }
 
-    private var barStyle: AnyShapeStyle {
+    /// Front to back: the cover's main color, its second color, then a soft white;
+    /// without Light and Color, white at falling strengths.
+    private var strandStyles: [Color] {
         guard NotchAppearance.shared.isLightAndColorEnabled, let palette = model.palette else {
-            return AnyShapeStyle(NotchTheme.primaryText)
+            return [NotchTheme.primaryText, NotchTheme.primaryText.opacity(0.55), NotchTheme.primaryText.opacity(0.3)]
         }
-        return AnyShapeStyle(LinearGradient(
-            colors: [palette.primary.color, palette.secondary.color],
-            startPoint: .top,
-            endPoint: .bottom
-        ))
+        return [palette.primary.color, palette.secondary.color, NotchTheme.primaryText.opacity(0.45)]
     }
 
     private var symbolStyle: AnyShapeStyle {
@@ -167,20 +174,34 @@ private struct PulseIcon: View {
     }
 }
 
-/// All bars in one shape, so `amplitude` animates them together: 1 lets them
-/// follow `levels`, 0 settles them into dots as tall as they are wide.
-private struct PulseBars: Shape {
-    var levels: [Double]
-    var amplitude: Double
-
-    static let barCount = 5
-    static let barWidth: CGFloat = 3
-    static let gap: CGFloat = 2.5
-    static let minimumHeight: CGFloat = 4
-    static let maximumHeight: CGFloat = 16
-    static var width: CGFloat {
-        CGFloat(barCount) * barWidth + CGFloat(barCount - 1) * gap
+/// One strand: a sine wave pinned to the middle line at both ends (its swing
+/// tapers to nothing there), travelling sideways as time passes. `level` is how
+/// hard the beat pushes it right now; `amplitude` animates it between swinging (1)
+/// and lying flat (0), so a pause eases all strands into one line.
+private struct WaveStrand: Shape {
+    struct Voice {
+        /// Whole waves across the width.
+        var cycles: Double
+        /// Radians per beat the wave travels; negative runs leftward.
+        var speed: Double
+        /// Share of the full height this strand may swing.
+        var reach: Double
+        var phase: Double
     }
+
+    static let voices = [
+        Voice(cycles: 1, speed: 1.6, reach: 1, phase: 0),
+        Voice(cycles: 1.5, speed: -1.1, reach: 0.8, phase: 2.1),
+        Voice(cycles: 0.75, speed: 2.3, reach: 0.6, phase: 4.2),
+    ]
+    static let lineWidth: CGFloat = 1.6
+    private static let samples = 28
+
+    var voice: Voice
+    var level: Double
+    var time: TimeInterval
+    var tempo: Double
+    var amplitude: Double
 
     var animatableData: Double {
         get { amplitude }
@@ -188,15 +209,19 @@ private struct PulseBars: Shape {
     }
 
     func path(in rect: CGRect) -> Path {
+        let swing = (rect.height - Self.lineWidth) / 2 * voice.reach * level * amplitude
+        let phase = voice.phase + voice.speed * time * tempo / 60
         var path = Path()
-        for (index, level) in levels.enumerated() {
-            let playing = Self.minimumHeight + CGFloat(level) * (Self.maximumHeight - Self.minimumHeight)
-            let height = Self.barWidth + (playing - Self.barWidth) * CGFloat(amplitude)
-            let x = rect.minX + CGFloat(index) * (Self.barWidth + Self.gap)
-            path.addRoundedRect(
-                in: CGRect(x: x, y: rect.midY - height / 2, width: Self.barWidth, height: height),
-                cornerSize: CGSize(width: Self.barWidth / 2, height: Self.barWidth / 2)
-            )
+        for sample in 0...Self.samples {
+            let u = Double(sample) / Double(Self.samples)
+            let taper = pow(sin(.pi * u), 2)
+            let y = rect.midY + swing * taper * sin(2 * .pi * voice.cycles * u + phase)
+            let point = CGPoint(x: rect.minX + rect.width * u, y: y)
+            if sample == 0 {
+                path.move(to: point)
+            } else {
+                path.addLine(to: point)
+            }
         }
         return path
     }

@@ -168,7 +168,7 @@ public final class NowPlayingFeature: NotchFeature {
             // Presented once per appearance: the wings observe the model, so later
             // track, cover, and play-state changes update them in place. Presenting
             // again would replace the views and restart their transitions.
-            context?.present(NotchActivity(id: Self.activityID, priority: .normal) { [model] in
+            context?.present(NotchActivity(id: Self.activityID, priority: .normal, wingWidth: nowPlayingWingWidth) { [model] in
                 NowPlayingSleeve(model: model)
             } trailing: { [model] in
                 NowPlayingPulse(model: model)

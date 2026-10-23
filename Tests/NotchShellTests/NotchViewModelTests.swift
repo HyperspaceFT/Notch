@@ -34,6 +34,20 @@ struct NotchViewModelTests {
         #expect(model.islandScreenFrame.maxY == 956)
     }
 
+    @Test func activityWingWidthSetsTheIslandWidth() {
+        let wingWidth: CGFloat = 38
+        model.present(NotchActivity(id: "narrow", featureID: "test", wingWidth: wingWidth) {
+            EmptyView()
+        } trailing: {
+            EmptyView()
+        })
+        #expect(model.bodySize.width == 190 + wingWidth * 2)
+
+        // A standard activity on top brings the standard width back.
+        model.present(activity("wide", priority: .high))
+        #expect(model.bodySize.width == 190 + NotchTheme.activityWingWidth * 2)
+    }
+
     @Test func activityThenExpandThenCollapse() {
         model.present(activity("a"))
         #expect(model.state == .activity)

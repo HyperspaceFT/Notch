@@ -217,14 +217,15 @@ private struct ActivityWingsView: View {
     let earInset: CGFloat
 
     var body: some View {
+        let wingWidth = activity.wingWidth ?? NotchTheme.activityWingWidth
         HStack(spacing: 0) {
             activity.leading
-                .frame(width: NotchTheme.activityWingWidth, alignment: .center)
+                .frame(width: wingWidth, alignment: .center)
             // Nothing is visible behind the camera housing.
             Color.clear
                 .frame(width: notchSize.width)
             activity.trailing
-                .frame(width: NotchTheme.activityWingWidth, alignment: .center)
+                .frame(width: wingWidth, alignment: .center)
         }
         .frame(height: notchSize.height)
         .foregroundStyle(NotchTheme.primaryText)

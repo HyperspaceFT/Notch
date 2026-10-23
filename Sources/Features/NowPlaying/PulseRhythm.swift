@@ -1,6 +1,6 @@
 import Foundation
 
-/// The bar heights of the pulse icon over time: a made-up beat, not the audio
+/// How hard the wave's strands swing over time: a made-up beat, not the audio
 /// (which the players do not share). Seeded per track, so every song gets its own
 /// tempo, accents, and shimmer, and the same song always moves the same way.
 struct PulseRhythm: Sendable, Equatable {

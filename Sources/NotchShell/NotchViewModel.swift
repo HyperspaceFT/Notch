@@ -188,7 +188,8 @@ final class NotchViewModel {
         case .collapsed:
             size = notch
         case .activity:
-            size = CGSize(width: notch.width + NotchTheme.activityWingWidth * 2, height: notch.height)
+            let wingWidth = currentActivity?.wingWidth ?? NotchTheme.activityWingWidth
+            size = CGSize(width: notch.width + wingWidth * 2, height: notch.height)
         case .expanded:
             return CGSize(width: expandedBodyWidth, height: NotchTheme.expandedSize.height)
         }
