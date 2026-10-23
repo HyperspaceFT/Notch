@@ -1,6 +1,36 @@
 import Foundation
+import NotchKit
 import Observation
 import SwiftUI
+
+/// Which events the Home calendar module lists: the Calendar app's, the
+/// subscribed feeds', or both.
+public enum CalendarSource: String, CaseIterable, Codable, Sendable {
+    case all
+    /// Only the Calendar app's calendars (through EventKit).
+    case local
+    /// Only the subscribed iCalendar feeds.
+    case cloud
+
+    @MainActor public var title: String {
+        switch self {
+        case .all: localized(en: "All", zh: "全部")
+        case .local: localized(en: "This Mac", zh: "本机")
+        case .cloud: localized(en: "Cloud", zh: "云端")
+        }
+    }
+
+    public var symbol: String {
+        switch self {
+        case .all: "square.grid.2x2"
+        case .local: "laptopcomputer"
+        case .cloud: "cloud"
+        }
+    }
+
+    public var includesLocal: Bool { self != .cloud }
+    public var includesCloud: Bool { self != .local }
+}
 
 /// What the Home calendar module shows, as the settings window edits it: how
 /// many days, which of the Calendar app's calendars, and the subscribed feeds.
@@ -12,6 +42,7 @@ public final class CalendarSettings {
     static let dayCountKey = "NotchCalendarDayCount"
     static let hiddenCalendarsKey = "NotchCalendarHiddenCalendars"
     static let subscriptionsKey = "NotchCalendarSubscriptions"
+    static let sourceKey = "NotchCalendarSource"
     static let defaultDayCount = 3
 
     /// How many days, today included, the module may show.
@@ -26,6 +57,15 @@ public final class CalendarSettings {
             guard clamped != storedDayCount else { return }
             storedDayCount = clamped
             defaults.set(clamped, forKey: Self.dayCountKey)
+        }
+    }
+
+    /// Which of the Calendar app and the subscriptions the module lists; saved
+    /// on every change.
+    public var source: CalendarSource {
+        didSet {
+            guard source != oldValue else { return }
+            defaults.set(source.rawValue, forKey: Self.sourceKey)
         }
     }
 
@@ -47,13 +87,14 @@ public final class CalendarSettings {
     private var storedDayCount: Int
     @ObservationIgnored private let defaults: UserDefaults
 
-    /// Saved values that do not decode fall back to the defaults.
+    /// Saved values that do not decode (an unknown source too) fall back to the defaults.
     init(defaults: UserDefaults) {
         self.defaults = defaults
         let savedDayCount = defaults.object(forKey: Self.dayCountKey) as? Int
         storedDayCount = savedDayCount.map {
             min(max($0, Self.dayCountRange.lowerBound), Self.dayCountRange.upperBound)
         } ?? Self.defaultDayCount
+        source = defaults.string(forKey: Self.sourceKey).flatMap(CalendarSource.init(rawValue:)) ?? .all
         hiddenCalendarIDs = Set(defaults.stringArray(forKey: Self.hiddenCalendarsKey) ?? [])
         subscriptions = defaults.data(forKey: Self.subscriptionsKey)
             .flatMap { try? JSONDecoder().decode([CalendarSubscription].self, from: $0) }

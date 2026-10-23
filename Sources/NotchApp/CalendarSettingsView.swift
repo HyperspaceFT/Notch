@@ -4,9 +4,10 @@ import NotchKit
 import Observation
 import SwiftUI
 
-/// The Calendar pane: how many days the Home calendar module shows, which of
-/// the Calendar app's calendars, and the subscribed calendar feeds. Taller
-/// than the window allows, the form scrolls.
+/// The Calendar pane: which events (the Calendar app's, the feeds', or both)
+/// and how many days the Home calendar module shows, which of the Calendar
+/// app's calendars, and the subscribed calendar feeds. Taller than the window
+/// allows, the form scrolls.
 struct CalendarSettingsView: View {
     @Bindable var settings: CalendarSettings
     let local: LocalCalendars
@@ -43,6 +44,12 @@ struct CalendarSettingsView: View {
 
     private var daysSection: some View {
         Section {
+            Picker(localized(en: "Show", zh: "显示"), selection: $settings.source) {
+                ForEach(CalendarSource.allCases, id: \.self) { source in
+                    Text(source.title).tag(source)
+                }
+            }
+            .pickerStyle(.segmented)
             Stepper(value: $settings.dayCount, in: CalendarSettings.dayCountRange) {
                 let count = settings.dayCount
                 Text(count == 1

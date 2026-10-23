@@ -20,6 +20,7 @@ struct CalendarSettingsTests {
             #expect(settings.dayCount == 3)
             #expect(settings.hiddenCalendarIDs.isEmpty)
             #expect(settings.subscriptions.isEmpty)
+            #expect(settings.source == .all)
             #expect(CalendarSettings.dayCountRange == 1...14)
         }
     }
@@ -36,6 +37,81 @@ struct CalendarSettingsTests {
             #expect(reloaded.subscriptions == settings.subscriptions)
             #expect(reloaded.subscriptions.first?.name == "Team")
         }
+    }
+
+    @Test func sourceSurvivesARelaunch() {
+        withSettings { _, make in
+            let settings = make()
+            settings.source = .cloud
+            #expect(make().source == .cloud)
+            settings.source = .local
+            #expect(make().source == .local)
+            settings.source = .all
+            #expect(make().source == .all)
+        }
+    }
+
+    @Test func unknownSavedSourceFallsBackToAll() {
+        withSettings { defaults, make in
+            defaults.set("icloud", forKey: CalendarSettings.sourceKey)
+            #expect(make().source == .all)
+            defaults.set(3, forKey: CalendarSettings.sourceKey)
+            #expect(make().source == .all)
+        }
+    }
+
+    @Test func sourceSaysWhichKindsItIncludes() {
+        #expect(CalendarSource.allCases == [.all, .local, .cloud])
+        #expect(CalendarSource.all.includesLocal && CalendarSource.all.includesCloud)
+        #expect(CalendarSource.local.includesLocal && !CalendarSource.local.includesCloud)
+        #expect(!CalendarSource.cloud.includesLocal && CalendarSource.cloud.includesCloud)
+    }
+
+    @Test func localSourceNeedsOnlyAccessToEmptyTheCard() {
+        func state(
+            _ source: CalendarSource,
+            _ access: LocalCalendars.Access,
+            subscriptions: Bool = false,
+            fetching: Bool = false,
+            failed: Bool = false
+        ) -> CalendarCardState {
+            CalendarCardState.state(
+                source: source,
+                access: access,
+                hasEnabledSubscriptions: subscriptions,
+                isFetchingFirstTime: fetching,
+                hasFailedWithoutData: failed
+            )
+        }
+        // This Mac: subscriptions and their feeds never matter.
+        #expect(state(.local, .notDetermined, subscriptions: true) == .allowAccess)
+        #expect(state(.local, .denied, subscriptions: true, fetching: true) == .accessNeeded)
+        #expect(state(.local, .granted, subscriptions: true, fetching: true, failed: true) == .empty)
+        // Cloud: the Calendar app's access never matters.
+        #expect(state(.cloud, .notDetermined) == .addLinks)
+        #expect(state(.cloud, .denied) == .addLinks)
+        #expect(state(.cloud, .notDetermined, subscriptions: true) == .empty)
+        #expect(state(.cloud, .denied, subscriptions: true, fetching: true) == .loading)
+        #expect(state(.cloud, .granted, subscriptions: true, failed: true) == .failed)
+        // All: as before the switch existed.
+        #expect(state(.all, .notDetermined) == .allowAccess)
+        #expect(state(.all, .denied) == .accessNeeded)
+        #expect(state(.all, .notDetermined, subscriptions: true) == .empty)
+        #expect(state(.all, .denied, subscriptions: true, fetching: true) == .loading)
+        #expect(state(.all, .granted, subscriptions: true, failed: true) == .failed)
+        #expect(state(.all, .granted) == .empty)
+    }
+
+    @Test func accessIsRequestedOnlyWhereTheSourceNeedsIt() {
+        func requests(_ source: CalendarSource, _ access: LocalCalendars.Access, subscriptions: Bool = false) -> Bool {
+            CalendarCardState.shouldRequestAccess(source: source, access: access, hasEnabledSubscriptions: subscriptions)
+        }
+        #expect(requests(.all, .notDetermined))
+        #expect(!requests(.all, .notDetermined, subscriptions: true))
+        #expect(requests(.local, .notDetermined, subscriptions: true))
+        #expect(!requests(.cloud, .notDetermined))
+        #expect(!requests(.local, .granted))
+        #expect(!requests(.all, .denied))
     }
 
     @Test func dayCountStaysInRange() {

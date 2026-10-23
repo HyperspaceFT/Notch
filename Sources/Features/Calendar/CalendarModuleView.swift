@@ -3,7 +3,8 @@ import NotchUI
 import SwiftUI
 
 /// The calendar module at the size Home gives it: the coming days' events,
-/// local and subscribed together, in a list that scrolls. From
+/// local and subscribed together (or either alone, as the card's switch says),
+/// in a list that scrolls. From
 /// `wideThreshold` on, each event's time sits in its own column with the
 /// location after the title.
 struct CalendarModuleView: View {
@@ -24,18 +25,35 @@ struct CalendarModuleView: View {
             NotchCard(tint: days.first?.entries.first?.event.color.color) {
                 content(days, now: context.date)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    // In every state, so the user can always switch back.
+                    .overlay(alignment: .topTrailing) {
+                        CalendarSourceSwitch(source: settings.source) { source in
+                            withAnimation(.snappy(duration: 0.25)) {
+                                settings.source = source
+                            }
+                        }
+                    }
             }
         }
         .frame(width: size.width, height: size.height)
         // SwiftUI cancels this when the module leaves the screen, such as when the
-        // panel collapses, so no feed downloads while the island is closed.
-        .task {
-            if local.access == .notDetermined && !hasEnabledSubscriptions {
+        // panel collapses, so no feed downloads while the island is closed. It
+        // starts over when the source changes, so a feed newly included is
+        // checked at once.
+        .task(id: settings.source) {
+            let source = settings.source
+            if CalendarCardState.shouldRequestAccess(
+                source: source,
+                access: local.access,
+                hasEnabledSubscriptions: hasEnabledSubscriptions
+            ) {
                 local.requestAccess()
             }
             while !Task.isCancelled {
                 local.refreshAccess()
-                feeds.refreshIfNeeded()
+                if source.includesCloud {
+                    feeds.refreshIfNeeded()
+                }
                 try? await Task.sleep(for: Self.checkInterval)
             }
         }
@@ -48,50 +66,73 @@ struct CalendarModuleView: View {
     private func agenda(at now: Date) -> [AgendaDay] {
         let calendar = Calendar.current
         let window = Agenda.window(now: now, dayCount: settings.dayCount, calendar: calendar)
-        let events = local.events(in: window, hidden: settings.hiddenCalendarIDs) + feeds.events()
+        let source = settings.source
+        let events = (source.includesLocal ? local.events(in: window, hidden: settings.hiddenCalendarIDs) : [])
+            + (source.includesCloud ? feeds.events() : [])
         return Agenda.days(for: events, now: now, dayCount: settings.dayCount, calendar: calendar)
     }
 
     @ViewBuilder
     private func content(_ days: [AgendaDay], now: Date) -> some View {
         if !days.isEmpty {
-            AgendaList(days: days, now: now, isWide: size.width >= Self.wideThreshold)
-        } else if !hasEnabledSubscriptions && local.access == .notDetermined {
-            centered {
-                StatusLine(symbol: "calendar") {
-                    localized(en: "Show your events here", zh: "在这里显示你的日程")
-                }
-                GlassCapsuleButton(localized(en: "Allow", zh: "允许"), symbol: "checkmark") {
-                    local.requestAccess()
-                }
-            }
-        } else if !hasEnabledSubscriptions && local.access == .denied {
-            centered {
-                StatusLine(symbol: "calendar.badge.exclamationmark") {
-                    localized(en: "Calendar access needed", zh: "需要日历权限")
-                }
-                GlassCapsuleButton(localized(en: "Open Settings", zh: "打开设置"), symbol: "gear") {
-                    local.openPrivacySettings()
-                }
-            }
-        } else if feeds.isFetchingFirstTime() {
-            centered {
-                ProgressView()
-                    .controlSize(.small)
-            }
-        } else if feeds.hasFailedWithoutData() {
-            centered {
-                StatusLine(symbol: "exclamationmark.icloud") {
-                    localized(en: "Couldn't update calendars", zh: "无法更新订阅日历")
-                }
-            }
+            AgendaList(
+                days: days,
+                now: now,
+                isWide: size.width >= Self.wideThreshold,
+                // Room for the switch, which the first day's title would run under.
+                firstTitleTrailingInset: CalendarSourceSwitch.width + 6
+            )
         } else {
-            centered {
-                StatusLine(symbol: "calendar") {
-                    let count = settings.dayCount
-                    return count == 1
-                        ? localized(en: "No more events today", zh: "今天没有更多日程")
-                        : localized(en: "No events in the next \(count) days", zh: "未来 \(count) 天没有日程")
+            switch CalendarCardState.state(
+                source: settings.source,
+                access: local.access,
+                hasEnabledSubscriptions: hasEnabledSubscriptions,
+                isFetchingFirstTime: feeds.isFetchingFirstTime(),
+                hasFailedWithoutData: feeds.hasFailedWithoutData()
+            ) {
+            case .allowAccess:
+                centered {
+                    StatusLine(symbol: "calendar") {
+                        localized(en: "Show your events here", zh: "在这里显示你的日程")
+                    }
+                    GlassCapsuleButton(localized(en: "Allow", zh: "允许"), symbol: "checkmark") {
+                        local.requestAccess()
+                    }
+                }
+            case .accessNeeded:
+                centered {
+                    StatusLine(symbol: "calendar.badge.exclamationmark") {
+                        localized(en: "Calendar access needed", zh: "需要日历权限")
+                    }
+                    GlassCapsuleButton(localized(en: "Open Settings", zh: "打开设置"), symbol: "gear") {
+                        local.openPrivacySettings()
+                    }
+                }
+            case .addLinks:
+                centered {
+                    StatusLine(symbol: "link") {
+                        localized(en: "Add calendar links in Settings", zh: "在设置中添加日历链接")
+                    }
+                }
+            case .loading:
+                centered {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            case .failed:
+                centered {
+                    StatusLine(symbol: "exclamationmark.icloud") {
+                        localized(en: "Couldn't update calendars", zh: "无法更新订阅日历")
+                    }
+                }
+            case .empty:
+                centered {
+                    StatusLine(symbol: "calendar") {
+                        let count = settings.dayCount
+                        return count == 1
+                            ? localized(en: "No more events today", zh: "今天没有更多日程")
+                            : localized(en: "No events in the next \(count) days", zh: "未来 \(count) 天没有日程")
+                    }
                 }
             }
         }
@@ -102,6 +143,113 @@ struct CalendarModuleView: View {
             content()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// What the card shows when there are no events to list, for the chosen
+/// source. `.all` keeps the order the card had before the switch: the Calendar
+/// app's access states only while no subscription is enabled.
+enum CalendarCardState: Equatable {
+    case allowAccess
+    case accessNeeded
+    case addLinks
+    case loading
+    case failed
+    case empty
+
+    static func state(
+        source: CalendarSource,
+        access: LocalCalendars.Access,
+        hasEnabledSubscriptions: Bool,
+        isFetchingFirstTime: Bool,
+        hasFailedWithoutData: Bool
+    ) -> CalendarCardState {
+        switch source {
+        case .local:
+            switch access {
+            case .notDetermined: return .allowAccess
+            case .denied: return .accessNeeded
+            case .granted: return .empty
+            }
+        case .cloud:
+            if !hasEnabledSubscriptions { return .addLinks }
+            if isFetchingFirstTime { return .loading }
+            if hasFailedWithoutData { return .failed }
+            return .empty
+        case .all:
+            if !hasEnabledSubscriptions && access == .notDetermined { return .allowAccess }
+            if !hasEnabledSubscriptions && access == .denied { return .accessNeeded }
+            if isFetchingFirstTime { return .loading }
+            if hasFailedWithoutData { return .failed }
+            return .empty
+        }
+    }
+
+    /// Whether the card asks for Calendar access by itself when it appears: not
+    /// for `.cloud`, and for `.all` only when subscriptions cannot fill the card.
+    static func shouldRequestAccess(
+        source: CalendarSource,
+        access: LocalCalendars.Access,
+        hasEnabledSubscriptions: Bool
+    ) -> Bool {
+        guard access == .notDetermined else { return false }
+        switch source {
+        case .local: return true
+        case .cloud: return false
+        case .all: return !hasEnabledSubscriptions
+        }
+    }
+}
+
+/// Three icon segments that pick which events the card lists, in the card's
+/// top-trailing corner. The selection capsule slides between them.
+private struct CalendarSourceSwitch: View {
+    let source: CalendarSource
+    let select: (CalendarSource) -> Void
+
+    @Namespace private var selection
+
+    private static let segmentSize = CGSize(width: 20, height: 16)
+    private static let inset: CGFloat = 2
+
+    /// Its width, for the room the first day's title leaves free.
+    static var width: CGFloat {
+        segmentSize.width * CGFloat(CalendarSource.allCases.count) + inset * 2
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(CalendarSource.allCases, id: \.self) { option in
+                let isSelected = option == source
+                Button {
+                    select(option)
+                } label: {
+                    Image(systemName: option.symbol)
+                        .font(.system(size: 9.5, weight: .semibold))
+                        .foregroundStyle(isSelected ? NotchTheme.primaryText : NotchTheme.secondaryText)
+                        .frame(width: Self.segmentSize.width, height: Self.segmentSize.height)
+                        .background {
+                            if isSelected {
+                                Capsule()
+                                    .fill(Color.white.opacity(0.16))
+                                    .matchedGeometryEffect(id: "selection", in: selection)
+                            }
+                        }
+                        .contentShape(.capsule)
+                }
+                .buttonStyle(.plain)
+                .help(option.title)
+                .accessibilityLabel(option.title)
+                .accessibilityValue(isSelected ? localized(en: "Selected", zh: "已选中") : "")
+            }
+        }
+        .padding(Self.inset)
+        // Dark enough that events scrolled under it stay out of the way.
+        .background {
+            Capsule()
+                .fill(Color.black.opacity(0.55))
+                .overlay { Capsule().fill(Color.white.opacity(0.08)) }
+        }
     }
 }
 
@@ -129,6 +277,8 @@ private struct AgendaList: View {
     let days: [AgendaDay]
     let now: Date
     let isWide: Bool
+    /// Trailing room the first day's title leaves free.
+    let firstTitleTrailingInset: CGFloat
 
     /// Height of the fade at the bottom, where a list longer than the card is cut off.
     private static let fadeHeight: CGFloat = 18
@@ -143,6 +293,8 @@ private struct AgendaList: View {
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(NotchTheme.secondaryText)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .padding(.trailing, day.id == days.first?.id ? firstTitleTrailingInset : 0)
                         ForEach(day.entries) { entry in
                             EntryRow(
                                 entry: entry,
