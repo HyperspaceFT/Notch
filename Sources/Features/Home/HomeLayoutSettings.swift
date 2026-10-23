@@ -17,15 +17,17 @@ public final class HomeLayoutSettings {
     public nonisolated static let maximumModuleCount = HomeLayout.maximumCount
     /// Gap between modules in Home's row.
     public nonisolated static let spacing: CGFloat = 10
-    /// How much wider the island grows for each module past the first.
-    public nonisolated static let extraWidthPerModule: CGFloat = 120
+    /// How much wider the island grows for each module past the first, in order:
+    /// the second and the third add the same, the fourth less, so a full row does
+    /// not stretch the island too far. One entry per module up to `maximumModuleCount`.
+    public nonisolated static let extraWidths: [CGFloat] = [120, 120, 80]
 
     /// Body width of the expanded island while Home shows `count` modules: the
-    /// standard width for one module or none, `extraWidthPerModule` more for each
-    /// further one, up to `maximumModuleCount`.
+    /// standard width for one module or none, plus `extraWidths` for each further
+    /// one, up to `maximumModuleCount`.
     public nonisolated static func bodyWidth(forModuleCount count: Int) -> CGFloat {
         let extraModules = max(min(count, maximumModuleCount) - 1, 0)
-        return NotchTheme.expandedSize.width + extraWidthPerModule * CGFloat(extraModules)
+        return NotchTheme.expandedSize.width + extraWidths.prefix(extraModules).reduce(0, +)
     }
 
     /// Home's row with `count` modules under a 32-point notch: as wide as the body at

@@ -7,6 +7,11 @@ import AppKit
 /// dragged onto the notch (files, for instance) expands it directly, because a
 /// drag cannot click.
 ///
+/// While the user types in the panel (`isEditingText`) the expanded island stays
+/// open when the pointer leaves it, for instance onto an input method's candidate
+/// window; once editing ends, `refresh()` lets the departure count again. A click
+/// away from the island ends editing (`onClickOutsideIsland`).
+///
 /// Uses global + local NSEvent mouse monitors. Mouse-move monitors do not require
 /// the Accessibility permission (only keyboard monitors do), so none is requested.
 @MainActor
@@ -30,6 +35,15 @@ final class HoverController {
         case dropExpand
         case collapse
     }
+
+    /// Whether a text view in the panel has the keyboard; the expanded island
+    /// does not collapse while it does.
+    var isEditingText: @MainActor () -> Bool = { false }
+    /// Called for a left click away from the expanded island. Most of those go to
+    /// another app, which takes the keyboard anyway; but the panel is wider than
+    /// the island and takes the clicks beside it while expanded, so without this a
+    /// click there would leave the island held open for editing.
+    var onClickOutsideIsland: () -> Void = {}
 
     private let model: NotchViewModel
     /// A drag that carries content (files, text, images) writes this pasteboard when it starts.
@@ -86,9 +100,19 @@ final class HoverController {
         frameWithPointer = nil
     }
 
+    /// Re-runs the pointer checks without a mouse event, for when editing ends
+    /// (e.g. a click into another app takes the keyboard) and the pointer stays put.
+    func refresh() {
+        guard !monitors.isEmpty else { return }
+        pointerMoved(dragging: false)
+    }
+
     private func handle(_ type: NSEvent.EventType) {
         if type == .leftMouseDown {
             dragChangeCountAtMouseDown = dragPasteboard.changeCount
+            if model.isExpanded, !isInsideExpandedIsland(NSEvent.mouseLocation) {
+                onClickOutsideIsland()
+            }
         } else {
             pointerMoved(dragging: type == .leftMouseDragged)
         }
@@ -193,7 +217,7 @@ final class HoverController {
                 NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
             }
         case .collapse:
-            if model.isExpanded, !isInsideExpandedIsland(location) {
+            if model.isExpanded, !isEditingText(), !isInsideExpandedIsland(location) {
                 frameWithPointer = nil
                 model.setExpanded(false)
             }

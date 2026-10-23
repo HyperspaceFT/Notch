@@ -56,6 +56,14 @@ public final class NotchShellController {
         model.onInteractivityChange = { [weak panel] interactive in
             // Collapsed/activity without hover: let clicks through to the menu bar underneath.
             panel?.ignoresMouseEvents = !interactive
+            // A collapsed island must not keep the keyboard from the app the user was in.
+            if !interactive {
+                panel?.relinquishKeyFocus()
+            }
+        }
+        // Hidden tabs stay mounted, so a hidden editor would keep taking keystrokes.
+        model.onSelectedTabChange = { [weak panel] in
+            panel?.endTextEditing()
         }
 
         screenLocator.onChange = { [weak self] geometry in
@@ -68,6 +76,15 @@ public final class NotchShellController {
         self.featureHost = featureHost
 
         let hoverController = HoverController(model: model)
+        hoverController.isEditingText = { [weak panel] in
+            panel?.isEditingText ?? false
+        }
+        panel.onFocusChange = { [weak hoverController] in
+            hoverController?.refresh()
+        }
+        hoverController.onClickOutsideIsland = { [weak panel] in
+            panel?.endTextEditing()
+        }
         hoverController.start()
         self.hoverController = hoverController
 
@@ -80,12 +97,17 @@ public final class NotchShellController {
     }
 
     public func stop() {
+        // First, so text still being composed reaches its feature before the
+        // features save on deactivation.
+        panel?.endTextEditing()
         hoverController?.stop()
         hoverController = nil
         featureHost?.stop()
         featureHost = nil
         screenLocator.stop()
         screenLocator.onChange = nil
+        panel?.onFocusChange = nil
+        model?.onSelectedTabChange = nil
         panel?.orderOut(nil)
         panel = nil
         model = nil

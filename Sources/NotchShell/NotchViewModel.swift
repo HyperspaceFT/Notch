@@ -84,7 +84,12 @@ final class NotchViewModel {
     /// The pointer rests on the collapsed or activity island. Always false while expanded.
     private(set) var isHovered = false
     private(set) var tabs: [Tab] = []
-    var selectedTabID: String?
+    var selectedTabID: String? {
+        didSet {
+            guard selectedTabID != oldValue else { return }
+            onSelectedTabChange?()
+        }
+    }
 
     /// When false, the hover controller leaves the state alone (debug pinning).
     var isHoverEnabled = true
@@ -97,6 +102,12 @@ final class NotchViewModel {
     /// Invoked whenever `isInteractive` changes; the shell uses it to toggle mouse
     /// interception on the panel.
     @ObservationIgnored var onInteractivityChange: ((Bool) -> Void)?
+
+    /// Invoked whenever `selectedTabID` changes, and when the expanded panel finds
+    /// another tab shown in the selected one's place (`shownTabDidChange()`), so a
+    /// switch may report twice. The shell uses it to end text editing, since hidden
+    /// tabs stay mounted and could keep the keyboard.
+    @ObservationIgnored var onSelectedTabChange: (() -> Void)?
 
     private var entries: [ActivityEntry] = []
     @ObservationIgnored private var nextSequence = 0
@@ -277,6 +288,13 @@ final class NotchViewModel {
     private func reportInteractivity(ifChangedFrom wasInteractive: Bool) {
         guard isInteractive != wasInteractive else { return }
         onInteractivityChange?(isInteractive)
+    }
+
+    /// Called by the expanded panel when the tab it shows changes. That also
+    /// happens without `selectedTabID` changing: the selected tab hides and the
+    /// first visible one takes its place, or it shows again.
+    func shownTabDidChange() {
+        onSelectedTabChange?()
     }
 
     /// Expands the island, selecting `tabID` when such a tab exists and is visible.

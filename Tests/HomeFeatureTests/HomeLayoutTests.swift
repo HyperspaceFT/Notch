@@ -9,9 +9,10 @@ private let row = HomeRowMetrics(width: 456, height: 134, spacing: 10)
 /// `row` for every module count, for the rules that do not depend on the row widening.
 private func fixedRows(_ count: Int) -> HomeRowMetrics { row }
 /// The panel's rows as the island widens: 520 points for one module, 120 more for
-/// each further one, less the 32-point margins on either side.
+/// the second and the third, 80 more for the fourth, less the 32-point margins on
+/// either side.
 private func panelRow(_ count: Int) -> HomeRowMetrics {
-    HomeRowMetrics(width: [456, 456, 576, 696, 816][min(count, 4)], height: 134, spacing: 10)
+    HomeRowMetrics(width: [456, 456, 576, 696, 776][min(count, 4)], height: 134, spacing: 10)
 }
 /// The clock: a square at its narrowest, 184 points at its widest.
 private let clock = HomeModuleSizing.resizable(minimum: .height(1), maximum: .points(184))
@@ -271,9 +272,10 @@ struct HomeLayoutSettingsTests {
         NotchHomeModule(id: "weather", title: { "Weather" }, symbol: "cloud", sizing: weather) { _ in AnyView(EmptyView()) },
     ]
 
-    @Test func bodyWidthGrowsByAHundredAndTwentyPointsPerModule() {
+    @Test func bodyWidthGrowsLessForTheFourthModule() {
         let widths = (0...5).map { HomeLayoutSettings.bodyWidth(forModuleCount: $0) }
-        #expect(widths == [520, 520, 640, 760, 880, 880])
+        #expect(widths == [520, 520, 640, 760, 840, 840])
+        #expect(HomeLayoutSettings.extraWidths.count == HomeLayoutSettings.maximumModuleCount - 1)
     }
 
     @Test func referenceRowsAreThePanelsRows() {

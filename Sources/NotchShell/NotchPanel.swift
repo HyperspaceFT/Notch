@@ -28,15 +28,51 @@ final class NotchPanel: NSPanel {
         hidesOnDeactivate = false
         isReleasedWhenClosed = false
         animationBehavior = .none
-        // Only take key status when a control (e.g. a future text field) needs it.
+        // Only take key status when a control that types (a text view) needs it.
         becomesKeyOnlyIfNeeded = true
         acceptsMouseMovedEvents = true
         ignoresMouseEvents = true
     }
 
-    // Lets future text fields receive keyboard input without activating the app.
+    // Lets text views receive keyboard input without activating the app.
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    /// Called after the panel loses key status or its first responder changes,
+    /// so the shell can re-check whether text is being edited.
+    var onFocusChange: (() -> Void)?
+
+    /// Whether the user is typing into the panel. Field editors are text views too.
+    var isEditingText: Bool {
+        isKeyWindow && firstResponder is NSTextView
+    }
+
+    override func resignKey() {
+        super.resignKey()
+        onFocusChange?()
+    }
+
+    override func makeFirstResponder(_ responder: NSResponder?) -> Bool {
+        let result = super.makeFirstResponder(responder)
+        onFocusChange?()
+        return result
+    }
+
+    /// Ends editing in whatever text view has the keyboard, keeping key status.
+    func endTextEditing() {
+        _ = makeFirstResponder(nil)
+    }
+
+    /// Ends editing and hands the keyboard back to the app the user was in.
+    func relinquishKeyFocus() {
+        guard isKeyWindow else { return }
+        _ = makeFirstResponder(nil)
+        // AppKit has no call that only gives up key status. Ordering a
+        // non-activating panel out and straight back in returns key focus to
+        // the active app's window.
+        orderOut(nil)
+        orderFrontRegardless()
+    }
 
     // AppKit would otherwise push the frame below the menu bar.
     override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {

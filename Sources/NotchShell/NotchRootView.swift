@@ -256,6 +256,11 @@ private struct ExpandedIslandView: View {
         // while the island collapses.
         .padding(.horizontal, NotchTheme.expandedTopRadius + NotchTheme.contentPadding)
         .padding(.bottom, 14)
+        // Also catches a tab's availability putting another tab in the selected
+        // one's place, which leaves `selectedTabID` alone.
+        .onChange(of: model.selectedTab?.id) {
+            model.shownTabDidChange()
+        }
     }
 
     /// Sits in the same band as the hardware notch, so the tab buttons stay clear

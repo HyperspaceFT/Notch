@@ -301,6 +301,40 @@ struct NotchViewModelTests {
         #expect(model.selectedTabID == "shelf")
     }
 
+    @Test func tabChangeCallbackFiresOnlyWhenTheSelectionChanges() {
+        model.setTabs([
+            .init(id: "home", title: { "主页" }, symbol: { "house" }, content: AnyView(EmptyView())),
+            .init(id: "notes", title: { "笔记" }, symbol: { "note.text" }, content: AnyView(EmptyView())),
+        ])
+        var calls = 0
+        model.onSelectedTabChange = { calls += 1 }
+
+        model.selectedTabID = "notes"
+        #expect(calls == 1)
+        model.selectedTabID = "notes"
+        #expect(calls == 1)
+
+        model.requestExpand(tabID: "home")
+        #expect(model.selectedTabID == "home")
+        #expect(calls == 2)
+        model.requestExpand(tabID: "home")
+        #expect(calls == 2)
+    }
+
+    @Test func tabChangeCallbackStaysQuietForAHiddenTab() {
+        let airPods = Availability(false)
+        model.setTabs([
+            .init(id: "home", title: { "主页" }, symbol: { "house" }, content: AnyView(EmptyView())),
+            .init(id: "airpods", title: { "AirPods" }, symbol: { "airpods" }, isAvailable: { airPods.isAvailable }, content: AnyView(EmptyView())),
+        ])
+        var calls = 0
+        model.onSelectedTabChange = { calls += 1 }
+
+        model.requestExpand(tabID: "airpods")
+        #expect(model.selectedTabID == "home")
+        #expect(calls == 0)
+    }
+
     /// Lets a test change the width a tab asks for after it is set, as a feature's
     /// observable state would.
     private final class Width {
