@@ -75,17 +75,27 @@ public struct NotchShape: Shape {
     }
 }
 
-/// The sides and bottom of the island outline (`NotchShape`) as an open path:
-/// from the left side at `horizon`, a share of the height from the top, down
-/// around the bottom and up the right side to the same height. It leaves out
-/// the ears and the top edge, so a stroke trimmed along it lights only the
-/// lower edge.
+/// Part of the island outline (`NotchShape`) as an open path, split where the
+/// sides reach `horizon`, a share of the height from the top. The lower arc runs
+/// left to right around the bottom and the upper arc right to left across the
+/// top, so the two together go once around the island.
 public struct NotchEdge: Shape {
+    public enum Arc: Sendable {
+        /// From the left side at `horizon` down around the bottom and up the
+        /// right side to the same height.
+        case lower
+        /// From the right side at `horizon` up over the right ear, along the top
+        /// edge, and over the left ear down to the same height on the left side.
+        case upper
+    }
+
+    public var arc: Arc
     public var topCornerRadius: CGFloat
     public var bottomCornerRadius: CGFloat
     public var horizon: CGFloat
 
-    public init(topCornerRadius: CGFloat, bottomCornerRadius: CGFloat, horizon: CGFloat) {
+    public init(arc: Arc, topCornerRadius: CGFloat, bottomCornerRadius: CGFloat, horizon: CGFloat) {
+        self.arc = arc
         self.topCornerRadius = topCornerRadius
         self.bottomCornerRadius = bottomCornerRadius
         self.horizon = horizon
@@ -102,21 +112,37 @@ public struct NotchEdge: Shape {
     public func path(in rect: CGRect) -> Path {
         let (top, bottom) = NotchShape.clampedRadii(top: topCornerRadius, bottom: bottomCornerRadius, in: rect)
         // Below the ears, and above the bottom corners.
-        let start = min(max(rect.minY + rect.height * horizon, rect.minY + top), rect.maxY - bottom)
+        let split = min(max(rect.minY + rect.height * horizon, rect.minY + top), rect.maxY - bottom)
 
         var path = Path()
-        path.move(to: CGPoint(x: rect.minX + top, y: start))
-        path.addLine(to: CGPoint(x: rect.minX + top, y: rect.maxY - bottom))
-        path.addQuadCurve(
-            to: CGPoint(x: rect.minX + top + bottom, y: rect.maxY),
-            control: CGPoint(x: rect.minX + top, y: rect.maxY)
-        )
-        path.addLine(to: CGPoint(x: rect.maxX - top - bottom, y: rect.maxY))
-        path.addQuadCurve(
-            to: CGPoint(x: rect.maxX - top, y: rect.maxY - bottom),
-            control: CGPoint(x: rect.maxX - top, y: rect.maxY)
-        )
-        path.addLine(to: CGPoint(x: rect.maxX - top, y: start))
+        switch arc {
+        case .lower:
+            path.move(to: CGPoint(x: rect.minX + top, y: split))
+            path.addLine(to: CGPoint(x: rect.minX + top, y: rect.maxY - bottom))
+            path.addQuadCurve(
+                to: CGPoint(x: rect.minX + top + bottom, y: rect.maxY),
+                control: CGPoint(x: rect.minX + top, y: rect.maxY)
+            )
+            path.addLine(to: CGPoint(x: rect.maxX - top - bottom, y: rect.maxY))
+            path.addQuadCurve(
+                to: CGPoint(x: rect.maxX - top, y: rect.maxY - bottom),
+                control: CGPoint(x: rect.maxX - top, y: rect.maxY)
+            )
+            path.addLine(to: CGPoint(x: rect.maxX - top, y: split))
+        case .upper:
+            path.move(to: CGPoint(x: rect.maxX - top, y: split))
+            path.addLine(to: CGPoint(x: rect.maxX - top, y: rect.minY + top))
+            path.addQuadCurve(
+                to: CGPoint(x: rect.maxX, y: rect.minY),
+                control: CGPoint(x: rect.maxX - top, y: rect.minY)
+            )
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+            path.addQuadCurve(
+                to: CGPoint(x: rect.minX + top, y: rect.minY + top),
+                control: CGPoint(x: rect.minX + top, y: rect.minY)
+            )
+            path.addLine(to: CGPoint(x: rect.minX + top, y: split))
+        }
         return path
     }
 }

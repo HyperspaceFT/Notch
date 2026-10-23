@@ -59,7 +59,7 @@ struct NotchRootView: View {
         .background {
             shape.fill(NotchTheme.islandColor)
             // Under the content: it lights the island, not the cards on it.
-            IslandRim(topCornerRadius: model.topCornerRadius, bottomCornerRadius: model.bottomCornerRadius)
+            IslandGlow(topCornerRadius: model.topCornerRadius, bottomCornerRadius: model.bottomCornerRadius)
                 .opacity(isExpanded && NotchAppearance.shared.isLightAndColorEnabled ? 1 : 0)
                 .allowsHitTesting(false)
         }
@@ -125,24 +125,23 @@ private struct DropEffect: ViewModifier {
     }
 }
 
-/// The expanded island's edge, lit by the sky (`SkyLight`): an even rim along the
-/// sides and bottom with a soft halo inside it, and the sun as a band of light
-/// moving along it. Clear toward the top, so the band beside the hardware notch
-/// stays pure black. The island's clip keeps only the inner half of each stroke.
-private struct IslandRim: View {
+/// The expanded island's edge, lit by the sky (`SkyLight`): a soft halo for the
+/// sun along the sides and bottom, and one for the moon along the top. The
+/// island's clip keeps only the part of each halo inside the edge.
+private struct IslandGlow: View {
     let topCornerRadius: CGFloat
     let bottomCornerRadius: CGFloat
 
-    /// Where the sun's path meets the sides, as a share of the island's height:
-    /// below the tab buttons.
+    /// Where the sun's path meets the moon's on either side, as a share of the
+    /// island's height: below the tab buttons.
     private static let horizon: CGFloat = 0.3
 
-    /// The sun's band, widest and faintest first; stacked, they fade out along
-    /// the edge. `length` is a share of the sun's path.
-    private static let sunLayers: [(length: Double, lineWidth: CGFloat, blur: CGFloat, opacity: Double)] = [
-        (0.4, 26, 18, 0.45),
-        (0.22, 10, 7, 0.6),
-        (0.1, 3, 1.5, 0.9),
+    /// A halo's layers, widest and faintest first; stacked, they fade out along
+    /// and away from the edge. `spread` is a share of the path on either side of
+    /// the halo's position; it and `lineWidth` scale with the halo's size.
+    private static let layers: [(spread: Double, lineWidth: CGFloat, blur: CGFloat, opacity: Double)] = [
+        (0.16, 56, 36, 0.3),
+        (0.07, 36, 22, 0.3),
     ]
 
     var body: some View {
@@ -150,57 +149,39 @@ private struct IslandRim: View {
         TimelineView(.everyMinute) { context in
             let light = SkyLight.at(context.date, sunTimes: Daylight.shared.sunTimes)
             ZStack {
-                rim(light.rim)
-                if light.sun.strength > 0 {
-                    sun(light.sun)
-                }
+                halo(light.sun, along: .lower)
+                halo(light.moon, along: .upper)
             }
             // New sun times ease in rather than jump.
             .animation(.smooth(duration: 1), value: light)
         }
     }
 
-    private func rim(_ rim: SkyLight.Rim) -> some View {
-        let shape = NotchShape(topCornerRadius: topCornerRadius, bottomCornerRadius: bottomCornerRadius)
-        let color = Color(rim.color)
-        let gradient = LinearGradient(
-            stops: [
-                .init(color: color.opacity(0), location: 1 - rim.reach),
-                .init(color: color.opacity(rim.intensity), location: 1),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        return ZStack {
-            if rim.halo > 0 {
-                shape
-                    .stroke(gradient, lineWidth: 18)
-                    .blur(radius: 12)
-                    .opacity(rim.halo)
-            }
-            shape.stroke(gradient, lineWidth: 2)
-        }
-    }
-
-    private func sun(_ sun: SkyLight.Sun) -> some View {
-        let edge = NotchEdge(
-            topCornerRadius: topCornerRadius,
-            bottomCornerRadius: bottomCornerRadius,
-            horizon: Self.horizon
-        )
-        let color = Color(sun.color)
-        return ZStack {
-            ForEach(Self.sunLayers.indices, id: \.self) { index in
-                let layer = Self.sunLayers[index]
-                let from = min(max(sun.position - layer.length / 2, 0), 1)
-                let to = min(max(sun.position + layer.length / 2, 0), 1)
-                // Past the end of the edge, where a round cap would still draw a dot.
-                if to > from {
+    @ViewBuilder
+    private func halo(_ halo: SkyLight.Halo, along arc: NotchEdge.Arc) -> some View {
+        if halo.strength > 0 {
+            let edge = NotchEdge(
+                arc: arc,
+                topCornerRadius: topCornerRadius,
+                bottomCornerRadius: bottomCornerRadius,
+                horizon: Self.horizon
+            )
+            let color = Color(halo.color)
+            ZStack {
+                ForEach(Self.layers.indices, id: \.self) { index in
+                    let layer = Self.layers[index]
+                    let spread = layer.spread * halo.size
                     edge
-                        .trim(from: from, to: to)
-                        .stroke(color, style: StrokeStyle(lineWidth: layer.lineWidth, lineCap: .round))
+                        .trim(
+                            from: min(max(halo.position - spread, 0), 1),
+                            to: min(max(halo.position + spread, 0), 1)
+                        )
+                        .stroke(
+                            color,
+                            style: StrokeStyle(lineWidth: layer.lineWidth * CGFloat(halo.size), lineCap: .round)
+                        )
                         .blur(radius: layer.blur)
-                        .opacity(layer.opacity * sun.strength)
+                        .opacity(layer.opacity * halo.strength)
                 }
             }
         }
