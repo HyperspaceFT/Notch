@@ -98,6 +98,41 @@ struct NotchViewModelTests {
         #expect(model.bodySize == NotchTheme.expandedSize)
     }
 
+    @Test func expandedContentDropsOnceShownAndOutlivesTheCollapse() async throws {
+        model.expandedContentLinger = .milliseconds(20)
+        model.setExpanded(true)
+        #expect(model.isExpandedContentMounted)
+        // Mounted raised, so it has a pose to drop from.
+        #expect(!model.isExpandedContentDropped)
+
+        model.expandedContentDidAppear()
+        #expect(model.isExpandedContentDropped)
+
+        // Collapsing raises it at once but keeps it mounted while it rises.
+        model.setExpanded(false)
+        #expect(!model.isExpandedContentDropped)
+        #expect(model.isExpandedContentMounted)
+
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(!model.isExpandedContentMounted)
+        #expect(!model.hasExpandedContentAppeared)
+    }
+
+    @Test func expandingAgainWhileTheContentRisesKeepsTheSameContent() async throws {
+        model.expandedContentLinger = .milliseconds(20)
+        model.setExpanded(true)
+        model.expandedContentDidAppear()
+        model.setExpanded(false)
+
+        // The views still on screen drop again; there is nothing new to wait for.
+        model.setExpanded(true)
+        #expect(model.isExpandedContentDropped)
+
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(model.isExpandedContentMounted)
+        #expect(model.isExpandedContentDropped)
+    }
+
     @Test func higherPriorityWinsThenNewestAmongEqual() {
         model.present(activity("low", priority: .low))
         model.present(activity("high", priority: .high))

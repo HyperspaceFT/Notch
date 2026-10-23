@@ -18,7 +18,8 @@ struct NotchRootView: View {
 
         ZStack(alignment: .top) {
             switch model.state {
-            case .collapsed:
+            case .collapsed, .expanded:
+                // The expanded panel is the overlay below, which outlives the state.
                 Color.clear
             case .activity:
                 if let activity = model.currentActivity {
@@ -31,17 +32,30 @@ struct NotchRootView: View {
                     .id("\(activity.featureID).\(activity.id)")
                     .transition(.blurReplace)
                 }
-            case .expanded:
-                ExpandedIslandView(model: model)
-                    // Drops out of the notch on its own spring; collapsing tucks it
-                    // back up with the state's animation.
-                    .transition(AsymmetricTransition(
-                        insertion: DropTransition().animation(NotchTheme.expandDropAnimation),
-                        removal: DropTransition()
-                    ))
             }
         }
         .frame(width: model.islandSize.width, height: model.islandSize.height, alignment: .top)
+        .overlay(alignment: .top) {
+            if model.isExpandedContentMounted {
+                ExpandedIslandView(model: model)
+                    // Laid out at the expanded size even while the outline is
+                    // smaller, so nothing reflows as the island opens or closes.
+                    .frame(width: Self.expandedIslandWidth, height: NotchTheme.expandedSize.height)
+                    // Collapsing, and expanding again before that has finished,
+                    // turn the content around with the state's animation.
+                    .modifier(DropEffect(isDropped: model.isExpandedContentDropped))
+                    // While it rises, clicks belong to the collapsed island.
+                    .allowsHitTesting(model.isExpanded)
+                    // Mounted raised and unmounted out of sight.
+                    .transition(.identity)
+                    .onAppear {
+                        // The first drop sets off after the outline and trails it.
+                        withAnimation(NotchTheme.expandDropAnimation.delay(NotchTheme.expandDropDelay)) {
+                            model.expandedContentDidAppear()
+                        }
+                    }
+            }
+        }
         .background { shape.fill(NotchTheme.islandColor) }
         .clipShape(shape)
         // The hovered ring casts a lighter, tighter shadow than the expanded panel.
@@ -75,6 +89,12 @@ struct NotchRootView: View {
         .ignoresSafeArea()
     }
 
+    /// Frame width of the expanded island, ears included.
+    private static let expandedIslandWidth = NotchShape.frameWidth(
+        bodyWidth: NotchTheme.expandedSize.width,
+        topCornerRadius: NotchTheme.expandedTopRadius
+    )
+
     private func animation(for state: NotchViewModel.State) -> Animation {
         switch state {
         case .expanded: NotchTheme.expandAnimation
@@ -84,16 +104,18 @@ struct NotchRootView: View {
     }
 }
 
-/// The expanded content outside its place: raised under the notch, narrowed
-/// toward the top, and blurred. The island's outline clips it, so on insertion it
-/// seems to fall out of the notch, and on removal to retract into it.
-private struct DropTransition: Transition {
-    func body(content: Content, phase: TransitionPhase) -> some View {
+/// The expanded content in place, or raised into the notch: shifted up, narrowed
+/// toward the top, blurred, and faded. The island's outline clips it, so dropping
+/// looks like falling out of the notch, and rising like retracting into it.
+private struct DropEffect: ViewModifier {
+    let isDropped: Bool
+
+    func body(content: Content) -> some View {
         content
-            .scaleEffect(phase.isIdentity ? 1 : 0.94, anchor: .top)
-            .offset(y: phase.isIdentity ? 0 : -NotchTheme.expandDropDistance)
-            .blur(radius: phase.isIdentity ? 0 : 6)
-            .opacity(phase.isIdentity ? 1 : 0)
+            .scaleEffect(isDropped ? 1 : 0.94, anchor: .top)
+            .offset(y: isDropped ? 0 : -NotchTheme.expandDropDistance)
+            .blur(radius: isDropped ? 0 : 6)
+            .opacity(isDropped ? 1 : 0)
     }
 }
 
@@ -139,7 +161,9 @@ private struct ExpandedIslandView: View {
             content
         }
         .foregroundStyle(NotchTheme.primaryText)
-        .padding(.horizontal, model.topCornerRadius + NotchTheme.contentPadding)
+        // The expanded radius, not the current one: the content stays on screen
+        // while the island collapses.
+        .padding(.horizontal, NotchTheme.expandedTopRadius + NotchTheme.contentPadding)
         .padding(.bottom, 14)
     }
 

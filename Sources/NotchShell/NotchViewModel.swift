@@ -68,6 +68,13 @@ final class NotchViewModel {
 
     private(set) var geometry: NotchGeometry
     private(set) var isExpanded = false
+    /// The expanded panel's views are in the tree. Set on expanding and cleared
+    /// `expandedContentLinger` after collapsing, so a collapse undone midway turns
+    /// the same views around instead of bringing in new ones over the leaving ones.
+    private(set) var isExpandedContentMounted = false
+    /// The mounted expanded content has appeared, so it can drop from its raised
+    /// pose: a view inserted already in place would have nothing to animate from.
+    private(set) var hasExpandedContentAppeared = false
     /// The pointer rests on the collapsed or activity island. Always false while expanded.
     private(set) var isHovered = false
     private(set) var tabs: [Tab] = []
@@ -76,6 +83,11 @@ final class NotchViewModel {
     /// When false, the hover controller leaves the state alone (debug pinning).
     var isHoverEnabled = true
 
+    /// How long the expanded content stays mounted after collapsing: long enough
+    /// for `NotchTheme.collapseAnimation` (or `activityAnimation`, when an activity
+    /// returns) to raise it out of sight.
+    @ObservationIgnored var expandedContentLinger: Duration = .milliseconds(500)
+
     /// Invoked whenever `isInteractive` changes; the shell uses it to toggle mouse
     /// interception on the panel.
     @ObservationIgnored var onInteractivityChange: ((Bool) -> Void)?
@@ -83,6 +95,7 @@ final class NotchViewModel {
     private var entries: [ActivityEntry] = []
     @ObservationIgnored private var nextSequence = 0
     @ObservationIgnored private var expiryTask: Task<Void, Never>?
+    @ObservationIgnored private var contentUnmountTask: Task<Void, Never>?
 
     init(geometry: NotchGeometry) {
         self.geometry = geometry
@@ -121,6 +134,12 @@ final class NotchViewModel {
                 return lhs.sequence > rhs.sequence
             }
             .map(\.activity.id)
+    }
+
+    /// The expanded content sits in place; otherwise it is raised into the notch,
+    /// where the island's outline hides it.
+    var isExpandedContentDropped: Bool {
+        isExpanded && hasExpandedContentAppeared
     }
 
     /// The tabs whose feature currently offers them, in `tabs` order.
@@ -205,7 +224,30 @@ final class NotchViewModel {
         isExpanded = expanded
         // Expanding replaces the hover; collapsing happens with the pointer outside.
         isHovered = false
+        if expanded {
+            contentUnmountTask?.cancel()
+            contentUnmountTask = nil
+            isExpandedContentMounted = true
+        } else {
+            scheduleContentUnmount()
+        }
         reportInteractivity(ifChangedFrom: wasInteractive)
+    }
+
+    /// Called by the mounted expanded content once it is on screen, to start its drop.
+    func expandedContentDidAppear() {
+        hasExpandedContentAppeared = true
+    }
+
+    private func scheduleContentUnmount() {
+        contentUnmountTask?.cancel()
+        let linger = expandedContentLinger
+        contentUnmountTask = Task { [weak self] in
+            try? await Task.sleep(for: linger)
+            guard !Task.isCancelled, let self, !self.isExpanded else { return }
+            self.isExpandedContentMounted = false
+            self.hasExpandedContentAppeared = false
+        }
     }
 
     /// Ignored while expanded.

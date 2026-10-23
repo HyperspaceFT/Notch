@@ -49,17 +49,20 @@ public enum NotchTheme {
     public static let islandColor = Color.black
     public static let primaryText = Color.white
     public static let secondaryText = Color.white.opacity(0.6)
+    public static let cardFill = Color.white.opacity(0.07)
     public static let chargingColor = Color.green
 
     // MARK: Animations
 
     /// Opening the island: slightly bouncy, like Dynamic Island.
-    public static let expandAnimation = Animation.bouncy(duration: 0.42, extraBounce: 0.08)
-    /// The expanded content dropping out of the notch: a little longer and bouncier
-    /// than `expandAnimation`, so it lands just after the outline.
-    public static let expandDropAnimation = Animation.bouncy(duration: 0.5, extraBounce: 0.12)
+    public static let expandAnimation = Animation.bouncy(duration: 0.52, extraBounce: 0.08)
+    /// The expanded content dropping out of the notch. It sets off
+    /// `expandDropDelay` after the outline and takes a little longer, so it
+    /// trails the outline and lands just after it.
+    public static let expandDropAnimation = Animation.bouncy(duration: 0.56, extraBounce: 0.1)
+    public static let expandDropDelay: TimeInterval = 0.1
     /// How far above its place the expanded content starts its drop.
-    public static let expandDropDistance: CGFloat = 28
+    public static let expandDropDistance: CGFloat = 32
     /// Closing the island: no overshoot so it settles cleanly into the notch.
     public static let collapseAnimation = Animation.smooth(duration: 0.34)
     /// Activities appearing or disappearing in collapsed mode.
