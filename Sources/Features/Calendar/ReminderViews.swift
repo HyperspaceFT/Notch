@@ -3,10 +3,6 @@ import NotchKit
 import NotchUI
 import SwiftUI
 
-/// Width of each event reminder wing: room for the start time on the left and
-/// a short title on the right.
-let eventReminderWingWidth: CGFloat = 120
-
 /// Space kept between a wing's content and the island's outer edge, so it stays
 /// clear of the rounded bottom corner (`NotchTheme.activityBottomRadius`).
 private let wingCornerClearance: CGFloat = 12
@@ -56,6 +52,56 @@ private func liveStatus(_ event: AgendaEvent, now: Date) -> String {
     return hasEnded ? localized(en: "Ended", zh: "已结束") : localized(en: "Now", zh: "进行中")
 }
 
+/// The event reminder wings' widths, each fitted to its own content, as the wings
+/// draw it: the calendar symbol, start time, and "+N" on the left; the title, or
+/// the status line under it when that is longer, on the right. The status is
+/// measured as it reads now and as "Starting now", its readings while the wings
+/// usually show; a longer one later ("Started 12 min ago", after waiting out an
+/// expanded island) shrinks to fit. Neither wing grows past `maximumWidth`,
+/// where the text is cut short.
+@MainActor
+enum EventReminderWings {
+    static let maximumWidth: CGFloat = 120
+    /// The right wing's least width, so a one-word title does not pinch the island.
+    static let minimumTrailingWidth: CGFloat = 52
+    /// The box the calendar symbol is drawn in.
+    static let symbolWidth: CGFloat = 16
+    static let spacing: CGFloat = 5
+    static let symbolSize: CGFloat = 13
+    static let timeSize: CGFloat = 12
+    static let othersSize: CGFloat = 10
+    static let titleSize: CGFloat = 12
+    static let statusSize: CGFloat = 10
+
+    static func widths(for notice: EventReminderNotice, now: Date) -> (leading: CGFloat, trailing: CGFloat) {
+        let event = notice.first.event
+        let time = width(
+            of: CalendarFormat.clock(event.start, calendar: .current),
+            in: .monospacedDigitSystemFont(ofSize: timeSize, weight: .semibold)
+        )
+        var leading = wingCornerClearance + symbolWidth + spacing + time + wingNotchClearance
+        if notice.othersCount > 0 {
+            leading += spacing + width(
+                of: "+\(notice.othersCount)",
+                in: .monospacedDigitSystemFont(ofSize: othersSize, weight: .semibold)
+            )
+        }
+        let statuses = [EventReminderPhase(start: event.start, now: now), .startingNow].map { phase in
+            width(of: wingStatus(phase), in: .systemFont(ofSize: statusSize))
+        }
+        let title = width(of: displayTitle(event), in: .systemFont(ofSize: titleSize, weight: .semibold))
+        let trailing = wingNotchClearance + max(title, statuses.max() ?? 0) + wingCornerClearance
+        return (min(leading, maximumWidth), min(max(trailing, minimumTrailingWidth), maximumWidth))
+    }
+
+    /// Rounded up with a point to spare, so a line that just fits is not cut short
+    /// where SwiftUI lays it out on whole pixels.
+    private static func width(of text: String, in font: NSFont) -> CGFloat {
+        guard !text.isEmpty else { return 0 }
+        return ceil((text as NSString).size(withAttributes: [.font: font]).width) + 1
+    }
+}
+
 /// "09:00–10:30", or the start alone for an event without length.
 private func timeRange(_ event: AgendaEvent) -> String {
     let start = CalendarFormat.clock(event.start, calendar: .current)
@@ -64,8 +110,8 @@ private func timeRange(_ event: AgendaEvent) -> String {
 }
 
 /// Left wing: a calendar symbol in the first event's calendar color and its
-/// start time, with "+N" when more events are due, next to the notch. A click
-/// opens the detail.
+/// start time, with "+N" when more events are due, next to the notch
+/// (`EventReminderWings` sizes it). A click opens the detail.
 struct EventReminderWingLeading: View {
     let notice: EventReminderNotice
     let open: @MainActor () -> Void
@@ -74,19 +120,19 @@ struct EventReminderWingLeading: View {
     var body: some View {
         let event = notice.first.event
         Button(action: open) {
-            HStack(spacing: 5) {
-                Spacer(minLength: 0)
+            HStack(spacing: EventReminderWings.spacing) {
                 Image(systemName: "calendar")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: EventReminderWings.symbolSize, weight: .semibold))
                     .foregroundStyle(event.color.color)
+                    .frame(width: EventReminderWings.symbolWidth)
                 Text(CalendarFormat.clock(event.start, calendar: .current))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: EventReminderWings.timeSize, weight: .semibold))
                     .foregroundStyle(NotchTheme.primaryText)
                     .monospacedDigit()
                     .lineLimit(1)
                 if notice.othersCount > 0 {
                     Text("+\(notice.othersCount)")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: EventReminderWings.othersSize, weight: .semibold))
                         .foregroundStyle(NotchTheme.secondaryText)
                         .monospacedDigit()
                         .lineLimit(1)
@@ -97,7 +143,7 @@ struct EventReminderWingLeading: View {
             .offset(wingHoverOffset(isHovered: isIslandHovered, outward: -1))
             .padding(.leading, wingCornerClearance)
             .padding(.trailing, wingNotchClearance)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -120,15 +166,17 @@ struct EventReminderWingTrailing: View {
         Button(action: open) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(displayTitle(reminder.event))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: EventReminderWings.titleSize, weight: .semibold))
                     .foregroundStyle(NotchTheme.primaryText)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 TimelineView(.periodic(from: .now, by: Self.refreshInterval)) { context in
                     Text(wingStatus(EventReminderPhase(start: reminder.event.start, now: context.date)))
-                        .font(.system(size: 10))
+                        .font(.system(size: EventReminderWings.statusSize))
                         .foregroundStyle(NotchTheme.secondaryText)
                         .lineLimit(1)
+                        // A later, longer reading than the wing was sized for.
+                        .minimumScaleFactor(0.75)
                         .truncationMode(.tail)
                 }
             }

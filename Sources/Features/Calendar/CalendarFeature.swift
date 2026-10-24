@@ -177,13 +177,16 @@ public final class CalendarFeature: NotchFeature {
         if !isSample {
             presentedNotice = notice
         }
+        // Fitted to this reminder's text: a short title keeps the island small.
+        let wings = EventReminderWings.widths(for: notice, now: Date())
         // The same id replaces an earlier reminder still showing and restarts its
         // timer. Held while the island is expanded, so it is seen once it collapses.
         context?.present(NotchActivity(
             id: activityID,
             priority: .high,
             duration: Self.reminderDuration,
-            wingWidth: eventReminderWingWidth,
+            wingWidth: wings.trailing,
+            leadingWingWidth: wings.leading,
             holdsWhileExpanded: true
         ) {
             EventReminderWingLeading(notice: notice, open: open)
