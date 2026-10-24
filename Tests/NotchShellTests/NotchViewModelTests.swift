@@ -700,6 +700,26 @@ struct NotchViewModelTests {
         #expect(activity("a").rim == nil)
     }
 
+    @Test func rimActivityOutlastsWingsOnTopAndTheOpenIsland() {
+        #expect(model.rimActivity == nil)
+        model.present(activity("wings", priority: .high))
+        #expect(model.rimActivity == nil)
+
+        model.present(rimActivity("low"))
+        model.present(rimActivity("rim", priority: NotchActivity.Priority(60)))
+        #expect(model.currentActivity?.id == "wings")
+        #expect(model.rimActivity?.id == "rim")
+
+        model.setExpanded(true)
+        #expect(model.rimActivity?.id == "rim")
+        model.setExpanded(false)
+
+        model.dismiss(activityID: "rim", featureID: "test")
+        #expect(model.rimActivity?.id == "low")
+        model.dismiss(activityID: "low", featureID: "test")
+        #expect(model.rimActivity == nil)
+    }
+
     @Test func tabCarriesItsCustomIcon() {
         model.setTabs([
             .init(id: "home", title: { "主页" }, symbol: { "house" }, content: AnyView(EmptyView())),

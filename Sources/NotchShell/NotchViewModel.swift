@@ -173,6 +173,14 @@ final class NotchViewModel {
         entries.filter(\.activity.morphsIntoTab).max(by: Self.ranksBelow)?.activity
     }
 
+    /// The winning activity among those with a band (`NotchActivity.rim`). The
+    /// shell keeps its band while the island is open or another activity is
+    /// current, retracted, so the band leaves and returns along the moving outline
+    /// instead of appearing on the outline the island is still heading for.
+    var rimActivity: NotchActivity? {
+        entries.filter { $0.activity.rim != nil }.max(by: Self.ranksBelow)?.activity
+    }
+
     private static func ranksBelow(_ lhs: ActivityEntry, _ rhs: ActivityEntry) -> Bool {
         if lhs.activity.priority != rhs.activity.priority {
             return lhs.activity.priority < rhs.activity.priority

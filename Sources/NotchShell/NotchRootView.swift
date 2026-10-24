@@ -27,12 +27,19 @@ struct NotchRootView: View {
         } else {
             switch model.state {
             case .collapsed: nil
-            case .activity: model.currentActivity
+            // A band has an overlay of its own.
+            case .activity: model.currentActivity.flatMap { $0.rim == nil ? $0 : nil }
             // Kept over the open panel only for the heroes that fly into its tab,
             // even while another activity is current (it draws nothing there).
             case .expanded: model.morphingActivity
             }
         }
+        let rimActivity = model.rimActivity
+        // Shown only while it is the current activity on the closed island; else
+        // retracted into its right end.
+        let isRimRetracted = isExpanded || rimActivity.map { rim in
+            model.currentActivity.map { $0.featureID == rim.featureID && $0.id == rim.id } != true
+        } ?? true
         let morph = NotchActivityMorph(
             namespace: activityMorph,
             state: NotchMorphState(
@@ -69,28 +76,32 @@ struct NotchRootView: View {
                     }
             }
         }
+        // The band, over the expanded panel and kept while it is open (retracted),
+        // so it moves with the outline as the island opens and closes.
+        .overlay(alignment: .top) {
+            if let activity = rimActivity, let rim = activity.rim {
+                ActivityRimView(
+                    rim: rim,
+                    isRetracted: isRimRetracted,
+                    topCornerRadius: model.topCornerRadius,
+                    bottomCornerRadii: model.bottomCornerRadii
+                )
+                // Clicks go to the island beneath, which expands.
+                .allowsHitTesting(false)
+                .id("\(activity.featureID).\(activity.id)")
+                .transition(.blurReplace)
+            }
+        }
         // Over the expanded panel and outside its drop, so heroes kept while it
         // opens fly above it without rising, blurring, or fading with it; still
         // inside the outline's clip.
         .overlay(alignment: .top) {
             if let activity = wingsActivity {
-                Group {
-                    if let rim = activity.rim {
-                        ActivityRimView(
-                            rim: rim,
-                            topCornerRadius: model.topCornerRadius,
-                            bottomCornerRadii: model.bottomCornerRadii
-                        )
-                        // Clicks go to the island beneath, which expands.
-                        .allowsHitTesting(false)
-                    } else {
-                        ActivityWingsView(
-                            activity: activity,
-                            notchSize: model.geometry.notchRect.size,
-                            earInset: model.topCornerRadius
-                        )
-                    }
-                }
+                ActivityWingsView(
+                    activity: activity,
+                    notchSize: model.geometry.notchRect.size,
+                    earInset: model.topCornerRadius
+                )
                 .environment(\.notchIsHovered, model.isHovered)
                 .environment(\.notchActivityMorph, morph)
                 // A new activity replaces the old one with a blur instead of a cut.
@@ -333,14 +344,23 @@ private struct ActivityWingsView: View {
 /// smoothly; steps too small to see are drawn without animation, so a long timer
 /// does not keep the island redrawing at display rate. The island's clip keeps
 /// the glow inside.
+///
+/// Retracted, the band shrinks into its right end, just below the right ear, as
+/// it does over time, and fades as it gets there; the outline's own animation
+/// (opening, closing, another activity's wings) carries the move.
 private struct ActivityRimView: View {
     let rim: NotchActivityRim
+    let isRetracted: Bool
     let topCornerRadius: CGFloat
     let bottomCornerRadii: CGSize
 
     private static let lineWidth: CGFloat = 3
     /// The least change in the band's length, in points, that a step animates.
     private static let animatedStep: CGFloat = 1
+    /// Retracting, the band fades late, near its end, where its round cap would
+    /// otherwise stay as a dot; returning, it shows at once.
+    private static let retractFade = Animation.easeIn(duration: 0.3)
+    private static let returnFade = Animation.easeOut(duration: 0.12)
     /// Ticks on whole seconds whenever the view appears, so redraws that are not
     /// ticks (a hover changing the corners) see the same date and the same fraction.
     private static let schedule = PeriodicTimelineSchedule(from: Date(timeIntervalSinceReferenceDate: 0), by: 1)
@@ -367,7 +387,7 @@ private struct ActivityRimView: View {
                 // About the arc's length: down both sides and across the bottom.
                 let arcLength = proxy.size.height * 2 + proxy.size.width
                 let animates = abs(fraction - previous) * arcLength >= Self.animatedStep
-                let band = edge.trim(from: 1 - fraction, to: 1)
+                let band = edge.trim(from: isRetracted ? 1 : 1 - fraction, to: 1)
                 ZStack {
                     if NotchAppearance.shared.isLightAndColorEnabled {
                         band
@@ -380,6 +400,9 @@ private struct ActivityRimView: View {
                 }
                 .padding(.horizontal, inset)
                 .padding(.bottom, inset)
+                .animation(isRetracted ? Self.retractFade : Self.returnFade) {
+                    $0.opacity(isRetracted ? 0 : 1)
+                }
                 .opacity(rim.isDimmed() ? 0.45 : 1)
                 .animation(animates ? .linear(duration: 1) : nil, value: fraction)
             }
