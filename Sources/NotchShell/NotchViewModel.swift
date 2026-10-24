@@ -17,8 +17,10 @@ import SwiftUI
 ///   rises out of sight and goes with it; every ordinary expansion (a click,
 ///   `requestExpand(tabID:)`, a drop) clears it and brings the tabs back.
 ///
-/// Expansion always wins over activities; activities keep their queue and
-/// timers while expanded and reappear on collapse.
+/// Expansion always wins over activities; activities keep their queue while
+/// expanded and reappear on collapse. Their timers run on while expanded, except
+/// for those that hold (`NotchActivity.holdsWhileExpanded`): theirs stop on
+/// expanding and start over in full on collapse.
 ///
 /// `isHovered` sits on top of `.collapsed` and `.activity`: the island grows by
 /// `NotchTheme.hoverGrowth` and takes the clicks that expand it.
@@ -82,6 +84,7 @@ final class NotchViewModel {
         var activity: NotchActivity
         /// Monotonic insertion order; breaks priority ties in favour of the newest.
         var sequence: Int
+        /// Nil without a duration, and for a holding activity while expanded.
         var expiresAt: Date?
     }
 
@@ -320,6 +323,7 @@ final class NotchViewModel {
         } else {
             scheduleContentUnmount()
         }
+        holdExpiries(whileExpanded: expanded, now: Date())
         reportInteractivity(ifChangedFrom: wasInteractive)
     }
 
@@ -395,7 +399,8 @@ final class NotchViewModel {
     }
 
     /// Adds an activity, replacing any existing one with the same feature and id.
-    /// A replaced activity moves to the front of its priority band and restarts its timer.
+    /// A replaced activity moves to the front of its priority band and restarts its
+    /// timer; one that holds, presented while expanded, starts it on collapse.
     func present(_ activity: NotchActivity, now: Date = Date()) {
         entries.removeAll { $0.activity.id == activity.id && $0.activity.featureID == activity.featureID }
         nextSequence += 1
@@ -403,9 +408,26 @@ final class NotchViewModel {
             ActivityEntry(
                 activity: activity,
                 sequence: nextSequence,
-                expiresAt: activity.duration.map { now.addingTimeInterval(max(0, $0)) }
+                expiresAt: expiry(of: activity, now: now)
             )
         )
+        scheduleExpiry(now: now)
+    }
+
+    /// `duration` after `now`; nil without one, or while expanded for an
+    /// activity that holds.
+    private func expiry(of activity: NotchActivity, now: Date) -> Date? {
+        guard !(activity.holdsWhileExpanded && isExpanded) else { return nil }
+        return activity.duration.map { now.addingTimeInterval(max(0, $0)) }
+    }
+
+    /// Stops the timers of activities that hold on expanding, and gives them
+    /// their whole duration again on collapse.
+    private func holdExpiries(whileExpanded expanded: Bool, now: Date) {
+        guard entries.contains(where: { $0.activity.holdsWhileExpanded && $0.activity.duration != nil }) else { return }
+        for index in entries.indices where entries[index].activity.holdsWhileExpanded {
+            entries[index].expiresAt = expanded ? nil : expiry(of: entries[index].activity, now: now)
+        }
         scheduleExpiry(now: now)
     }
 

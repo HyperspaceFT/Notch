@@ -222,6 +222,72 @@ struct NotchViewModelTests {
         #expect(model.queuedActivityIDs == ["persistent"])
     }
 
+    private func holdingActivity(_ id: String, duration: TimeInterval) -> NotchActivity {
+        NotchActivity(id: id, featureID: "test", duration: duration, holdsWhileExpanded: true) {
+            EmptyView()
+        } trailing: {
+            EmptyView()
+        }
+    }
+
+    @Test func holdingActivityPresentedWhileExpandedWaitsForCollapse() {
+        #expect(!activity("a").holdsWhileExpanded)
+        model.setExpanded(true)
+        let start = Date()
+        model.present(holdingActivity("reminder", duration: 2), now: start)
+        model.removeExpired(now: start.addingTimeInterval(10))
+        #expect(model.queuedActivityIDs == ["reminder"])
+
+        model.setExpanded(false)
+        let collapsed = Date()
+        model.removeExpired(now: collapsed.addingTimeInterval(1.5))
+        #expect(model.queuedActivityIDs == ["reminder"])
+        model.removeExpired(now: collapsed.addingTimeInterval(2))
+        #expect(model.queuedActivityIDs.isEmpty)
+    }
+
+    @Test func holdingActivityShowingWhenExpandedRestartsOnCollapse() {
+        let start = Date()
+        model.present(holdingActivity("reminder", duration: 2), now: start)
+        model.setExpanded(true)
+        model.removeExpired(now: start.addingTimeInterval(10))
+        #expect(model.queuedActivityIDs == ["reminder"])
+
+        model.setExpanded(false)
+        let collapsed = Date()
+        model.removeExpired(now: collapsed.addingTimeInterval(1.5))
+        #expect(model.currentActivity?.id == "reminder")
+        model.removeExpired(now: collapsed.addingTimeInterval(2))
+        #expect(model.currentActivity == nil)
+    }
+
+    @Test func otherActivitiesStillExpireWhileExpanded() {
+        model.setExpanded(true)
+        let start = Date()
+        model.present(activity("volume", duration: 2), now: start)
+        model.present(holdingActivity("reminder", duration: 2), now: start)
+        model.removeExpired(now: start.addingTimeInterval(2))
+        #expect(model.queuedActivityIDs == ["reminder"])
+    }
+
+    @Test func holdingActivityCanBeDismissedWhileExpanded() {
+        model.setExpanded(true)
+        model.present(holdingActivity("reminder", duration: 2))
+        model.dismiss(activityID: "reminder", featureID: "test")
+        #expect(model.queuedActivityIDs.isEmpty)
+        model.setExpanded(false)
+        #expect(model.currentActivity == nil)
+    }
+
+    @Test func holdingActivityReplacedWhileExpandedStaysHeld() {
+        model.setExpanded(true)
+        let start = Date()
+        model.present(holdingActivity("reminder", duration: 2), now: start)
+        model.present(holdingActivity("reminder", duration: 2), now: start.addingTimeInterval(1))
+        model.removeExpired(now: start.addingTimeInterval(10))
+        #expect(model.queuedActivityIDs == ["reminder"])
+    }
+
     @Test func requestExpandSelectsKnownTab() {
         model.setTabs([
             .init(id: "clock", title: { "今天" }, symbol: { "clock" }, content: AnyView(EmptyView())),

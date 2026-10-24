@@ -33,6 +33,38 @@ struct EventReminderNotice: Sendable, Equatable {
     var first: EventReminder { reminders[0] }
     /// How many more there are than the one the wings show.
     var othersCount: Int { reminders.count - 1 }
+
+    /// When the last of its events is over: its end, or for a zero-length
+    /// event `EventReminderPlanner.startingWindow` after its start. A reminder
+    /// still waiting (on an expanded island) is not shown from then on.
+    var endsAt: Date {
+        reminders.map { reminder in
+            let event = reminder.event
+            return event.end > event.start
+                ? event.end
+                : event.start.addingTimeInterval(EventReminderPlanner.startingWindow)
+        }.max() ?? first.event.start
+    }
+}
+
+/// Where an event stands next to its start, as the reminder's wing says it.
+enum EventReminderPhase: Sendable, Equatable {
+    /// Whole minutes until the start, rounded up.
+    case startsIn(minutes: Int)
+    /// Within `EventReminderPlanner.startingWindow` of the start.
+    case startingNow
+    /// Whole minutes since the start, rounded down.
+    case startedAgo(minutes: Int)
+
+    init(start: Date, now: Date) {
+        if now < start {
+            self = .startsIn(minutes: Int((start.timeIntervalSince(now) / 60).rounded(.up)))
+        } else if now < start.addingTimeInterval(EventReminderPlanner.startingWindow) {
+            self = .startingNow
+        } else {
+            self = .startedAgo(minutes: Int((now.timeIntervalSince(start) / 60).rounded(.down)))
+        }
+    }
 }
 
 /// What a check finds: the reminders due now, and when the next one becomes due.

@@ -41,6 +41,13 @@ public struct NotchActivity: Identifiable {
     /// anything else would cover the tab buttons beside the notch. `false` (the
     /// default) removes the wings while expanded.
     public var morphsIntoTab: Bool
+    /// Keeps the activity for its whole `duration` on the collapsed island:
+    /// while the island is expanded (on the tabs or a detail), where its wings
+    /// do not show, the duration does not run, and when the island collapses
+    /// it starts over in full from that moment. For something the user should
+    /// see, such as an event reminder. `false` (the default) lets the duration
+    /// run while expanded; without a duration it changes nothing.
+    public var holdsWhileExpanded: Bool
     /// Content left of the hardware notch.
     public var leading: AnyView
     /// Content right of the hardware notch.
@@ -53,6 +60,7 @@ public struct NotchActivity: Identifiable {
         duration: TimeInterval? = nil,
         wingWidth: CGFloat? = nil,
         morphsIntoTab: Bool = false,
+        holdsWhileExpanded: Bool = false,
         @ViewBuilder leading: () -> Leading,
         @ViewBuilder trailing: () -> Trailing
     ) {
@@ -62,6 +70,7 @@ public struct NotchActivity: Identifiable {
         self.duration = duration
         self.wingWidth = wingWidth
         self.morphsIntoTab = morphsIntoTab
+        self.holdsWhileExpanded = holdsWhileExpanded
         self.leading = AnyView(leading())
         self.trailing = AnyView(trailing())
     }

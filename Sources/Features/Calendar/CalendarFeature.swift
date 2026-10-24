@@ -32,6 +32,10 @@ public final class CalendarFeature: NotchFeature {
     private let feeds = SubscriptionFeeds.shared
     private weak var context: (any NotchContext)?
     private var reminderLoop: Task<Void, Never>?
+    /// The notice of the reminder activity last presented, until it is
+    /// dismissed: a reminder held on an expanded island is withdrawn once its
+    /// events are over.
+    private var presentedNotice: EventReminderNotice?
     /// Reminders shown since launch, with their events' starts for pruning.
     private var firedReminders: [EventReminderKey: Date] = [:]
 
@@ -46,6 +50,7 @@ public final class CalendarFeature: NotchFeature {
     public func deactivate() {
         reminderLoop?.cancel()
         reminderLoop = nil
+        presentedNotice = nil
         context?.dismiss(activityID: Self.reminderActivityID)
         context = nil
         local.stop()
@@ -93,6 +98,9 @@ public final class CalendarFeature: NotchFeature {
     /// before the next check.
     private func checkReminders(now: Date) -> TimeInterval {
         firedReminders = firedReminders.filter { now.timeIntervalSince($0.value) < Self.firedRetention }
+        if let presentedNotice, presentedNotice.endsAt <= now {
+            dismissReminder()
+        }
         guard let lead = settings.reminderLead.minutes else { return Self.reminderCheckInterval }
         // Never asks for access: local events count only once it is granted.
         local.refreshAccess()
@@ -118,7 +126,10 @@ public final class CalendarFeature: NotchFeature {
             }
             present(notice)
         }
-        let untilNext = plan.nextCheck.map { $0.timeIntervalSince(now) } ?? Self.reminderCheckInterval
+        // Also wakes when the presented reminder's events are over.
+        let untilNext = [plan.nextCheck, presentedNotice?.endsAt]
+            .compactMap { $0?.timeIntervalSince(now) }
+            .min() ?? Self.reminderCheckInterval
         return min(max(untilNext, 1), Self.reminderCheckInterval)
     }
 
@@ -138,12 +149,15 @@ public final class CalendarFeature: NotchFeature {
         let open: @MainActor () -> Void = { [weak self] in
             self?.openDetail(of: notice)
         }
-        // The same id replaces an earlier reminder still showing and restarts its timer.
+        presentedNotice = notice
+        // The same id replaces an earlier reminder still showing and restarts its
+        // timer. Held while the island is expanded, so it is seen once it collapses.
         context?.present(NotchActivity(
             id: Self.reminderActivityID,
             priority: .high,
             duration: Self.reminderDuration,
-            wingWidth: eventReminderWingWidth
+            wingWidth: eventReminderWingWidth,
+            holdsWhileExpanded: true
         ) {
             EventReminderWingLeading(notice: notice, open: open)
         } trailing: {
@@ -154,6 +168,11 @@ public final class CalendarFeature: NotchFeature {
     /// Opens the island on the due events, in place of their activity.
     private func openDetail(of notice: EventReminderNotice) {
         context?.requestExpand(detail: AnyView(EventReminderDetailView(notice: notice)))
+        dismissReminder()
+    }
+
+    private func dismissReminder() {
+        presentedNotice = nil
         context?.dismiss(activityID: Self.reminderActivityID)
     }
 }

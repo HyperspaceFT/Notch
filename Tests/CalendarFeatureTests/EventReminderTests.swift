@@ -135,3 +135,33 @@ struct EventReminderPlannerTests {
         #expect(due(result) == ["Alpha starting", "Zeta starting"])
     }
 }
+
+struct EventReminderPhaseTests {
+    @Test func beforeTheStartCountsMinutesUp() {
+        #expect(EventReminderPhase(start: start, now: start.addingTimeInterval(-5 * 60)) == .startsIn(minutes: 5))
+        #expect(EventReminderPhase(start: start, now: start.addingTimeInterval(-150)) == .startsIn(minutes: 3))
+        #expect(EventReminderPhase(start: start, now: start.addingTimeInterval(-1)) == .startsIn(minutes: 1))
+    }
+
+    @Test func startingNowForTheStartingWindow() {
+        #expect(EventReminderPhase(start: start, now: start) == .startingNow)
+        #expect(EventReminderPhase(start: start, now: start.addingTimeInterval(4 * 60 + 59)) == .startingNow)
+    }
+
+    @Test func laterCountsMinutesSinceTheStart() {
+        #expect(EventReminderPhase(start: start, now: start.addingTimeInterval(5 * 60)) == .startedAgo(minutes: 5))
+        #expect(EventReminderPhase(start: start, now: start.addingTimeInterval(7 * 60 + 30)) == .startedAgo(minutes: 7))
+    }
+
+    @Test func noticeEndsWithItsLastEvent() {
+        let short = EventReminder(event: event("Call", minutes: 2), kind: .starting, minutesLeft: 0)
+        let long = EventReminder(event: event("Review", minutes: 30), kind: .starting, minutesLeft: 0)
+        #expect(EventReminderNotice(reminders: [short]).endsAt == start.addingTimeInterval(2 * 60))
+        #expect(EventReminderNotice(reminders: [short, long]).endsAt == start.addingTimeInterval(30 * 60))
+    }
+
+    @Test func zeroLengthEventEndsFiveMinutesAfterItsStart() {
+        let deadline = EventReminder(event: event("Deadline", minutes: 0), kind: .starting, minutesLeft: 0)
+        #expect(EventReminderNotice(reminders: [deadline]).endsAt == start.addingTimeInterval(5 * 60))
+    }
+}

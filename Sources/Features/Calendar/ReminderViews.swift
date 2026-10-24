@@ -28,15 +28,17 @@ private func displayTitle(_ event: AgendaEvent) -> String {
     return title.isEmpty ? localized(en: "No Title", zh: "无标题") : title
 }
 
-/// "In 5 min" or "Starting now".
+/// "In 5 min", "Starting now", or "Started 7 min ago": the wing can show
+/// long after the reminder fired, when it waited out an expanded island.
 @MainActor
-private func dueText(_ reminder: EventReminder) -> String {
-    switch reminder.kind {
-    case .upcoming:
-        let minutes = reminder.minutesLeft
-        return localized(en: "In \(minutes) min", zh: "\(minutes) 分钟后")
-    case .starting:
-        return localized(en: "Starting now", zh: "现在开始")
+private func wingStatus(_ phase: EventReminderPhase) -> String {
+    switch phase {
+    case .startsIn(let minutes):
+        localized(en: "In \(minutes) min", zh: "\(minutes) 分钟后")
+    case .startingNow:
+        localized(en: "Starting now", zh: "现在开始")
+    case .startedAgo(let minutes):
+        localized(en: "Started \(minutes) min ago", zh: "已开始 \(minutes) 分钟")
     }
 }
 
@@ -102,12 +104,15 @@ struct EventReminderWingLeading: View {
     }
 }
 
-/// Right wing: the first event's title over how soon it starts. A click opens
-/// the detail.
+/// Right wing: the first event's title over how soon it starts, kept current.
+/// A click opens the detail.
 struct EventReminderWingTrailing: View {
     let notice: EventReminderNotice
     let open: @MainActor () -> Void
     @Environment(\.notchIsHovered) private var isIslandHovered
+
+    /// How often the status line is worked out again.
+    private static let refreshInterval: TimeInterval = 15
 
     var body: some View {
         let reminder = notice.first
@@ -118,11 +123,13 @@ struct EventReminderWingTrailing: View {
                     .foregroundStyle(NotchTheme.primaryText)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                Text(dueText(reminder))
-                    .font(.system(size: 10))
-                    .foregroundStyle(NotchTheme.secondaryText)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                TimelineView(.periodic(from: .now, by: Self.refreshInterval)) { context in
+                    Text(wingStatus(EventReminderPhase(start: reminder.event.start, now: context.date)))
+                        .font(.system(size: 10))
+                        .foregroundStyle(NotchTheme.secondaryText)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
             }
             // Moves with the hovered island, like the left wing.
             .offset(wingHoverOffset(isHovered: isIslandHovered, outward: 1))
