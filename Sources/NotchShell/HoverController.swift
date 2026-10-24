@@ -4,8 +4,8 @@ import AppKit
 /// (it grows and the trackpad taps once), drops the hover when the pointer leaves it, and
 /// collapses the expanded island when the pointer leaves that. Expanding itself
 /// takes a click on the hovered island, handled in `NotchRootView`; only content
-/// dragged onto the notch (files, for instance) expands it directly, because a
-/// drag cannot click.
+/// dragged onto or toward the notch (files, for instance) expands it directly,
+/// because a drag cannot click.
 ///
 /// While the user types in the panel (`isEditingText`) the expanded island stays
 /// open when the pointer leaves it, for instance onto an input method's candidate
@@ -18,12 +18,18 @@ import AppKit
 final class HoverController {
     /// Time from entering the hot zone to the hover; a sweep across the menu bar
     /// that leaves sooner neither grows the island nor taps the trackpad.
-    /// Content dragged onto the notch waits as long before the island opens.
+    /// Content dragged onto or toward the notch waits as long before the island opens.
     static let hoverDelay: Duration = .milliseconds(80)
     /// Debounce before collapsing after the pointer leaves the expanded island.
     static let collapseDelay: Duration = .milliseconds(250)
     /// How far the hot zone extends beyond the collapsed island.
     static let hotZoneInset = CGSize(width: 6, height: 4)
+    /// How far beyond the notch dragged content already opens the island: `width`
+    /// on each side, `height` below. Otherwise the drag has to reach the top edge
+    /// of the screen, where macOS opens Mission Control instead. Kept inside the
+    /// expanded island, so the pointer is on the island it opened and does not
+    /// collapse it again.
+    static let dragApproachInset = CGSize(width: 64, height: 72)
     /// Extra room around the expanded island before it counts as "left".
     static let exitMargin: CGFloat = 8
     /// The same for the hovered island. Kept small because the whole panel takes
@@ -140,8 +146,9 @@ final class HoverController {
             }
         } else {
             frameWithPointer = nil
-            if isInsideHotZone(location) {
-                schedule(dragging && isDraggingContent ? .dropExpand : .hover, after: Self.hoverDelay)
+            let draggingContent = dragging && isDraggingContent
+            if draggingContent ? isInsideDropZone(location) : isInsideHotZone(location) {
+                schedule(draggingContent ? .dropExpand : .hover, after: Self.hoverDelay)
             } else {
                 cancelPending(.hover)
                 cancelPending(.dropExpand)
@@ -159,6 +166,23 @@ final class HoverController {
         model.islandScreenFrame
             .insetBy(dx: -Self.hotZoneInset.width, dy: -Self.hotZoneInset.height)
             .contains(point)
+    }
+
+    /// Where dragged content opens the island: the hot zone, or the area the
+    /// drag approaches the notch through.
+    private func isInsideDropZone(_ point: CGPoint) -> Bool {
+        isInsideHotZone(point) || Self.dragApproachZone(notch: model.geometry.notchRect).contains(point)
+    }
+
+    /// The notch widened by `dragApproachInset`, and reaching as far above the
+    /// screen's top edge as the hot zone, so the top row of pixels counts too.
+    static func dragApproachZone(notch: CGRect) -> CGRect {
+        CGRect(
+            x: notch.minX - dragApproachInset.width,
+            y: notch.minY - dragApproachInset.height,
+            width: notch.width + dragApproachInset.width * 2,
+            height: notch.height + dragApproachInset.height + hotZoneInset.height
+        )
     }
 
     /// For the hovered or expanded island, whose frame already has its final size.
@@ -212,7 +236,7 @@ final class HoverController {
             }
         case .dropExpand:
             // A drag released within the delay landed on the menu bar; there is nothing to drop.
-            if !model.isExpanded, NSEvent.pressedMouseButtons & 1 != 0, isInsideHotZone(location) {
+            if !model.isExpanded, NSEvent.pressedMouseButtons & 1 != 0, isInsideDropZone(location) {
                 model.expandForDrop()
                 NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
             }

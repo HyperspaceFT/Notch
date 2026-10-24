@@ -32,4 +32,30 @@ struct HoverControllerTests {
         #expect(HoverController.isInsideExpanded(justOutsideWide, current: narrow, remembered: wide, margin: 8))
         #expect(!HoverController.isInsideExpanded(justOutsideWide, current: narrow, remembered: nil, margin: 8))
     }
+
+    /// The island a drag opens must cover the zone it opened from, or the pointer
+    /// would be outside it and collapse it again.
+    @MainActor
+    @Test(arguments: [
+        // A notched laptop screen.
+        NotchGeometry(
+            screenFrame: CGRect(x: 0, y: 0, width: 1512, height: 982),
+            safeAreaTop: 38,
+            auxiliaryTopLeftArea: CGRect(x: 0, y: 944, width: 661, height: 38),
+            auxiliaryTopRightArea: CGRect(x: 851, y: 944, width: 661, height: 38)
+        ),
+        // An external display with the simulated notch.
+        NotchGeometry(screenFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080), safeAreaTop: 0, auxiliaryTopLeftArea: .null, auxiliaryTopRightArea: .null),
+    ])
+    func dragApproachZoneLiesInsideTheIslandItOpens(geometry: NotchGeometry) {
+        let notch = geometry.notchRect
+        let zone = HoverController.dragApproachZone(notch: notch)
+        #expect(zone.minY < notch.minY && zone.minX < notch.minX && zone.maxX > notch.maxX)
+        #expect(zone.contains(CGPoint(x: notch.midX, y: geometry.screenFrame.maxY)))
+
+        let model = NotchViewModel(geometry: geometry)
+        model.expandForDrop()
+        let margin = HoverController.exitMargin
+        #expect(model.islandScreenFrame.insetBy(dx: -margin, dy: -margin).contains(zone))
+    }
 }

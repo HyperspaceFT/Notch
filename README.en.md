@@ -19,7 +19,7 @@
 
 ## What it does
 
-Move the pointer onto the notch and it bounces and grows a little (with a light tap on a Force Touch trackpad). Click it and it opens into a small black panel; move away and it shrinks back into the hardware notch. Drag files onto the notch and it opens straight to the Files tab.
+Move the pointer onto the notch and it bounces and grows a little (with a light tap on a Force Touch trackpad). Click it and it opens into a small black panel; move away and it shrinks back into the hardware notch. Drag files toward the notch and it opens straight to the Files tab before they reach the top edge of the screen, where macOS would open Mission Control.
 
 Built-in features:
 
