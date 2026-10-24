@@ -28,6 +28,7 @@ struct NotchRootView: View {
                         notchSize: model.geometry.notchRect.size,
                         earInset: model.topCornerRadius
                     )
+                    .environment(\.notchIsHovered, model.isHovered)
                     // A new activity replaces the old one with a blur instead of a cut.
                     .id("\(activity.featureID).\(activity.id)")
                     .transition(.blurReplace)

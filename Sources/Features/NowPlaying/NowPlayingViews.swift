@@ -7,10 +7,19 @@ import SwiftUI
 /// edge, which also keeps them clear of the rounded bottom corners.
 let nowPlayingWingWidth: CGFloat = 38
 
+/// While the pointer rests on the island, it grows (`NotchTheme.hoverGrowth`) and
+/// the cover and the wave move out with it, by half the growth, so each stays
+/// centered in its grown wing. `outward` is -1 on the left, 1 on the right.
+private func hoverShift(isHovered: Bool, outward: CGFloat) -> CGSize {
+    guard isHovered else { return .zero }
+    return CGSize(width: NotchTheme.hoverGrowth.width / 2 * outward, height: NotchTheme.hoverGrowth.height / 2)
+}
+
 /// Left wing: the cover, like a record sleeve. It glows in its own colors while
 /// playing, sinks back while paused, and flips over when the track changes.
 struct NowPlayingSleeve: View {
     let model: NowPlayingModel
+    @Environment(\.notchIsHovered) private var isIslandHovered
 
     private static let maximumSide: CGFloat = 24
     private static let cornerRadius: CGFloat = 6
@@ -26,6 +35,7 @@ struct NowPlayingSleeve: View {
                     .transition(.flip)
             }
             .animation(.smooth(duration: 0.24), value: model.coverKey)
+            .offset(hoverShift(isHovered: isIslandHovered, outward: -1))
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
     }
@@ -97,6 +107,7 @@ private extension AnyTransition {
 /// pause button, which they are.
 struct NowPlayingPulse: View {
     let model: NowPlayingModel
+    @Environment(\.notchIsHovered) private var isIslandHovered
 
     var body: some View {
         Button {
@@ -105,6 +116,7 @@ struct NowPlayingPulse: View {
             WaveIcon(model: model)
         }
         .buttonStyle(PulseButtonStyle())
+        .offset(hoverShift(isHovered: isIslandHovered, outward: 1))
         .onHover { model.isPulseHovered = $0 }
         .accessibilityLabel(model.isPlaying ? localized(en: "Pause", zh: "暂停") : localized(en: "Play", zh: "播放"))
     }
