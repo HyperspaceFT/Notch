@@ -3,8 +3,11 @@ import NotchKit
 import Observation
 
 /// The latest download of each subscribed feed (`CalendarSettings.subscriptions`)
-/// and how it went. Downloads only when asked (`refreshIfNeeded`, `refreshNow`),
-/// so nothing runs while the panel is closed and the settings window is not open.
+/// and how it went. Downloads only when asked (`refreshIfNeeded`, `refreshNow`):
+/// by the calendar module while it is on screen, by the settings window, and,
+/// while event reminders are on, by `CalendarFeature`'s reminder loop, also
+/// while the panel is closed: when a feed is 30 minutes old, has never
+/// downloaded, or last failed (then again after `CalendarRefreshPolicy.retryDelay`).
 @MainActor
 @Observable
 public final class SubscriptionFeeds {
@@ -79,6 +82,22 @@ public final class SubscriptionFeeds {
             subscription.agendaEvents(
                 from: occurrences[subscription.id] ?? [],
                 feedName: statuses[subscription.id]?.feedName
+            )
+        }
+    }
+
+    /// Whether an enabled subscription has never downloaded, last downloaded
+    /// `maximumAge` or more before `now`, or failed its latest download; for
+    /// refreshing while nothing on screen asks for the feeds.
+    func needsBackgroundRefresh(maximumAge: TimeInterval, now: Date) -> Bool {
+        settings.subscriptions.contains { subscription in
+            guard subscription.isEnabled else { return false }
+            let status = statuses[subscription.id] ?? Status()
+            return CalendarRefreshPolicy.isStale(
+                lastSuccess: status.lastUpdated,
+                hasFailed: status.failure != nil,
+                maximumAge: maximumAge,
+                now: now
             )
         }
     }
@@ -275,6 +294,15 @@ enum CalendarRefreshPolicy {
            now.timeIntervalSince(lastFailure) < retryDelay {
             return false
         }
+        guard let lastSuccess else { return true }
+        return now.timeIntervalSince(lastSuccess) >= maximumAge
+    }
+
+    /// Whether a feed should be downloaded again in the background: it never
+    /// downloaded, its last success is `maximumAge` or more old, or its latest
+    /// download failed. `shouldRefresh` still decides whether that happens now.
+    static func isStale(lastSuccess: Date?, hasFailed: Bool, maximumAge: TimeInterval, now: Date) -> Bool {
+        if hasFailed { return true }
         guard let lastSuccess else { return true }
         return now.timeIntervalSince(lastSuccess) >= maximumAge
     }

@@ -5,9 +5,9 @@ import Observation
 import SwiftUI
 
 /// The Calendar pane: which events (the Calendar app's, the feeds', or both)
-/// and how many days the Home calendar module shows, which of the Calendar
-/// app's calendars, and the subscribed calendar feeds. Taller than the window
-/// allows, the form scrolls.
+/// and how many days the Home calendar module shows, when event reminders
+/// show, which of the Calendar app's calendars, and the subscribed calendar
+/// feeds. Taller than the window allows, the form scrolls.
 struct CalendarSettingsView: View {
     @Bindable var settings: CalendarSettings
     let local: LocalCalendars
@@ -23,6 +23,7 @@ struct CalendarSettingsView: View {
     var body: some View {
         Form {
             daysSection
+            remindersSection
             calendarAppSection
             subscriptionsSection
         }
@@ -63,6 +64,23 @@ struct CalendarSettingsView: View {
             footnote(localized(
                 en: "Today counts as the first day.",
                 zh: "今天算作第一天。"
+            ))
+        }
+    }
+
+    // MARK: Reminders
+
+    private var remindersSection: some View {
+        Section {
+            Picker(localized(en: "Event Reminders", zh: "日程提醒"), selection: $settings.reminderLead) {
+                ForEach(EventReminderLead.allCases, id: \.self) { lead in
+                    Text(lead.title).tag(lead)
+                }
+            }
+        } footer: {
+            footnote(localized(
+                en: "Shown beside the notch before an event starts. While reminders are on, subscribed calendars also update every 30 minutes with the island closed.",
+                zh: "在日程开始前，于刘海两侧提醒；打开提醒后，订阅链接的日程在岛收起时也会每 30 分钟更新一次。"
             ))
         }
     }

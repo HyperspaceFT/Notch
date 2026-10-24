@@ -37,8 +37,9 @@ struct CalendarModuleView: View {
         }
         .frame(width: size.width, height: size.height)
         // SwiftUI cancels this when the module leaves the screen, such as when the
-        // panel collapses, so no feed downloads while the island is closed. It
-        // starts over when the source changes, so a feed newly included is
+        // panel collapses, so this loop downloads no feed while the island is
+        // closed (the reminder loop in `CalendarFeature` may, while reminders are on).
+        // It starts over when the source changes, so a feed newly included is
         // checked at once.
         .task(id: settings.source) {
             let source = settings.source

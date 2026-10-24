@@ -360,3 +360,36 @@ struct CalendarFormatTests {
         #expect(CalendarFormat.dayTitle(oct(23), now: now, language: .simplifiedChinese, calendar: calendar) == "明天")
     }
 }
+
+@MainActor
+struct EventReminderLeadSettingsTests {
+    @Test func defaultsToFiveMinutes() {
+        withSettings { _, make in
+            #expect(make().reminderLead == .fiveMinutes)
+            #expect(make().reminderLead.minutes == 5)
+        }
+    }
+
+    @Test func offersTheChoicesInOrder() {
+        #expect(EventReminderLead.allCases.map(\.minutes) == [nil, 0, 1, 5, 10, 15, 30, 60])
+    }
+
+    @Test func everyChoiceSurvivesARelaunch() {
+        withSettings { _, make in
+            let settings = make()
+            for lead in [EventReminderLead.off, .atStart] + EventReminderLead.allCases {
+                settings.reminderLead = lead
+                #expect(make().reminderLead == lead)
+            }
+        }
+    }
+
+    @Test func unknownSavedLeadFallsBackToFiveMinutes() {
+        withSettings { defaults, make in
+            defaults.set(7, forKey: CalendarSettings.reminderLeadKey)
+            #expect(make().reminderLead == .fiveMinutes)
+            defaults.set("soon", forKey: CalendarSettings.reminderLeadKey)
+            #expect(make().reminderLead == .fiveMinutes)
+        }
+    }
+}

@@ -42,7 +42,10 @@ public final class LocalCalendars {
     @ObservationIgnored private var store = EKEventStore()
     @ObservationIgnored private var observer: (any NSObjectProtocol)?
     @ObservationIgnored private var isRequesting = false
-    @ObservationIgnored private var cache: (key: CacheKey, events: [AgendaEvent])?
+    /// The latest queries, newest last: the agenda's and the reminders'
+    /// windows differ, and one entry would make each throw the other's away.
+    @ObservationIgnored private var cache: [(key: CacheKey, events: [AgendaEvent])] = []
+    private static let cacheSize = 2
 
     private struct CacheKey: Equatable {
         var window: DateInterval
@@ -65,7 +68,7 @@ public final class LocalCalendars {
 
     func stop() {
         stopObservingStore()
-        cache = nil
+        cache = []
     }
 
     private func observeStore() {
@@ -147,9 +150,12 @@ public final class LocalCalendars {
     /// and revision, so a redraw does not query EventKit again.
     func events(in window: DateInterval, hidden: Set<String>) -> [AgendaEvent] {
         let key = CacheKey(window: window, hidden: hidden, revision: revision)
-        if let cache, cache.key == key { return cache.events }
+        if let cached = cache.first(where: { $0.key == key }) { return cached.events }
         let events = queryEvents(in: window, hidden: hidden)
-        cache = (key, events)
+        cache.append((key, events))
+        if cache.count > Self.cacheSize {
+            cache.removeFirst(cache.count - Self.cacheSize)
+        }
         return events
     }
 
@@ -175,7 +181,13 @@ public final class LocalCalendars {
                 end: end,
                 isAllDay: event.isAllDay,
                 color: Self.color(of: calendar?.cgColor),
-                calendarTitle: calendar?.title ?? ""
+                calendarTitle: calendar?.title ?? "",
+                meetingURL: MeetingLink.detect(
+                    url: event.url?.absoluteString,
+                    conference: nil,
+                    location: event.location,
+                    notes: event.notes
+                )
             )
         }
     }

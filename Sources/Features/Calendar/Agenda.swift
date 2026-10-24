@@ -21,6 +21,9 @@ struct AgendaEvent: Sendable, Equatable, Identifiable {
     var isAllDay: Bool
     var color: CalendarColor
     var calendarTitle: String
+    /// The link that joins the event's online meeting, when one was found
+    /// (see `MeetingLink`).
+    var meetingURL: URL? = nil
 }
 
 /// An event as listed on one day of the agenda.

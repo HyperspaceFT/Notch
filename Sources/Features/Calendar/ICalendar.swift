@@ -124,10 +124,21 @@ struct ICalendarEvent: Sendable, Equatable {
     var recurrenceID: Date?
     /// STATUS:CANCELLED.
     var isCancelled = false
+    /// The online meeting's link from URL, X-GOOGLE-CONFERENCE, LOCATION or
+    /// DESCRIPTION (see `MeetingLink`); the description itself is not kept.
+    var meetingURL: URL?
 
     /// This event alone, unexpanded.
     var occurrence: ICalendarOccurrence {
-        ICalendarOccurrence(uid: uid, title: summary, location: location, start: start, end: end, isAllDay: isAllDay)
+        ICalendarOccurrence(
+            uid: uid,
+            title: summary,
+            location: location,
+            start: start,
+            end: end,
+            isAllDay: isAllDay,
+            meetingURL: meetingURL
+        )
     }
 
     /// The occurrences of this master that may touch `interval`, with
@@ -175,6 +186,7 @@ struct ICalendarOccurrence: Sendable, Equatable, Hashable {
     /// Exclusive.
     var end: Date
     var isAllDay: Bool
+    var meetingURL: URL? = nil
 
     fileprivate func overlaps(_ interval: DateInterval) -> Bool {
         if end <= start { return start >= interval.start && start < interval.end }
@@ -236,6 +248,12 @@ private struct EventReader {
         }
         event.isCancelled = component.property("STATUS")?.value
             .trimmingCharacters(in: .whitespaces).uppercased() == "CANCELLED"
+        event.meetingURL = MeetingLink.detect(
+            url: component.property("URL")?.value,
+            conference: component.property("X-GOOGLE-CONFERENCE")?.value,
+            location: location,
+            notes: component.property("DESCRIPTION").map { ICalendarText.unescape($0.value) }
+        )
         return event
     }
 

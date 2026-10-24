@@ -32,8 +32,40 @@ public enum CalendarSource: String, CaseIterable, Codable, Sendable {
     public var includesCloud: Bool { self != .local }
 }
 
+/// How long before an event starts its reminder shows beside the notch.
+public enum EventReminderLead: Int, CaseIterable, Sendable {
+    case off = -1
+    /// Only when the event starts.
+    case atStart = 0
+    case oneMinute = 1
+    case fiveMinutes = 5
+    case tenMinutes = 10
+    case fifteenMinutes = 15
+    case thirtyMinutes = 30
+    case oneHour = 60
+
+    /// Minutes ahead of the start; nil when reminders are off.
+    public var minutes: Int? {
+        self == .off ? nil : rawValue
+    }
+
+    @MainActor public var title: String {
+        switch self {
+        case .off: localized(en: "Off", zh: "不提醒")
+        case .atStart: localized(en: "At Start", zh: "开始时")
+        case .oneMinute: localized(en: "1 Minute Before", zh: "提前 1 分钟")
+        case .fiveMinutes: localized(en: "5 Minutes Before", zh: "提前 5 分钟")
+        case .tenMinutes: localized(en: "10 Minutes Before", zh: "提前 10 分钟")
+        case .fifteenMinutes: localized(en: "15 Minutes Before", zh: "提前 15 分钟")
+        case .thirtyMinutes: localized(en: "30 Minutes Before", zh: "提前 30 分钟")
+        case .oneHour: localized(en: "1 Hour Before", zh: "提前 1 小时")
+        }
+    }
+}
+
 /// What the Home calendar module shows, as the settings window edits it: how
 /// many days, which of the Calendar app's calendars, and the subscribed feeds.
+/// Also when event reminders show.
 @MainActor
 @Observable
 public final class CalendarSettings {
@@ -43,7 +75,9 @@ public final class CalendarSettings {
     static let hiddenCalendarsKey = "NotchCalendarHiddenCalendars"
     static let subscriptionsKey = "NotchCalendarSubscriptions"
     static let sourceKey = "NotchCalendarSource"
+    static let reminderLeadKey = "NotchCalendarReminderLead"
     static let defaultDayCount = 3
+    static let defaultReminderLead = EventReminderLead.fiveMinutes
 
     /// How many days, today included, the module may show.
     public static var dayCountRange: ClosedRange<Int> { Agenda.dayCountRange }
@@ -69,6 +103,14 @@ public final class CalendarSettings {
         }
     }
 
+    /// How long before an event its reminder shows; saved on every change.
+    public var reminderLead: EventReminderLead {
+        didSet {
+            guard reminderLead != oldValue else { return }
+            defaults.set(reminderLead.rawValue, forKey: Self.reminderLeadKey)
+        }
+    }
+
     /// EventKit calendar identifiers the user turned off. Stored as hidden rather
     /// than shown, so a calendar added later shows by default.
     public private(set) var hiddenCalendarIDs: Set<String> {
@@ -87,7 +129,8 @@ public final class CalendarSettings {
     private var storedDayCount: Int
     @ObservationIgnored private let defaults: UserDefaults
 
-    /// Saved values that do not decode (an unknown source too) fall back to the defaults.
+    /// Saved values that do not decode (an unknown source or reminder lead too)
+    /// fall back to the defaults.
     init(defaults: UserDefaults) {
         self.defaults = defaults
         let savedDayCount = defaults.object(forKey: Self.dayCountKey) as? Int
@@ -95,6 +138,8 @@ public final class CalendarSettings {
             min(max($0, Self.dayCountRange.lowerBound), Self.dayCountRange.upperBound)
         } ?? Self.defaultDayCount
         source = defaults.string(forKey: Self.sourceKey).flatMap(CalendarSource.init(rawValue:)) ?? .all
+        reminderLead = (defaults.object(forKey: Self.reminderLeadKey) as? Int)
+            .flatMap(EventReminderLead.init(rawValue:)) ?? Self.defaultReminderLead
         hiddenCalendarIDs = Set(defaults.stringArray(forKey: Self.hiddenCalendarsKey) ?? [])
         subscriptions = defaults.data(forKey: Self.subscriptionsKey)
             .flatMap { try? JSONDecoder().decode([CalendarSubscription].self, from: $0) }
@@ -227,7 +272,8 @@ public struct CalendarSubscription: Codable, Identifiable, Equatable, Sendable {
                 end: occurrence.end,
                 isAllDay: occurrence.isAllDay,
                 color: calendarColor,
-                calendarTitle: calendarTitle
+                calendarTitle: calendarTitle,
+                meetingURL: occurrence.meetingURL
             )
         }
     }
