@@ -28,28 +28,22 @@ struct NotificationInboxTests {
         #expect(inbox.items.map(\.id) == ["c", "b", "a"])
     }
 
-    @Test func sameContentWithinTheWindowIsIgnored() {
+    @Test func identicalNotificationsInARowAreAllListed() {
         let inbox = NotificationInbox()
-        #expect(NotificationInbox.dedupeWindow == 10)
-        #expect(inbox.insert(item("a", token: "t1", title: "Hi", at: 0)))
-        // Rebuilt by NotificationCenter under a new token, with the same text.
-        #expect(!inbox.insert(item("b", token: "ax-2", title: "Hi", at: 10)))
-        #expect(inbox.items.map(\.id) == ["a"])
+        // The same `display notification` run again and again, under one token too.
+        for index in 0..<12 {
+            inbox.insert(item("\(index)", token: "t", title: "Test", at: TimeInterval(index)))
+        }
+        #expect(inbox.items.count == 12)
+        #expect(inbox.items.map(\.id) == (0..<12).reversed().map { "\($0)" })
     }
 
     @Test func sameTokenWithDifferentContentListsBoth() {
         let inbox = NotificationInbox()
-        #expect(inbox.insert(item("a", token: "stack-chat", title: "First", at: 0)))
-        #expect(inbox.insert(item("b", token: "stack-chat", title: "Second", at: 1)))
+        inbox.insert(item("a", token: "stack-chat", title: "First", at: 0))
+        inbox.insert(item("b", token: "stack-chat", title: "Second", at: 1))
         #expect(inbox.items.map(\.id) == ["b", "a"])
         #expect(inbox.items.map(\.token) == ["stack-chat", "stack-chat"])
-    }
-
-    @Test func sameContentAfterTheWindowIsListedAgain() {
-        let inbox = NotificationInbox()
-        #expect(inbox.insert(item("a", token: "t", title: "Hi", at: 0)))
-        #expect(inbox.insert(item("b", token: "t", title: "Hi", at: 10.5)))
-        #expect(inbox.items.map(\.id) == ["b", "a"])
     }
 
     @Test func eachArrivalGetsItsOwnID() {

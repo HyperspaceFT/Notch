@@ -149,9 +149,8 @@ public final class NotificationsFeature: NotchFeature {
                 body: capture.body,
                 received: now
             )
-            if inbox.insert(item) {
-                newest = item
-            }
+            inbox.insert(item)
+            newest = item
         }
         guard let newest else { return }
         // The same id replaces the previous banner's activity and restarts its timer.

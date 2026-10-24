@@ -27,6 +27,8 @@ struct BannerCapture: Equatable, Sendable {
     var token: String
     /// `nodeKey` of the window the banner sits in, which parking moves.
     var windowKey: Int
+    /// `nodeKey` of the banner element itself.
+    var elementKey: Int
     var subrole: String
     var appName: String?
     var title: String?
@@ -38,13 +40,27 @@ struct BannerCapture: Equatable, Sendable {
         appName != nil || title != nil || subtitle != nil || body != nil
     }
 
-    /// The token together with what the banner says. A token may stand for a
-    /// whole group of notifications (a stacking identifier does), and a banner
-    /// may change its text in place, so a token alone does not tell one
-    /// notification from the next.
+    /// The token, the element, and what the banner says: the same element read
+    /// again is the same banner. A token may stand for a whole group of
+    /// notifications (a stacking identifier does), so a second banner under it
+    /// is told apart by its element, and one whose text changes in place by its
+    /// content.
     var identity: String {
         // U+001F, the unit separator, which notification text practically never holds.
-        [token, appName ?? "", title ?? "", subtitle ?? "", body ?? ""].joined(separator: "\u{1F}")
+        [token, String(elementKey), appName ?? "", title ?? "", subtitle ?? "", body ?? ""]
+            .joined(separator: "\u{1F}")
+    }
+
+    /// Whether NotificationCenter gave the token (an identifier or stacking
+    /// identifier), rather than it being the element-hash fallback, which says
+    /// nothing about the banner once its element is rebuilt.
+    var hasOwnToken: Bool {
+        token != BannerScan.fallbackToken(elementKey: elementKey)
+    }
+
+    /// Whether `other` says the same thing.
+    func hasSameContent(as other: BannerCapture) -> Bool {
+        appName == other.appName && title == other.title && subtitle == other.subtitle && body == other.body
     }
 
     /// Alerts wait for a click (Calendar's Snooze, for one); moved off screen,
@@ -155,7 +171,12 @@ enum BannerScan {
         if let stacking = banner.stackingIdentifier, !stacking.isEmpty {
             return stacking
         }
-        return "ax-\(banner.nodeKey)"
+        return fallbackToken(elementKey: banner.nodeKey)
+    }
+
+    /// The token of a banner without identifiers of its own.
+    static func fallbackToken(elementKey: Int) -> String {
+        "ax-\(elementKey)"
     }
 
     /// The app's name from a banner's description, "<App>, <title>, <body>…":
@@ -194,6 +215,7 @@ enum BannerScan {
         return BannerCapture(
             token: token(for: banner),
             windowKey: windowKey,
+            elementKey: banner.nodeKey,
             subrole: banner.subrole ?? "",
             appName: appName(fromDescription: banner.attributedDescription),
             // A header stands in for a missing title.
@@ -211,14 +233,33 @@ enum BannerScan {
 
 /// The banners of the last scan, by `BannerCapture.identity`: a banner is new
 /// once, in the first scan that has it, and forgotten by the first that does not.
+///
+/// NotificationCenter sometimes rebuilds a banner's elements, so the same
+/// notification comes back as a new element. Such a rebuild is not new: a
+/// capture that takes the place of one from the previous scan that is gone now,
+/// under the same token NotificationCenter gave both and with the same content.
+/// Element-hash tokens never match, since nothing says the two are one banner;
+/// nor does a capture whose twin is still on screen, which is a second banner.
 struct SeenBanners {
-    private(set) var identities: Set<String> = []
+    /// The previous scan's captures by identity.
+    private(set) var captures: [String: BannerCapture] = [:]
 
-    /// Replaces the remembered identities with `current` and returns those that are new.
-    mutating func update(_ current: [String]) -> Set<String> {
-        let current = Set(current)
-        let new = current.subtracting(identities)
-        identities = current
+    /// Replaces the remembered captures with `current` (unique by identity) and
+    /// returns the new ones, in order, without rebuilds.
+    mutating func update(_ current: [BannerCapture]) -> [BannerCapture] {
+        let currentIdentities = Set(current.map(\.identity))
+        var vanished = captures.values.filter { $0.hasOwnToken && !currentIdentities.contains($0.identity) }
+        var new: [BannerCapture] = []
+        for capture in current where captures[capture.identity] == nil {
+            if capture.hasOwnToken, let twin = vanished.firstIndex(where: {
+                $0.token == capture.token && $0.hasSameContent(as: capture)
+            }) {
+                vanished.remove(at: twin)
+                continue
+            }
+            new.append(capture)
+        }
+        captures = Dictionary(current.map { ($0.identity, $0) }, uniquingKeysWith: { first, _ in first })
         return new
     }
 }

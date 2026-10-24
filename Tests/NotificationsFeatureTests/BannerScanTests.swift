@@ -244,7 +244,7 @@ struct BannerScanTests {
 
     @Test func alertsAreNotParkable() {
         func capture(_ subrole: String) -> BannerCapture {
-            BannerCapture(token: "t", windowKey: 1, subrole: subrole)
+            BannerCapture(token: "t", windowKey: 1, elementKey: 2, subrole: subrole)
         }
         #expect(!capture("AXNotificationCenterAlert").isParkable)
         #expect(!capture("AXNotificationCenterAlertStack").isParkable)
@@ -253,26 +253,91 @@ struct BannerScanTests {
         #expect(capture("AXNotificationCenterBannerWindow").isParkable)
     }
 
-    @Test func identityTellsNotificationsUnderOneTokenApart() {
-        let first = BannerCapture(token: "stack-chat", windowKey: 1, subrole: "AXNotificationCenterBanner", title: "Anna", body: "Hi")
-        var updated = first
-        updated.body = "Are you there?"
-        var moved = first
-        moved.windowKey = 2
-        #expect(first.identity != updated.identity)
-        #expect(first.identity == moved.identity)
-        var seen = SeenBanners()
-        #expect(seen.update([first.identity]) == [first.identity])
-        // The banner's text changed in place: reported again.
-        #expect(seen.update([updated.identity]) == [updated.identity])
+    /// A banner capture with the given token, element, and text.
+    func capture(_ token: String?, element: Int, title: String = "Test", body: String? = "Hello") -> BannerCapture {
+        BannerCapture(
+            token: token ?? BannerScan.fallbackToken(elementKey: element),
+            windowKey: 1,
+            elementKey: element,
+            subrole: "AXNotificationCenterBanner",
+            appName: "Script Editor",
+            title: title,
+            body: body
+        )
     }
 
-    @Test func seenTokensAreNewOnceAndForgottenWhenGone() {
+    @Test func ownTokensAreToldFromTheElementHashFallback() {
+        #expect(capture("banner-1", element: 7).hasOwnToken)
+        #expect(!capture(nil, element: 7).hasOwnToken)
+        let bare = FakeNode()
+        #expect(BannerScan.token(for: bare) == BannerScan.fallbackToken(elementKey: bare.nodeKey))
+    }
+
+    @Test func sameElementReadAgainIsNotNew() {
         var seen = SeenBanners()
-        #expect(seen.update(["a", "b"]) == ["a", "b"])
-        #expect(seen.update(["a", "b", "c"]) == ["c"])
-        #expect(seen.update(["c"]) == [])
-        // "a" was absent from the last scan, so it counts as new again.
-        #expect(seen.update(["a", "c"]) == ["a"])
+        let banner = capture("t", element: 1)
+        #expect(seen.update([banner]) == [banner])
+        #expect(seen.update([banner]) == [])
+    }
+
+    @Test func identicalContentInANewElementWithAnotherTokenIsNew() {
+        var seen = SeenBanners()
+        let first = capture("a", element: 1)
+        let second = capture("b", element: 2)
+        #expect(seen.update([first]) == [first])
+        #expect(seen.update([first, second]) == [second])
+    }
+
+    @Test func ownTokenRebuildReplacingAVanishedTwinIsNotNew() {
+        var seen = SeenBanners()
+        let original = capture("stack-script", element: 1)
+        let rebuilt = capture("stack-script", element: 2)
+        #expect(seen.update([original]) == [original])
+        #expect(seen.update([rebuilt]) == [])
+        // Remembered as the banner now on screen.
+        #expect(seen.update([rebuilt]) == [])
+    }
+
+    @Test func identicalBannerBesideItsLiveTwinIsNew() {
+        var seen = SeenBanners()
+        let first = capture("stack-script", element: 1)
+        let second = capture("stack-script", element: 2)
+        #expect(seen.update([first]) == [first])
+        #expect(seen.update([first, second]) == [second])
+    }
+
+    @Test func elementHashTokenReplacingAVanishedTwinIsNew() {
+        var seen = SeenBanners()
+        let first = capture(nil, element: 1)
+        let second = capture(nil, element: 2)
+        #expect(seen.update([first]) == [first])
+        #expect(seen.update([second]) == [second])
+    }
+
+    @Test func inPlaceTextChangeIsNew() {
+        var seen = SeenBanners()
+        let before = capture("t", element: 1, body: "Hi")
+        let after = capture("t", element: 1, body: "Are you there?")
+        #expect(seen.update([before]) == [before])
+        #expect(seen.update([after]) == [after])
+    }
+
+    @Test func bannerThatLeftAndComesBackIdenticalLaterIsNew() {
+        var seen = SeenBanners()
+        let first = capture("stack-script", element: 1)
+        let again = capture("stack-script", element: 2)
+        #expect(seen.update([first]) == [first])
+        #expect(seen.update([]) == [])
+        #expect(seen.update([again]) == [again])
+    }
+
+    @Test func rebuildMatchesOneToOne() {
+        var seen = SeenBanners()
+        let one = capture("stack-script", element: 1)
+        let two = capture("stack-script", element: 2)
+        #expect(seen.update([one]) == [one])
+        // One vanished twin covers one rebuild; the other is a second banner.
+        let rebuiltA = capture("stack-script", element: 3)
+        #expect(seen.update([rebuiltA, two]) == [two])
     }
 }

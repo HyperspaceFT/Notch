@@ -310,8 +310,7 @@ final class NotificationBannerWatcher {
 
         var identities: Set<String> = []
         captures = captures.filter { identities.insert($0.identity).inserted }
-        let new = seen.update(captures.map(\.identity))
-        let newCaptures = captures.filter { new.contains($0.identity) }
+        let newCaptures = seen.update(captures)
         liveTokens = Dictionary(captures.map { ($0.token, $0.windowKey) }, uniquingKeysWith: { first, _ in first })
         blockedWindows = Set(captures.filter { !$0.isParkable }.map(\.windowKey))
         if hidesBanners {
