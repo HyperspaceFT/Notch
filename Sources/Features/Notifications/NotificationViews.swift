@@ -3,15 +3,44 @@ import NotchKit
 import NotchUI
 import SwiftUI
 
-/// Width of each notification wing: room for the app's name on the left and a
-/// line of text on the right.
-let notificationWingWidth: CGFloat = 120
-
 /// Space kept between a wing's content and the island's outer edge, so it stays
 /// clear of the rounded bottom corner (`NotchTheme.activityBottomRadius`).
 private let wingCornerClearance: CGFloat = 12
 /// Space between a wing's content and the notch.
 private let wingNotchClearance: CGFloat = 6
+
+/// The notification wings' widths, each fitted to its own content, as the wings
+/// draw it: the app's icon and name on the left, the longer of the two text lines
+/// on the right. Neither grows past `maximumWidth`, where the text is cut short.
+enum NotificationWings {
+    static let maximumWidth: CGFloat = 120
+    /// The right wing's least width, so a one-word line does not pinch the island.
+    static let minimumTrailingWidth: CGFloat = 52
+    static let iconSide: CGFloat = 20
+    static let iconSpacing: CGFloat = 6
+    static let nameSize: CGFloat = 11
+    static let headlineSize: CGFloat = 12
+    static let detailSize: CGFloat = 10
+
+    static func widths(for item: NotificationItem) -> (leading: CGFloat, trailing: CGFloat) {
+        let name = width(of: item.appName, in: .systemFont(ofSize: nameSize, weight: .medium))
+        let leading = wingCornerClearance + iconSide + (name > 0 ? iconSpacing + name : 0) + wingNotchClearance
+        let summary = item.summary
+        let text = max(
+            width(of: summary.headline, in: .systemFont(ofSize: headlineSize, weight: .semibold)),
+            width(of: summary.detail, in: .systemFont(ofSize: detailSize))
+        )
+        let trailing = wingNotchClearance + text + wingCornerClearance
+        return (min(leading, maximumWidth), min(max(trailing, minimumTrailingWidth), maximumWidth))
+    }
+
+    /// Rounded up with a point to spare, so a line that just fits is not cut short
+    /// where SwiftUI lays it out on whole pixels.
+    private static func width(of text: String?, in font: NSFont) -> CGFloat {
+        guard let text, !text.isEmpty else { return 0 }
+        return ceil((text as NSString).size(withAttributes: [.font: font]).width) + 1
+    }
+}
 
 /// How far a wing's content moves while the island is hovered: half the ring it
 /// grows by, outward (`outward` is -1 for the left wing, 1 for the right) and
@@ -21,8 +50,8 @@ private func wingHoverOffset(isHovered: Bool, outward: CGFloat) -> CGSize {
     return CGSize(width: NotchTheme.hoverGrowth.width / 2 * outward, height: NotchTheme.hoverGrowth.height / 2)
 }
 
-/// Left wing: the app's icon and name, next to the notch. A click opens the
-/// island on the whole notification.
+/// Left wing: the app's icon and name, next to the notch (`NotificationWings`
+/// sizes it). A click opens the island on the whole notification.
 struct NotificationWingLeading: View {
     let item: NotificationItem
     let inbox: NotificationInbox
@@ -34,12 +63,11 @@ struct NotificationWingLeading: View {
         // The listed copy, once a slow lookup has found the app's icon.
         let shown = inbox.item(id: item.id) ?? item
         Button(action: open) {
-            ZStack {
-                HStack(spacing: 6) {
-                    Spacer(minLength: 0)
-                    NotificationAppIcon(image: apps.icon(for: shown.appURL), side: 20)
+            ZStack(alignment: .trailing) {
+                HStack(spacing: NotificationWings.iconSpacing) {
+                    NotificationAppIcon(image: apps.icon(for: shown.appURL), side: NotificationWings.iconSide)
                     Text(shown.appName ?? "")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: NotificationWings.nameSize, weight: .medium))
                         .foregroundStyle(NotchTheme.secondaryText)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -57,7 +85,7 @@ struct NotificationWingLeading: View {
             .offset(wingHoverOffset(isHovered: isIslandHovered, outward: -1))
             .padding(.leading, wingCornerClearance)
             .padding(.trailing, wingNotchClearance)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -80,14 +108,14 @@ struct NotificationWingTrailing: View {
                 VStack(alignment: .leading, spacing: 1) {
                     if let headline = summary.headline {
                         Text(headline)
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: NotificationWings.headlineSize, weight: .semibold))
                             .foregroundStyle(NotchTheme.primaryText)
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
                     if let detail = summary.detail {
                         Text(detail)
-                            .font(.system(size: 10))
+                            .font(.system(size: NotificationWings.detailSize))
                             .foregroundStyle(NotchTheme.secondaryText)
                             .lineLimit(1)
                             .truncationMode(.tail)

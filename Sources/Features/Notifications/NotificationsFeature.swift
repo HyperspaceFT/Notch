@@ -199,11 +199,14 @@ public final class NotificationsFeature: NotchFeature {
         let open: @MainActor () -> Void = { [weak self] in
             self?.openDetail(of: newest)
         }
+        // Fitted to this notification's text: a short one keeps the island small.
+        let wings = NotificationWings.widths(for: newest)
         context?.present(NotchActivity(
             id: Self.activityID,
             priority: .high,
             duration: Self.activityDuration,
-            wingWidth: notificationWingWidth
+            wingWidth: wings.trailing,
+            leadingWingWidth: wings.leading
         ) { [inbox, apps] in
             NotificationWingLeading(item: newest, inbox: inbox, apps: apps, open: open)
         } trailing: { [inbox] in
