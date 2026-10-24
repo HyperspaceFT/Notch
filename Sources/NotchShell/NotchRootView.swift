@@ -489,32 +489,21 @@ private struct ExpandedIslandView: View {
 
     /// Sits in the same band as the hardware notch, so the tab buttons stay clear
     /// of it: leading tabs to its left, trailing tabs to its right. The trailing
-    /// tabs are one button just right of the notch (`trailingRepresentative`),
-    /// spread into a row to its right while the pointer is on it.
+    /// tabs are one button at the header's right end (`trailingRepresentative`),
+    /// spread into a row to its left while the pointer is on it.
     private var header: some View {
         HStack(spacing: 0) {
             tabButtons(model.visibleTabs.filter { $0.placement == .leading })
             Spacer(minLength: model.geometry.notchRect.width)
+            trailingTabGroup
         }
         .frame(height: headerHeight)
-        // The expanded island is centered on the notch, so the header's center is
-        // the notch's. A zero-wide frame there, with the row hanging off its
-        // leading edge, starts the row at the notch's right edge whatever the
-        // panel's width.
-        .overlay {
-            trailingTabGroup
-                .frame(width: 0, alignment: .leading)
-                .offset(x: model.geometry.notchRect.width / 2 + Self.trailingGroupNotchGap)
-        }
     }
-
-    /// Space between the hardware notch's right edge and the right-side tab buttons.
-    private static let trailingGroupNotchGap: CGFloat = 10
 
     private var trailingTabGroup: some View {
         let isOpen = model.isTrailingTabGroupOpen
         let tabs = isOpen ? model.trailingTabRow : model.trailingRepresentative.map { [$0] } ?? []
-        return tabButtons(tabs, transition: .opacity.combined(with: .scale(scale: 0.6, anchor: .leading)))
+        return tabButtons(tabs, transition: .opacity.combined(with: .scale(scale: 0.6, anchor: .trailing)))
             .onHover { model.setTrailingTabGroupHovered($0) }
             // Spreads out like the hovered island grows, and folds back as it shrinks.
             .animation(isOpen ? NotchTheme.hoverAnimation : NotchTheme.collapseAnimation, value: isOpen)

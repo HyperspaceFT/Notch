@@ -262,19 +262,20 @@ final class NotchViewModel {
             ?? trailing.first
     }
 
-    /// The right-side row while it is open: `trailingRepresentative` first, so
-    /// the button the collapsed group showed stays in place, then the other
-    /// visible trailing tabs in `tabs` order. Once open, the row keeps the order
-    /// it opened with until it closes, even as the selection moves: tabs that
-    /// are no longer visible drop out and newly visible ones join at the end.
+    /// The right-side row while it is open, left to right: the other visible
+    /// trailing tabs in `tabs` order, then `trailingRepresentative` last, so the
+    /// button the collapsed group showed stays in place at the header's right end
+    /// as the row opens to its left. Once open, the row keeps the order it opened
+    /// with until it closes, even as the selection moves: tabs that are no longer
+    /// visible drop out and newly visible ones join at the left end.
     var trailingTabRow: [Tab] {
         let visible = visibleTabs.filter { $0.placement == .trailing }
         if let order = openTrailingTabOrder {
             let kept = order.compactMap { id in visible.first { $0.id == id } }
-            return kept + visible.filter { tab in !order.contains(tab.id) }
+            return visible.filter { tab in !order.contains(tab.id) } + kept
         }
         guard let representative = trailingRepresentative else { return [] }
-        return [representative] + visible.filter { $0.id != representative.id }
+        return visible.filter { $0.id != representative.id } + [representative]
     }
 
     /// Body width of the expanded island: what the selected tab asks for, kept

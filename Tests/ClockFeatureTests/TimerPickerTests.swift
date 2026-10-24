@@ -64,6 +64,23 @@ struct MinuteRulerTests {
         // Halfway between two ticks, both stand out equally.
         #expect(MinuteRuler.height(ofTick: 25, position: 25.5) == MinuteRuler.height(ofTick: 26, position: 25.5))
     }
+
+    @Test func ticksDarkenAwayFromTheSelection() {
+        // The selected tick is the timer's own orange; the others darken over the
+        // falloff, to the same dark orange beyond it whether major or not.
+        #expect(MinuteRuler.dimming(ofTick: 25, position: 25) == 0)
+        var previous = 0.0
+        for minute in 26...30 {
+            let dimming = MinuteRuler.dimming(ofTick: minute, position: 25)
+            #expect(dimming > previous)
+            #expect(dimming == MinuteRuler.dimming(ofTick: 50 - minute, position: 25))
+            previous = dimming
+        }
+        #expect(previous == MinuteRuler.farTickDimming)
+        #expect(MinuteRuler.dimming(ofTick: 60, position: 25) == MinuteRuler.farTickDimming)
+        // Dark, but still orange rather than black.
+        #expect(MinuteRuler.farTickDimming > 0.3 && MinuteRuler.farTickDimming < 0.8)
+    }
 }
 
 @MainActor

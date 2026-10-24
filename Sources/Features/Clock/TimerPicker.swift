@@ -23,6 +23,10 @@ enum MinuteRuler {
     static let selectedTickHeight: CGFloat = 44
     /// Ticks each side of the selection over which the height falls back to normal.
     static let falloffRadius: Double = 5
+    /// How far toward black a tick away from the selection is mixed: every tick is
+    /// the timer's orange, dark away from the selection and brightening toward it
+    /// over the same falloff as the height.
+    static let farTickDimming: Double = 0.6
 
     /// `position` kept on the ruler.
     static func clamped(_ position: Double) -> Double {
@@ -60,6 +64,12 @@ enum MinuteRuler {
     static func height(ofTick minute: Int, position: Double) -> CGFloat {
         let base = minute % majorInterval == 0 ? majorTickHeight : tickHeight
         return base + (selectedTickHeight - base) * CGFloat(emphasis(distance: Double(minute) - position))
+    }
+
+    /// How far toward black `minute`'s tick is mixed while the ruler stands at
+    /// `position`: none at the position, `farTickDimming` at `falloffRadius` and beyond.
+    static func dimming(ofTick minute: Int, position: Double) -> Double {
+        farTickDimming * (1 - emphasis(distance: Double(minute) - position))
     }
 }
 
@@ -118,11 +128,13 @@ final class TimerPicker {
         movingPosition = nil
     }
 
-    /// Selects `minute` (kept on the ruler) and settles the ruler on it, as a
+    /// Selects `minute` (kept on the ruler) and slides the ruler over to it, as a
     /// click on a tick or a step of a mouse's wheel does.
     func pick(_ minute: Int) {
-        select(minute)
-        settle()
+        withAnimation(Self.snapAnimation) {
+            movingPosition = nil
+            select(minute)
+        }
     }
 
     func step(by minutes: Int) {
@@ -175,58 +187,67 @@ struct TimerPickerView: View {
 }
 
 /// The ruler: a tick per minute sliding under the fixed center, where the
-/// selected one stands tallest in the timer's color, and fading out at the edges.
-/// An AppKit overlay takes the scrolling, dragging, and clicks
+/// selected one stands tallest and brightest in the timer's color, and fading out
+/// at the edges. An AppKit overlay takes the scrolling, dragging, and clicks
 /// (`MinuteRulerInput`).
 private struct MinuteRulerView: View {
     let picker: TimerPicker
 
     var body: some View {
-        let position = picker.position
         let selected = picker.model.setterMinutes
+        MinuteRulerTicks(position: picker.position)
+            .frame(maxWidth: .infinity)
+            .frame(height: MinuteRuler.selectedTickHeight)
+            .clipped()
+            .mask {
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: .black, location: 0.3),
+                        .init(color: .black, location: 0.7),
+                        .init(color: .clear, location: 1),
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            }
+            .overlay {
+                MinuteRulerInput(picker: picker)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(localized(en: "Duration", zh: "时长"))
+            .accessibilityValue(localized(en: "\(selected) min", zh: "\(selected) 分钟"))
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment: picker.step(by: 1)
+                case .decrement: picker.step(by: -1)
+                @unknown default: break
+                }
+            }
+    }
+}
+
+/// The ticks for one ruler position. The position animates as a single value,
+/// so while the ruler slides to a picked minute or settles, the tallest,
+/// brightest tick travels with it instead of each tick fading between its two
+/// heights.
+private struct MinuteRulerTicks: View, Animatable {
+    var position: Double
+
+    nonisolated var animatableData: Double {
+        get { position }
+        set { position = newValue }
+    }
+
+    var body: some View {
         ZStack {
             ForEach(CountdownTimer.setterMinutes, id: \.self) { minute in
                 Capsule()
-                    .fill(tickStyle(minute: minute, selected: selected))
+                    .fill(timerColor.mix(with: .black, by: MinuteRuler.dimming(ofTick: minute, position: position)))
                     .frame(width: MinuteRuler.tickWidth, height: MinuteRuler.height(ofTick: minute, position: position))
                     .offset(x: CGFloat(Double(minute) - position) * MinuteRuler.spacing)
             }
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: MinuteRuler.selectedTickHeight)
-        .clipped()
-        .mask {
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0),
-                    .init(color: .black, location: 0.3),
-                    .init(color: .black, location: 0.7),
-                    .init(color: .clear, location: 1),
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-        }
-        .overlay {
-            MinuteRulerInput(picker: picker)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(localized(en: "Duration", zh: "时长"))
-        .accessibilityValue(localized(en: "\(selected) min", zh: "\(selected) 分钟"))
-        .accessibilityAdjustableAction { direction in
-            switch direction {
-            case .increment: picker.step(by: 1)
-            case .decrement: picker.step(by: -1)
-            @unknown default: break
-            }
-        }
-    }
-
-    private func tickStyle(minute: Int, selected: Int) -> AnyShapeStyle {
-        if minute == selected {
-            return timerStyle()
-        }
-        return AnyShapeStyle(minute % MinuteRuler.majorInterval == 0 ? NotchTheme.primaryText.opacity(0.75) : NotchTheme.secondaryText)
     }
 }
 

@@ -63,7 +63,8 @@ struct TrailingTabGroupTests {
             model.selectedTabID = "notes"
             // Even over an active tab.
             #expect(model.trailingRepresentative?.id == "notes")
-            #expect(model.trailingTabRow.map(\.id) == ["notes", "timer", "battery"])
+            // The representative last, at the header's right end.
+            #expect(model.trailingTabRow.map(\.id) == ["timer", "battery", "notes"])
         }
     }
 
@@ -83,7 +84,7 @@ struct TrailingTabGroupTests {
 
             timerActive.value = true
             #expect(model.trailingRepresentative?.id == "timer")
-            #expect(model.trailingTabRow.map(\.id) == ["timer", "battery", "notes"])
+            #expect(model.trailingTabRow.map(\.id) == ["battery", "notes", "timer"])
 
             timerActive.value = false
             #expect(model.trailingRepresentative?.id == "notes")
@@ -114,7 +115,7 @@ struct TrailingTabGroupTests {
             ])
             #expect(model.lastTrailingTabID == nil)
             #expect(model.trailingRepresentative?.id == "battery")
-            #expect(model.trailingTabRow.map(\.id) == ["battery", "notes"])
+            #expect(model.trailingTabRow.map(\.id) == ["notes", "battery"])
         }
     }
 
@@ -150,13 +151,13 @@ struct TrailingTabGroupTests {
 
             notifications.value = false
             #expect(model.trailingRepresentative?.id == "battery")
-            #expect(model.trailingTabRow.map(\.id) == ["battery", "notes"])
+            #expect(model.trailingTabRow.map(\.id) == ["notes", "battery"])
             // Still remembered, so it returns with its tab.
             #expect(model.lastTrailingTabID == "notifications")
 
             notifications.value = true
             #expect(model.trailingRepresentative?.id == "notifications")
-            #expect(model.trailingTabRow.map(\.id) == ["notifications", "battery", "notes"])
+            #expect(model.trailingTabRow.map(\.id) == ["battery", "notes", "notifications"])
         }
     }
 
@@ -268,40 +269,42 @@ struct TrailingTabGroupTests {
         model.selectedTabID = "timer"
         model.setExpanded(true)
         model.setTrailingTabGroupHovered(true)
-        #expect(model.trailingTabRow.map(\.id) == ["timer", "battery", "notes"])
+        #expect(model.trailingTabRow.map(\.id) == ["battery", "notes", "timer"])
 
-        // Selecting the third button leaves the row as it is.
+        // Selecting the leftmost button leaves the row as it is.
+        model.selectedTabID = "battery"
+        #expect(model.trailingRepresentative?.id == "battery")
+        #expect(model.trailingTabRow.map(\.id) == ["battery", "notes", "timer"])
         model.selectedTabID = "notes"
-        #expect(model.trailingRepresentative?.id == "notes")
-        #expect(model.trailingTabRow.map(\.id) == ["timer", "battery", "notes"])
 
-        // A tab that shows joins at the end; one that goes away drops out.
+        // A tab that shows joins at the left end, away from the pointer; one that
+        // goes away drops out.
         notifications.value = true
-        #expect(model.trailingTabRow.map(\.id) == ["timer", "battery", "notes", "notifications"])
+        #expect(model.trailingTabRow.map(\.id) == ["notifications", "battery", "notes", "timer"])
         model.setTabs([
             tab("home", .leading),
             tab("timer", .trailing),
             tab("notes", .trailing),
             tab("notifications", .trailing),
         ])
-        #expect(model.trailingTabRow.map(\.id) == ["timer", "notes", "notifications"])
+        #expect(model.trailingTabRow.map(\.id) == ["notifications", "notes", "timer"])
 
-        // Closed after the delay, the selected tab leads again.
+        // Closed after the delay, the selected tab is the right end again.
         model.setTrailingTabGroupHovered(false)
         let deadline = ContinuousClock.now + .seconds(2)
         while model.isTrailingTabGroupOpen, ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(20))
         }
         #expect(!model.isTrailingTabGroupOpen)
-        #expect(model.trailingTabRow.map(\.id) == ["notes", "timer", "notifications"])
+        #expect(model.trailingTabRow.map(\.id) == ["timer", "notifications", "notes"])
 
         // Reopening takes the new order; closing with the island resets it too.
         model.setTrailingTabGroupHovered(true)
-        #expect(model.trailingTabRow.map(\.id) == ["notes", "timer", "notifications"])
+        #expect(model.trailingTabRow.map(\.id) == ["timer", "notifications", "notes"])
         model.selectedTabID = "timer"
-        #expect(model.trailingTabRow.map(\.id) == ["notes", "timer", "notifications"])
+        #expect(model.trailingTabRow.map(\.id) == ["timer", "notifications", "notes"])
         model.setExpanded(false)
-        #expect(model.trailingTabRow.map(\.id) == ["timer", "notes", "notifications"])
+        #expect(model.trailingTabRow.map(\.id) == ["notes", "notifications", "timer"])
     }
 
     @Test func theRowClosesWithTheIslandAndForADetail() {
