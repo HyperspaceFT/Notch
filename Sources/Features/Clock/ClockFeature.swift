@@ -3,20 +3,22 @@ import NotchKit
 import NotchUI
 import SwiftUI
 
-/// The clock and a countdown timer. The clock is a Home module whose card opens
-/// the timer's setter (a detail) while idle, and the island's right-click menu
-/// starts and controls the timer. While a timer counts down or rings it has a
-/// tab, right of the notch; its ring and time show as wings beside the notch for
-/// a few seconds of the collapsed island after starting, then as a band of light
-/// around the island that shrinks with the time left. When it runs out a bell rings until dismissed.
+/// The clock and a countdown timer. The timer has a tab right of the notch, where
+/// a ruler picks the minutes while idle; the clock is a Home module whose card
+/// opens that tab, and the island's right-click menu starts and controls the
+/// timer. While a timer counts down or rings, its tab reports itself active, so
+/// the header's folded right-side button shows its ring or bell. Its ring and
+/// time show as wings beside the notch for a few seconds of the collapsed island
+/// after starting, then as a band of light around the island that shrinks with
+/// the time left. When it runs out a bell rings until dismissed.
 @MainActor
 public final class ClockFeature: NotchFeature {
     public let id = "clock"
     public var title: String { localized(en: "Timer", zh: "计时器") }
     public let symbol = "timer"
     public let tabPlacement = NotchTabPlacement.trailing
-    /// Only while there is a timer to show.
-    public var isTabAvailable: Bool { model.phase != .idle }
+    /// While a timer counts down or rings.
+    public var isTabActive: Bool { model.phase != .idle }
 
     static let countdownActivityID = "countdown"
     static let countdownRimActivityID = "countdown-rim"
@@ -28,11 +30,16 @@ public final class ClockFeature: NotchFeature {
     /// Seconds the countdown wings show on the collapsed island after a start.
     static let wingsDuration: TimeInterval = 5
 
-    private let model: TimerModel
+    let model: TimerModel
     private weak var context: (any NotchContext)?
 
-    public init() {
-        model = TimerModel(defaults: .standard)
+    public convenience init() {
+        self.init(defaults: .standard)
+    }
+
+    /// `defaults` holds the remembered duration; tests pass a domain of their own.
+    init(defaults: UserDefaults) {
+        model = TimerModel(defaults: defaults)
     }
 
     public func activate(context: any NotchContext) {
@@ -51,7 +58,7 @@ public final class ClockFeature: NotchFeature {
     }
 
     public func makeExpandedView() -> AnyView? {
-        AnyView(TimerTab(model: model))
+        AnyView(TimerTab(model: model, picker: TimerPicker(model: model)))
     }
 
     public func makeTabIcon() -> AnyView? {
@@ -74,8 +81,9 @@ public final class ClockFeature: NotchFeature {
                 }
             } + [
                 .divider,
+                // The tab's picker.
                 .button(localized(en: "Custom…", zh: "自定义…"), symbol: "slider.horizontal.3") { [weak self] in
-                    self?.openPanel()
+                    self?.context?.requestExpand()
                 },
             ]
         case .counting(let timer):
@@ -140,23 +148,11 @@ public final class ClockFeature: NotchFeature {
         return items
     }
 
-    /// Opens the island on the timer's setter (`TimerPanel`, shown while idle).
-    private func openPanel() {
-        context?.requestExpand(detail: AnyView(TimerPanel(model: model) { [weak self] in
-            // On to the tabs, on the timer's tab, which the started timer brought.
-            self?.context?.requestExpand()
-        }))
-    }
-
-    /// Opens the timer's tab while there is a timer, else its setter.
+    /// Opens the timer's tab: its picker while idle, else the timer.
     private func showTimer() {
-        if model.phase == .idle {
-            openPanel()
-        } else {
-            // The card shows only in the open panel, so this switches tabs.
-            withAnimation(NotchTheme.tabSwitchAnimation) {
-                context?.requestExpand()
-            }
+        // The card shows only in the open panel, so this switches tabs.
+        withAnimation(NotchTheme.tabSwitchAnimation) {
+            context?.requestExpand()
         }
     }
 
@@ -170,8 +166,8 @@ public final class ClockFeature: NotchFeature {
             // would replace the views and restart their transitions.
             presentRim()
             // Over the band until they expire. They hold while the island is
-            // open, so a timer started from the setter, which opens the tab,
-            // shows them once the island closes.
+            // open, so a timer started from the tab's picker shows them once
+            // the island closes.
             let remaining = if case .counting(let timer) = model.phase { timer.remaining(at: Date()) } else { 0.0 }
             context?.present(NotchActivity(
                 id: Self.countdownActivityID,

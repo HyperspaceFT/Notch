@@ -29,6 +29,11 @@ public protocol NotchFeature: AnyObject {
     /// Whether the feature's tab shows in the expanded panel. Read while the panel
     /// draws, so it may follow observable state (e.g. a device being connected).
     var isTabAvailable: Bool { get }
+    /// Whether the feature's tab shows something running that the user should keep
+    /// in view (e.g. a timer counting down). For a trailing tab, the header's
+    /// collapsed right-side button then shows this tab's icon in place of the
+    /// last-used right-side tab. Read while the panel draws.
+    var isTabActive: Bool { get }
     /// Which side of the hardware notch the feature's tab button sits on.
     var tabPlacement: NotchTabPlacement { get }
     /// Whether content (such as files) dragged onto the notch opens the island on
@@ -79,6 +84,7 @@ extension NotchFeature {
     public var tabPlacement: NotchTabPlacement { .leading }
     public var opensOnDrag: Bool { false }
     public var isTabAvailable: Bool { true }
+    public var isTabActive: Bool { false }
     public var expandedWidth: CGFloat? { nil }
     public var menuItems: [NotchMenuItem] { [] }
     public var debugItems: [NotchMenuItem] { [] }

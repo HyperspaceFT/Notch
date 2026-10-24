@@ -488,14 +488,36 @@ private struct ExpandedIslandView: View {
     }
 
     /// Sits in the same band as the hardware notch, so the tab buttons stay clear
-    /// of it: leading tabs to its left, trailing tabs to its right.
+    /// of it: leading tabs to its left, trailing tabs to its right. The trailing
+    /// tabs are one button just right of the notch (`trailingRepresentative`),
+    /// spread into a row to its right while the pointer is on it.
     private var header: some View {
         HStack(spacing: 0) {
-            tabButtons(.leading)
+            tabButtons(model.visibleTabs.filter { $0.placement == .leading })
             Spacer(minLength: model.geometry.notchRect.width)
-            tabButtons(.trailing)
         }
         .frame(height: headerHeight)
+        // The expanded island is centered on the notch, so the header's center is
+        // the notch's. A zero-wide frame there, with the row hanging off its
+        // leading edge, starts the row at the notch's right edge whatever the
+        // panel's width.
+        .overlay {
+            trailingTabGroup
+                .frame(width: 0, alignment: .leading)
+                .offset(x: model.geometry.notchRect.width / 2 + Self.trailingGroupNotchGap)
+        }
+    }
+
+    /// Space between the hardware notch's right edge and the right-side tab buttons.
+    private static let trailingGroupNotchGap: CGFloat = 10
+
+    private var trailingTabGroup: some View {
+        let isOpen = model.isTrailingTabGroupOpen
+        let tabs = isOpen ? model.trailingTabRow : model.trailingRepresentative.map { [$0] } ?? []
+        return tabButtons(tabs, transition: .opacity.combined(with: .scale(scale: 0.6, anchor: .leading)))
+            .onHover { model.setTrailingTabGroupHovered($0) }
+            // Spreads out like the hovered island grows, and folds back as it shrinks.
+            .animation(isOpen ? NotchTheme.hoverAnimation : NotchTheme.collapseAnimation, value: isOpen)
     }
 
     private var headerHeight: CGFloat {
@@ -505,8 +527,8 @@ private struct ExpandedIslandView: View {
     /// One side's buttons. Only the selected button has a glass background: one
     /// view per side that slides between that side's buttons, and fades out on one
     /// side and in on the other when the selection crosses the notch.
-    private func tabButtons(_ placement: NotchTabPlacement) -> some View {
-        let tabs = model.visibleTabs.filter { $0.placement == placement }
+    /// `transition` brings buttons in and out as the right-side row opens and closes.
+    private func tabButtons(_ tabs: [NotchViewModel.Tab], transition: AnyTransition = .opacity) -> some View {
         let selectedID = model.selectedTab?.id
         return HStack(spacing: 6) {
             ForEach(tabs) { tab in
@@ -521,6 +543,7 @@ private struct ExpandedIslandView: View {
                     }
                 }
                 .matchedGeometryEffect(id: tab.id, in: tabSelection)
+                .transition(transition)
             }
         }
         // Not inside a GlassEffectContainer: there this glass was drawn over the icons.
@@ -583,7 +606,7 @@ private struct TabButton: View {
         Button(action: action) {
             Group {
                 if let icon {
-                    icon
+                    icon.environment(\.notchTabIsSelected, isSelected)
                 } else {
                     Image(systemName: symbol)
                         .font(.system(size: 13, weight: .semibold))

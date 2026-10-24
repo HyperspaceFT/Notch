@@ -36,6 +36,7 @@ final class FeatureHost {
                     placement: feature.tabPlacement,
                     opensOnDrag: feature.opensOnDrag,
                     isAvailable: { feature.isTabAvailable },
+                    isActive: { feature.isTabActive },
                     expandedWidth: { feature.expandedWidth },
                     icon: feature.makeTabIcon(),
                     content: view

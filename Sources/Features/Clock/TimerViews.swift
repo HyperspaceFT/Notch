@@ -238,42 +238,19 @@ struct FinishedWingTrailing: View {
     }
 }
 
-// MARK: Panel
+// MARK: Tab
 
-/// The timer's panel, opened on its own in the expanded island: the setter while
-/// idle, the ring and controls while counting down, the alert once finished.
-/// Opened while idle; a started timer moves on to the timer's tab (`TimerTab`).
-struct TimerPanel: View {
-    let model: TimerModel
-    /// Called after the setter starts a timer.
-    let didStart: @MainActor () -> Void
-
-    var body: some View {
-        Group {
-            switch model.phase {
-            case .idle:
-                TimerSetter(model: model, didStart: didStart)
-            case .counting(let timer):
-                TimerCountdown(model: model, timer: timer)
-            case .finished:
-                TimerFinished(model: model)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(.smooth(duration: 0.3), value: model.phase)
-    }
-}
-
-/// The timer's tab, shown while it counts down or rings: the ring and controls,
-/// or the alert. Idle, the tab is hidden and this draws nothing.
+/// The timer's tab, always there right of the notch: the picker while idle, the
+/// ring and controls while counting down, the alert once finished.
 struct TimerTab: View {
     let model: TimerModel
+    let picker: TimerPicker
 
     var body: some View {
         Group {
             switch model.phase {
             case .idle:
-                Color.clear
+                TimerPickerView(picker: picker)
             case .counting(let timer):
                 TimerCountdown(model: model, timer: timer)
             case .finished:
@@ -289,13 +266,14 @@ struct TimerTab: View {
 /// glyph, ticking each second and dimmed while paused; a bell once finished.
 struct TimerTabIcon: View {
     let model: TimerModel
+    @Environment(\.notchTabIsSelected) private var isSelected
 
     var body: some View {
         switch model.phase {
         case .idle:
             Image(systemName: "timer")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(NotchTheme.secondaryText)
+                .foregroundStyle(isSelected ? NotchTheme.primaryText : NotchTheme.secondaryText)
         case .counting(let timer):
             CountdownTimeline(timer: timer) { now in
                 ZStack {
@@ -313,82 +291,6 @@ struct TimerTabIcon: View {
                 .foregroundStyle(timerStyle())
                 .symbolEffect(.wiggle, options: .repeat(.continuous))
         }
-    }
-}
-
-private struct TimerSetter: View {
-    let model: TimerModel
-    let didStart: @MainActor () -> Void
-
-    var body: some View {
-        HStack(spacing: 10) {
-            NotchCard {
-                VStack(spacing: 8) {
-                    Text(CountdownTimer.display(TimeInterval(model.setterMinutes * 60)))
-                        .font(.system(size: 36, weight: .semibold, design: .rounded))
-                        .foregroundStyle(NotchTheme.headline())
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                        .contentTransition(.numericText())
-                        .animation(.smooth(duration: 0.3), value: model.setterMinutes)
-                    GlassEffectContainer {
-                        HStack(spacing: 12) {
-                            GlassIconButton(symbol: "minus", help: localized(en: "1 Minute Less", zh: "减 1 分钟")) {
-                                model.adjustSetter(by: -1)
-                            }
-                            GlassIconButton(symbol: "plus", help: localized(en: "1 Minute More", zh: "加 1 分钟")) {
-                                model.adjustSetter(by: 1)
-                            }
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .frame(width: 160)
-
-            VStack(spacing: 8) {
-                GlassEffectContainer {
-                    Grid(horizontalSpacing: 6, verticalSpacing: 6) {
-                        ForEach([0, 4], id: \.self) { start in
-                            GridRow {
-                                ForEach(CountdownTimer.presetMinutes[start..<start + 4], id: \.self) { minutes in
-                                    PresetChip(title: presetTitle(minutes: minutes)) {
-                                        model.start(minutes: minutes)
-                                        didStart()
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                GlassCapsuleButton(localized(en: "Start", zh: "开始"), symbol: "play.fill") {
-                    model.start(minutes: model.setterMinutes)
-                    didStart()
-                }
-            }
-            .frame(maxWidth: .infinity)
-        }
-    }
-}
-
-/// A preset in the setter: starts the timer at once.
-private struct PresetChip: View {
-    let title: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(NotchTheme.secondaryText)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity)
-                .frame(height: 26)
-                .contentShape(.capsule)
-        }
-        .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: .capsule)
     }
 }
 

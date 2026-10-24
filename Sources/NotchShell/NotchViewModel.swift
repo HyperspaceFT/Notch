@@ -45,6 +45,9 @@ final class NotchViewModel {
         /// Read while the panel draws, so the tab can hide while the feature has
         /// nothing to show (e.g. its device is disconnected).
         let isAvailable: @MainActor () -> Bool
+        /// Whether the tab shows something running the user should keep in view
+        /// (`NotchFeature.isTabActive`). Read while the header draws.
+        let isActive: @MainActor () -> Bool
         /// Body width of the expanded island while this tab is selected; `nil` for
         /// the standard width. Read while the panel draws, so it can follow the
         /// feature's observable state.
@@ -60,6 +63,7 @@ final class NotchViewModel {
             placement: NotchTabPlacement = .leading,
             opensOnDrag: Bool = false,
             isAvailable: @escaping @MainActor () -> Bool = { true },
+            isActive: @escaping @MainActor () -> Bool = { false },
             expandedWidth: @escaping @MainActor () -> CGFloat? = { nil },
             icon: AnyView? = nil,
             content: AnyView
@@ -70,6 +74,7 @@ final class NotchViewModel {
             self.placement = placement
             self.opensOnDrag = opensOnDrag
             self.isAvailable = isAvailable
+            self.isActive = isActive
             self.expandedWidth = expandedWidth
             self.icon = icon
             self.content = content
@@ -114,9 +119,22 @@ final class NotchViewModel {
     var selectedTabID: String? {
         didSet {
             guard selectedTabID != oldValue else { return }
+            rememberShownTrailingTab()
             onSelectedTabChange?()
         }
     }
+    /// The trailing tab shown last, kept across launches (`lastTrailingTabKey`).
+    /// The header's collapsed right-side button falls back to it while the panel
+    /// shows a leading tab (`trailingRepresentative`).
+    private(set) var lastTrailingTabID: String?
+    /// The header's right-side tab buttons are spread out in a row; otherwise
+    /// only `trailingRepresentative` shows. Follows the pointer on the buttons
+    /// (`setTrailingTabGroupHovered`) and closes with the island.
+    private(set) var isTrailingTabGroupOpen = false
+    /// The open row's tab ids in the order it opened with, kept until it closes so
+    /// selecting a tab does not move the buttons under the pointer
+    /// (`trailingTabRow`).
+    private var openTrailingTabOrder: [String]?
 
     /// When false, the hover controller leaves the state alone (debug pinning).
     var isHoverEnabled = true
@@ -125,6 +143,14 @@ final class NotchViewModel {
     /// for `NotchTheme.collapseAnimation` (or `activityAnimation`, when an activity
     /// returns) to raise it out of sight.
     @ObservationIgnored var expandedContentLinger: Duration = .milliseconds(500)
+
+    /// How long the right-side tab row stays open after the pointer leaves it, so
+    /// passing over the gaps between its buttons or briefly past its end does not
+    /// close and reopen it.
+    @ObservationIgnored var trailingTabGroupCollapseDelay: Duration = .milliseconds(300)
+
+    /// Defaults key holding `lastTrailingTabID`.
+    static let lastTrailingTabKey = "NotchLastTrailingTab"
 
     /// Invoked whenever `isInteractive` changes; the shell uses it to toggle mouse
     /// interception on the panel.
@@ -142,9 +168,13 @@ final class NotchViewModel {
     @ObservationIgnored private var nextDetailSequence = 0
     @ObservationIgnored private var expiryTask: Task<Void, Never>?
     @ObservationIgnored private var contentUnmountTask: Task<Void, Never>?
+    @ObservationIgnored private var trailingTabGroupCloseTask: Task<Void, Never>?
+    @ObservationIgnored private let defaults: UserDefaults
 
-    init(geometry: NotchGeometry) {
+    init(geometry: NotchGeometry, defaults: UserDefaults = .standard) {
         self.geometry = geometry
+        self.defaults = defaults
+        lastTrailingTabID = defaults.string(forKey: Self.lastTrailingTabKey)
     }
 
     // MARK: Derived state
@@ -216,6 +246,35 @@ final class NotchViewModel {
     var selectedTab: Tab? {
         let visible = visibleTabs
         return visible.first { $0.id == selectedTabID } ?? visible.first
+    }
+
+    /// The tab the header's collapsed right-side button shows: the selected tab
+    /// when it is a trailing one; else the first visible trailing tab that is
+    /// active (a running timer); else the trailing tab shown last, while visible;
+    /// else the first visible trailing tab. `nil` without visible trailing tabs.
+    var trailingRepresentative: Tab? {
+        if let selected = selectedTab, selected.placement == .trailing {
+            return selected
+        }
+        let trailing = visibleTabs.filter { $0.placement == .trailing }
+        return trailing.first { $0.isActive() }
+            ?? trailing.first { $0.id == lastTrailingTabID }
+            ?? trailing.first
+    }
+
+    /// The right-side row while it is open: `trailingRepresentative` first, so
+    /// the button the collapsed group showed stays in place, then the other
+    /// visible trailing tabs in `tabs` order. Once open, the row keeps the order
+    /// it opened with until it closes, even as the selection moves: tabs that
+    /// are no longer visible drop out and newly visible ones join at the end.
+    var trailingTabRow: [Tab] {
+        let visible = visibleTabs.filter { $0.placement == .trailing }
+        if let order = openTrailingTabOrder {
+            let kept = order.compactMap { id in visible.first { $0.id == id } }
+            return kept + visible.filter { tab in !order.contains(tab.id) }
+        }
+        guard let representative = trailingRepresentative else { return [] }
+        return [representative] + visible.filter { $0.id != representative.id }
     }
 
     /// Body width of the expanded island: what the selected tab asks for, kept
@@ -324,6 +383,7 @@ final class NotchViewModel {
         if selectedTabID == nil || !tabs.contains(where: { $0.id == selectedTabID }) {
             selectedTabID = (tabs.first { $0.isAvailable() } ?? tabs.first)?.id
         }
+        rememberShownTrailingTab()
     }
 
     func setMenuSources(_ sources: [@MainActor () -> [NotchMenuItem]]) {
@@ -356,6 +416,7 @@ final class NotchViewModel {
             isExpandedContentMounted = true
         } else {
             scheduleContentUnmount()
+            closeTrailingTabGroup()
         }
         holdExpiries(whileExpanded: expanded, now: Date())
         reportInteractivity(ifChangedFrom: wasInteractive)
@@ -396,7 +457,49 @@ final class NotchViewModel {
     /// happens without `selectedTabID` changing: the selected tab hides and the
     /// first visible one takes its place, or it shows again.
     func shownTabDidChange() {
+        rememberShownTrailingTab()
         onSelectedTabChange?()
+    }
+
+    /// Remembers the shown tab as `lastTrailingTabID` when it is a trailing one.
+    private func rememberShownTrailingTab() {
+        guard let shown = selectedTab, shown.placement == .trailing, shown.id != lastTrailingTabID else { return }
+        lastTrailingTabID = shown.id
+        defaults.set(shown.id, forKey: Self.lastTrailingTabKey)
+    }
+
+    /// Opens the right-side tab row while the pointer is on it, and closes it
+    /// `trailingTabGroupCollapseDelay` after the pointer leaves unless it returns
+    /// first. Ignored while the island is not expanded.
+    func setTrailingTabGroupHovered(_ hovered: Bool) {
+        trailingTabGroupCloseTask?.cancel()
+        trailingTabGroupCloseTask = nil
+        guard isExpanded else { return }
+        if hovered {
+            if !isTrailingTabGroupOpen {
+                openTrailingTabOrder = nil
+                openTrailingTabOrder = trailingTabRow.map(\.id)
+                isTrailingTabGroupOpen = true
+            }
+            return
+        }
+        guard isTrailingTabGroupOpen else { return }
+        let delay = trailingTabGroupCollapseDelay
+        trailingTabGroupCloseTask = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled, let self else { return }
+            self.isTrailingTabGroupOpen = false
+            self.openTrailingTabOrder = nil
+        }
+    }
+
+    /// Closes the right-side tab row at once: the island collapsed or a detail
+    /// took the header away, so no pointer exit will come to close it.
+    private func closeTrailingTabGroup() {
+        trailingTabGroupCloseTask?.cancel()
+        trailingTabGroupCloseTask = nil
+        isTrailingTabGroupOpen = false
+        openTrailingTabOrder = nil
     }
 
     /// Expands the island, selecting `tabID` when such a tab exists and is visible.
@@ -419,6 +522,7 @@ final class NotchViewModel {
     func requestExpand(detail content: AnyView, featureID: String) {
         nextDetailSequence += 1
         detail = Detail(featureID: featureID, sequence: nextDetailSequence, content: content)
+        closeTrailingTabGroup()
         if isExpanded {
             shownTabDidChange()
         } else {

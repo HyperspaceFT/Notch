@@ -31,7 +31,7 @@ final class TimerModel {
     static let alertInterval: Duration = .seconds(3)
 
     private(set) var phase = Phase.idle
-    /// The panel setter's value: the last started duration until changed there.
+    /// The tab picker's value: the last started duration until changed there.
     private(set) var setterMinutes: Int
 
     /// Called after every phase change the wings follow.
@@ -55,8 +55,9 @@ final class TimerModel {
 
     // MARK: Setter
 
-    func adjustSetter(by minutes: Int) {
-        setterMinutes = CountdownTimer.clampedSetterMinutes(setterMinutes + minutes)
+    /// Sets the picker's value, kept within `CountdownTimer.setterMinutes`.
+    func selectSetter(_ minutes: Int) {
+        setterMinutes = CountdownTimer.clampedSetterMinutes(minutes)
     }
 
     // MARK: Actions
@@ -66,8 +67,8 @@ final class TimerModel {
     }
 
     /// Starts a timer for `duration` seconds, replacing whatever ran or sounded
-    /// before, and remembers it, in whole minutes, as the setter's next value.
-    /// With `remembering` false the setter and the saved value stay as they are;
+    /// before, and remembers it, in whole minutes, as the picker's next value.
+    /// With `remembering` false the picker and the saved value stay as they are;
     /// only the Debug pane starts that way.
     func start(duration: TimeInterval, now: Date = Date(), remembering: Bool = true) {
         stopAlert(notifying: false)

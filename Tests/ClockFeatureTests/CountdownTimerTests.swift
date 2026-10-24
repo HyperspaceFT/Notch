@@ -73,13 +73,15 @@ struct CountdownTimerTests {
         #expect(CountdownTimer.display(3899) == "1:04:59")
     }
 
-    @Test func setterStaysWithinOneToOneHundredEightyMinutes() {
-        #expect(CountdownTimer.clampedSetterMinutes(0) == 1)
-        #expect(CountdownTimer.clampedSetterMinutes(-5) == 1)
+    @Test func setterStaysWithinZeroToOneHundredTwentyMinutes() {
+        #expect(CountdownTimer.setterMinutes == 0...120)
+        #expect(CountdownTimer.clampedSetterMinutes(-5) == 0)
+        #expect(CountdownTimer.clampedSetterMinutes(0) == 0)
         #expect(CountdownTimer.clampedSetterMinutes(1) == 1)
         #expect(CountdownTimer.clampedSetterMinutes(25) == 25)
-        #expect(CountdownTimer.clampedSetterMinutes(180) == 180)
-        #expect(CountdownTimer.clampedSetterMinutes(181) == 180)
+        #expect(CountdownTimer.clampedSetterMinutes(120) == 120)
+        #expect(CountdownTimer.clampedSetterMinutes(121) == 120)
+        #expect(CountdownTimer.clampedSetterMinutes(180) == 120)
     }
 
     @Test func offersThePresets() {
@@ -95,14 +97,23 @@ struct TimerModelTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         let model = TimerModel(defaults: defaults)
         #expect(model.setterMinutes == 5)
-        for _ in 0..<10 {
-            model.adjustSetter(by: -1)
-        }
-        #expect(model.setterMinutes == 1)
-        for _ in 0..<200 {
-            model.adjustSetter(by: 1)
-        }
-        #expect(model.setterMinutes == 180)
+        model.selectSetter(-3)
+        #expect(model.setterMinutes == 0)
+        model.selectSetter(42)
+        #expect(model.setterMinutes == 42)
+        model.selectSetter(200)
+        #expect(model.setterMinutes == 120)
+    }
+
+    @Test func aRememberedDurationAboveTheRangeOpensAtItsTop() throws {
+        let suite = "TimerModelTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        // Saved while the setter still went to 180 minutes.
+        defaults.set(150, forKey: TimerModel.lastMinutesKey)
+        #expect(TimerModel(defaults: defaults).setterMinutes == 120)
+        defaults.set(90, forKey: TimerModel.lastMinutesKey)
+        #expect(TimerModel(defaults: defaults).setterMinutes == 90)
     }
 
     @Test func remembersTheLastStartedDuration() throws {

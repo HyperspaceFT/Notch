@@ -6,14 +6,24 @@ import SwiftUI
 import Testing
 @testable import NotchShell
 
+/// A class, so `deinit` can remove the defaults domain each test's model writes
+/// the remembered right-side tab to.
 @MainActor
-struct NotchViewModelTests {
-    private let model = NotchViewModel(geometry: NotchGeometry(
-        screenFrame: CGRect(x: 0, y: 0, width: 1470, height: 956),
-        safeAreaTop: 32,
-        auxiliaryTopLeftArea: CGRect(x: 0, y: 924, width: 640, height: 32),
-        auxiliaryTopRightArea: CGRect(x: 830, y: 924, width: 640, height: 32)
-    ))
+final class NotchViewModelTests {
+    private let defaultsSuite = "NotchViewModelTests.\(UUID().uuidString)"
+    private lazy var model = NotchViewModel(
+        geometry: NotchGeometry(
+            screenFrame: CGRect(x: 0, y: 0, width: 1470, height: 956),
+            safeAreaTop: 32,
+            auxiliaryTopLeftArea: CGRect(x: 0, y: 924, width: 640, height: 32),
+            auxiliaryTopRightArea: CGRect(x: 830, y: 924, width: 640, height: 32)
+        ),
+        defaults: UserDefaults(suiteName: defaultsSuite)!
+    )
+
+    deinit {
+        UserDefaults().removePersistentDomain(forName: defaultsSuite)
+    }
 
     private func activity(
         _ id: String,
