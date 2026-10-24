@@ -361,7 +361,11 @@ struct SystemArtworkTests {
         model.show(shown)
         #expect(model.hasTrack)
         model.show(nil)
-        try await Task.sleep(for: .milliseconds(200))
+        // Polled, as the covers are: in a busy run the main actor can take far
+        // longer than the grace to run the task that ends it.
+        for _ in 0..<250 where model.hasTrack {
+            try await Task.sleep(for: .milliseconds(20))
+        }
         #expect(!model.hasTrack)
         #expect(model.snapshot == shown)
     }
