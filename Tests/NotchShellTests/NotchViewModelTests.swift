@@ -650,4 +650,89 @@ struct NotchViewModelTests {
         #expect(!NotchMorphState(isExpanded: true, wingFeatureID: "music", shownTabID: nil).isSource(.tab, tabID: nil))
         #expect(!NotchMorphState(isExpanded: true, wingFeatureID: "music", shownTabID: nil).heroesStandIn(forTab: nil))
     }
+
+    private func rimActivity(_ id: String, priority: NotchActivity.Priority = .normal) -> NotchActivity {
+        NotchActivity(id: id, featureID: "test", priority: priority, rim: NotchActivityRim(color: .orange) { _ in 0.5 })
+    }
+
+    @Test func rimActivityGrowsTheIslandByTheRimThickness() {
+        let thickness = NotchTheme.activityRimThickness
+        model.present(rimActivity("rim"))
+        #expect(model.state == .activity)
+        #expect(model.bodySize == CGSize(width: 190 + thickness * 2, height: 32 + thickness))
+
+        // Hovered, the ring the island grows by comes on top.
+        let ring = NotchTheme.hoverGrowth
+        model.setHovered(true)
+        #expect(model.bodySize == CGSize(width: 190 + thickness * 2 + ring.width * 2, height: 32 + thickness + ring.height))
+        model.setHovered(false)
+
+        // A wings activity on top takes its wing width and the notch's height again.
+        let wingWidth: CGFloat = 40
+        model.present(NotchActivity(id: "wings", featureID: "test", priority: .high, wingWidth: wingWidth) {
+            EmptyView()
+        } trailing: {
+            EmptyView()
+        })
+        #expect(model.bodySize == CGSize(width: 190 + wingWidth * 2, height: 32))
+
+        model.dismiss(activityID: "wings")
+        #expect(model.bodySize == CGSize(width: 190 + thickness * 2, height: 32 + thickness))
+    }
+
+    @Test func rimActivityLeavesWhileExpandedAndReturnsOnCollapse() {
+        model.present(rimActivity("rim"))
+        #expect(model.currentActivity?.rim != nil)
+        #expect(!model.currentActivity!.morphsIntoTab)
+
+        model.setExpanded(true)
+        #expect(model.bodySize == NotchTheme.expandedSize)
+        #expect(model.morphingActivity == nil)
+
+        model.setExpanded(false)
+        #expect(model.bodySize == CGSize(
+            width: 190 + NotchTheme.activityRimThickness * 2,
+            height: 32 + NotchTheme.activityRimThickness
+        ))
+    }
+
+    @Test func wingsActivitiesHaveNoRim() {
+        #expect(activity("a").rim == nil)
+    }
+
+    @Test func tabCarriesItsCustomIcon() {
+        model.setTabs([
+            .init(id: "home", title: { "主页" }, symbol: { "house" }, content: AnyView(EmptyView())),
+            .init(id: "timer", title: { "计时器" }, symbol: { "timer" }, placement: .trailing, icon: AnyView(Circle()), content: AnyView(EmptyView())),
+        ])
+        #expect(model.tabs.first { $0.id == "home" }?.icon == nil)
+        #expect(model.tabs.first { $0.id == "timer" }?.icon != nil)
+    }
+
+    @Test func heldWingsOverARimShowAfterCollapseThenRevealTheRim() {
+        model.setExpanded(true)
+        let start = Date()
+        model.present(rimActivity("rim", priority: NotchActivity.Priority(60)), now: start)
+        model.present(NotchActivity(
+            id: "wings",
+            featureID: "test",
+            priority: NotchActivity.Priority(61),
+            duration: 2,
+            holdsWhileExpanded: true
+        ) {
+            EmptyView()
+        } trailing: {
+            EmptyView()
+        }, now: start)
+        model.removeExpired(now: start.addingTimeInterval(10))
+
+        model.setExpanded(false)
+        let collapsed = Date()
+        #expect(model.currentActivity?.id == "wings")
+        model.removeExpired(now: collapsed.addingTimeInterval(1.5))
+        #expect(model.currentActivity?.id == "wings")
+        model.removeExpired(now: collapsed.addingTimeInterval(2))
+        #expect(model.currentActivity?.id == "rim")
+        #expect(model.currentActivity?.rim != nil)
+    }
 }

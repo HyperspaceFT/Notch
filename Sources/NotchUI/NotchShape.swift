@@ -92,11 +92,12 @@ public struct NotchShape: Shape {
     }
 }
 
-/// Part of the island outline (`NotchShape`, with round bottom corners as the
-/// expanded island has) as an open path, split where the sides reach `horizon`,
-/// a share of the height from the top. The lower arc runs left to right around
-/// the bottom and the upper arc right to left across the top, so the two
-/// together go once around the island.
+/// Part of the island outline (`NotchShape`) as an open path, split where the
+/// sides reach `horizon`, a share of the height from the top. The bottom corners
+/// are round at `bottomCornerRadius`, as the expanded island has them, or
+/// stretched like the hovered island's (`bottomCornerRadii`). The lower arc runs
+/// left to right around the bottom and the upper arc right to left across the
+/// top, so the two together go once around the island.
 public struct NotchEdge: Shape {
     public enum Arc: Sendable {
         /// From the left side at `horizon` down around the bottom and up the
@@ -109,28 +110,45 @@ public struct NotchEdge: Shape {
 
     public var arc: Arc
     public var topCornerRadius: CGFloat
-    public var bottomCornerRadius: CGFloat
+    /// How far each bottom corner reaches along the bottom edge (`width`) and up
+    /// the side (`height`), as in `NotchShape`.
+    public var bottomCornerRadii: CGSize
     public var horizon: CGFloat
 
+    /// The bottom corners' radius while they are round; setting it makes them round.
+    public var bottomCornerRadius: CGFloat {
+        get { bottomCornerRadii.width }
+        set { bottomCornerRadii = CGSize(width: newValue, height: newValue) }
+    }
+
     public init(arc: Arc, topCornerRadius: CGFloat, bottomCornerRadius: CGFloat, horizon: CGFloat) {
+        self.init(
+            arc: arc,
+            topCornerRadius: topCornerRadius,
+            bottomCornerRadii: CGSize(width: bottomCornerRadius, height: bottomCornerRadius),
+            horizon: horizon
+        )
+    }
+
+    public init(arc: Arc, topCornerRadius: CGFloat, bottomCornerRadii: CGSize, horizon: CGFloat) {
         self.arc = arc
         self.topCornerRadius = topCornerRadius
-        self.bottomCornerRadius = bottomCornerRadius
+        self.bottomCornerRadii = bottomCornerRadii
         self.horizon = horizon
     }
 
-    public var animatableData: AnimatablePair<CGFloat, CGFloat> {
-        get { AnimatablePair(topCornerRadius, bottomCornerRadius) }
+    public var animatableData: AnimatablePair<CGFloat, CGSize.AnimatableData> {
+        get { AnimatablePair(topCornerRadius, bottomCornerRadii.animatableData) }
         set {
             topCornerRadius = newValue.first
-            bottomCornerRadius = newValue.second
+            bottomCornerRadii.animatableData = newValue.second
         }
     }
 
     public func path(in rect: CGRect) -> Path {
         let (top, bottom) = NotchShape.clampedRadii(
             top: topCornerRadius,
-            bottom: CGSize(width: bottomCornerRadius, height: bottomCornerRadius),
+            bottom: bottomCornerRadii,
             in: rect
         )
         // Below the ears, and above the bottom corners.

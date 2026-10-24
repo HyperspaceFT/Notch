@@ -3,7 +3,8 @@ import SwiftUI
 
 /// A short-lived or persistent status shown while the island is collapsed,
 /// rendered as two "wings" to the left and right of the hardware notch (and
-/// kept over the open panel for views that fly into the tab, see `morphsIntoTab`).
+/// kept over the open panel for views that fly into the tab, see `morphsIntoTab`),
+/// or, with a `rim`, as a band of light around the slightly grown island.
 ///
 /// Only the highest-priority activity is visible at a time; among equal
 /// priorities the most recently presented one wins.
@@ -52,6 +53,9 @@ public struct NotchActivity: Identifiable {
     public var leading: AnyView
     /// Content right of the hardware notch.
     public var trailing: AnyView
+    /// Draws the activity as a band along the island's edge instead of wings
+    /// (see `NotchActivityRim`); `nil` (the default) shows the wings.
+    public var rim: NotchActivityRim?
 
     public init<Leading: View, Trailing: View>(
         id: String,
@@ -73,5 +77,53 @@ public struct NotchActivity: Identifiable {
         self.holdsWhileExpanded = holdsWhileExpanded
         self.leading = AnyView(leading())
         self.trailing = AnyView(trailing())
+        self.rim = nil
+    }
+
+    /// An activity shown as a band of light around the island rather than wings.
+    public init(
+        id: String,
+        featureID: String = "",
+        priority: Priority = .normal,
+        duration: TimeInterval? = nil,
+        holdsWhileExpanded: Bool = false,
+        rim: NotchActivityRim
+    ) {
+        self.id = id
+        self.featureID = featureID
+        self.priority = priority
+        self.duration = duration
+        self.wingWidth = nil
+        self.morphsIntoTab = false
+        self.holdsWhileExpanded = holdsWhileExpanded
+        self.leading = AnyView(EmptyView())
+        self.trailing = AnyView(EmptyView())
+        self.rim = rim
+    }
+}
+
+/// An activity drawn as a band of light just inside the island's edge, from the
+/// left side down around the bottom and up the right side, instead of wings. The
+/// island grows only by a thin ring around the notch to hold it. The band shows
+/// a share of that arc, given by `fraction` and retracting from its left end
+/// toward its right end, so it can show something running down, such as time left.
+/// It takes no clicks; a click on the island still expands it.
+public struct NotchActivityRim {
+    /// The band's color.
+    public var color: Color
+    /// The share of the arc the band covers at a moment, 0…1. Read about once a
+    /// second while the band shows, and whenever observable state it reads changes.
+    public var fraction: @MainActor (Date) -> Double
+    /// Whether the band is drawn faintly, e.g. while what it shows is paused.
+    public var isDimmed: @MainActor () -> Bool
+
+    public init(
+        color: Color,
+        fraction: @escaping @MainActor (Date) -> Double,
+        isDimmed: @escaping @MainActor () -> Bool = { false }
+    ) {
+        self.color = color
+        self.fraction = fraction
+        self.isDimmed = isDimmed
     }
 }

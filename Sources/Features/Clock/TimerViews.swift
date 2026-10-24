@@ -2,17 +2,50 @@ import NotchKit
 import NotchUI
 import SwiftUI
 
-/// Width of each timer wing: room for "0:00:00" on the right.
-let countdownWingWidth: CGFloat = 76
+/// Width of each wing once the timer has run out: room for "Time's up" on the right.
+let finishedWingWidth: CGFloat = 76
 
-/// The timer's color: the ring, the card's tint, the bell.
+/// The timer's color: the ring, the card's tint, the bell, the band around the island.
 let timerColor = Color.orange
 
-/// Space kept between a wing's content and the island's outer edge, so it stays
-/// clear of the rounded bottom corner (`NotchTheme.activityBottomRadius`).
+/// The timer's color for what shows it beside the notch (the wings' ring and bell,
+/// the tab button's ring and bell): orange in both appearance modes, like the band
+/// around the island; shaded with light and color, flat without.
+@MainActor
+func timerStyle() -> AnyShapeStyle {
+    NotchAppearance.shared.isLightAndColorEnabled ? AnyShapeStyle(timerColor.gradient) : AnyShapeStyle(timerColor)
+}
+
+/// Room each wing leaves between its content and the island's outer edge, so the
+/// content stays clear of the rounded bottom corner (`NotchTheme.activityBottomRadius`).
+/// The content hugs the notch, so this is part of the wing's width, not padding.
 private let wingCornerClearance: CGFloat = 12
 /// Space between a wing's content and the notch.
 private let wingNotchClearance: CGFloat = 6
+
+/// The countdown wings' widths: only as wide as the time on the right needs (the
+/// ring on the left needs less), as it reads when the wings are presented.
+enum CountdownWings {
+    /// Room for "59:59" at the wing's 12-point semibold digits.
+    static let shortTimeWidth: CGFloat = 34
+    /// Room for "0:00:00".
+    static let longTimeWidth: CGFloat = 46
+
+    /// Each wing's width for a timer with `remaining` seconds left: the time's
+    /// room (`timeWidth`) and both clearances.
+    static func width(remaining: TimeInterval) -> CGFloat {
+        wingCornerClearance + timeWidth(remaining: remaining) + wingNotchClearance
+    }
+
+    /// Room for the time with `remaining` seconds left: for "m:ss" under an hour,
+    /// and for "h:mm:ss" from one, as `CountdownTimer.display` shows it (rounded
+    /// up, so 3599.5 seconds already read "1:00:00"). The right wing keeps the time
+    /// to this room, so time added later past the hour shrinks its digits rather
+    /// than run into the corner clearance; the wings keep their width.
+    static func timeWidth(remaining: TimeInterval) -> CGFloat {
+        Int(max(remaining, 0).rounded(.up)) >= 3600 ? longTimeWidth : shortTimeWidth
+    }
+}
 
 /// How far a wing's content moves while the island is hovered: half the ring it
 /// grows by, outward (`outward` is -1 for the left wing, 1 for the right) and
@@ -67,10 +100,13 @@ struct CountdownTimeline<Content: View>: View {
     }
 }
 
-/// A ring showing the share of the timer left, orange with light and color.
+/// A ring showing the share of the timer left, orange with light and color, or
+/// in `style`.
 struct CountdownRing: View {
     let progress: Double
     let lineWidth: CGFloat
+    /// The filled part's style; `nil` is the timer's color with light and color only.
+    var style: AnyShapeStyle? = nil
 
     var body: some View {
         ZStack {
@@ -78,7 +114,7 @@ struct CountdownRing: View {
                 .stroke(NotchTheme.primaryText.opacity(0.2), lineWidth: lineWidth)
             Circle()
                 .trim(from: 0, to: progress)
-                .stroke(NotchTheme.accent(timerColor), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .stroke(style ?? NotchTheme.accent(timerColor), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
         }
         // The stroke is centred on the path, so inset it to keep the outer edge at the frame.
@@ -89,8 +125,8 @@ struct CountdownRing: View {
 
 // MARK: Wings
 
-/// Left wing while counting down: a small ring with the share left, dimmed
-/// while paused. A click opens the timer's panel.
+/// Left wing while counting down: a small ring with the share left, right next
+/// to the notch, dimmed while paused. A click opens the timer's tab.
 struct CountdownWingLeading: View {
     let model: TimerModel
     let open: @MainActor () -> Void
@@ -101,7 +137,7 @@ struct CountdownWingLeading: View {
             Group {
                 if case .counting(let timer) = model.phase {
                     CountdownTimeline(timer: timer) { now in
-                        CountdownRing(progress: timer.progress(at: now), lineWidth: 3)
+                        CountdownRing(progress: timer.progress(at: now), lineWidth: 3, style: timerStyle())
                             .frame(width: 18, height: 18)
                             .opacity(timer.isPaused ? 0.45 : 1)
                     }
@@ -110,9 +146,8 @@ struct CountdownWingLeading: View {
             // An offset, not padding: the content keeps its size. The island's
             // hover animation carries the move.
             .offset(wingHoverOffset(isHovered: isIslandHovered, outward: -1))
-            .padding(.leading, wingCornerClearance)
             .padding(.trailing, wingNotchClearance)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -120,10 +155,12 @@ struct CountdownWingLeading: View {
     }
 }
 
-/// Right wing while counting down: the time left, ticking each second, dimmed
-/// while paused. A click opens the timer's panel.
+/// Right wing while counting down: the time left, ticking each second, right
+/// next to the notch, dimmed while paused. A click opens the timer's tab.
 struct CountdownWingTrailing: View {
     let model: TimerModel
+    /// Room the time keeps to (`CountdownWings.timeWidth`).
+    let timeWidth: CGFloat
     let open: @MainActor () -> Void
     @Environment(\.notchIsHovered) private var isIslandHovered
 
@@ -138,21 +175,22 @@ struct CountdownWingTrailing: View {
                             .foregroundStyle(timer.isPaused ? NotchTheme.secondaryText : NotchTheme.primaryText)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
+                            .frame(maxWidth: timeWidth, alignment: .leading)
                     }
                 }
             }
             // Moves with the hovered island, like the left wing.
             .offset(wingHoverOffset(isHovered: isIslandHovered, outward: 1))
             .padding(.leading, wingNotchClearance)
-            .padding(.trailing, wingCornerClearance)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
     }
 }
 
-/// Left wing once the timer has run out: a ringing bell. A click stops the alert.
+/// Left wing once the timer has run out: a ringing bell next to the notch. A
+/// click stops the alert.
 struct FinishedWingLeading: View {
     let stop: @MainActor () -> Void
     @Environment(\.notchIsHovered) private var isIslandHovered
@@ -161,12 +199,11 @@ struct FinishedWingLeading: View {
         Button(action: stop) {
             Image(systemName: "bell.fill")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(NotchTheme.accent(timerColor))
+                .foregroundStyle(timerStyle())
                 .symbolEffect(.wiggle, options: .repeat(.continuous))
                 .offset(wingHoverOffset(isHovered: isIslandHovered, outward: -1))
-                .padding(.leading, wingCornerClearance)
                 .padding(.trailing, wingNotchClearance)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -174,7 +211,7 @@ struct FinishedWingLeading: View {
     }
 }
 
-/// Right wing once the timer has run out. A click stops the alert.
+/// Right wing once the timer has run out, next to the notch. A click stops the alert.
 struct FinishedWingTrailing: View {
     let stop: @MainActor () -> Void
     @Environment(\.notchIsHovered) private var isIslandHovered
@@ -188,8 +225,7 @@ struct FinishedWingTrailing: View {
                 .minimumScaleFactor(0.7)
                 .offset(wingHoverOffset(isHovered: isIslandHovered, outward: 1))
                 .padding(.leading, wingNotchClearance)
-                .padding(.trailing, wingCornerClearance)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -200,6 +236,7 @@ struct FinishedWingTrailing: View {
 
 /// The timer's panel, opened on its own in the expanded island: the setter while
 /// idle, the ring and controls while counting down, the alert once finished.
+/// Opened while idle; a started timer moves on to the timer's tab (`TimerTab`).
 struct TimerPanel: View {
     let model: TimerModel
     /// Called after the setter starts a timer.
@@ -218,6 +255,58 @@ struct TimerPanel: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.smooth(duration: 0.3), value: model.phase)
+    }
+}
+
+/// The timer's tab, shown while it counts down or rings: the ring and controls,
+/// or the alert. Idle, the tab is hidden and this draws nothing.
+struct TimerTab: View {
+    let model: TimerModel
+
+    var body: some View {
+        Group {
+            switch model.phase {
+            case .idle:
+                Color.clear
+            case .counting(let timer):
+                TimerCountdown(model: model, timer: timer)
+            case .finished:
+                TimerFinished(model: model)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(.smooth(duration: 0.3), value: model.phase)
+    }
+}
+
+/// The timer tab's button: a small ring with the share left around a timer
+/// glyph, ticking each second and dimmed while paused; a bell once finished.
+struct TimerTabIcon: View {
+    let model: TimerModel
+
+    var body: some View {
+        switch model.phase {
+        case .idle:
+            Image(systemName: "timer")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(NotchTheme.secondaryText)
+        case .counting(let timer):
+            CountdownTimeline(timer: timer) { now in
+                ZStack {
+                    CountdownRing(progress: timer.progress(at: now), lineWidth: 2, style: timerStyle())
+                    Image(systemName: "timer")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(NotchTheme.primaryText)
+                }
+                .frame(width: 20, height: 20)
+                .opacity(timer.isPaused ? 0.45 : 1)
+            }
+        case .finished:
+            Image(systemName: "bell.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(timerStyle())
+                .symbolEffect(.wiggle, options: .repeat(.continuous))
+        }
     }
 }
 

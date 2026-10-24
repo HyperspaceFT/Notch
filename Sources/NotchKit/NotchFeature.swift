@@ -4,8 +4,9 @@ import SwiftUI
 ///
 /// A feature may contribute five things:
 /// - live activities (via `NotchContext.present`) shown as wings beside the
-///   hardware notch while the island is collapsed,
-/// - a tab in the expanded panel (via `makeExpandedView`),
+///   hardware notch, or as a band of light around it, while the island is collapsed,
+/// - a tab in the expanded panel (via `makeExpandedView`, its button's icon
+///   optionally drawn by the feature via `makeTabIcon`),
 /// - a detail the expanded island opens on alone, without the tabs (via
 ///   `NotchContext.requestExpand(detail:)`),
 /// - modules for the Home tab (via `makeHomeModules`), and
@@ -48,6 +49,11 @@ public protocol NotchFeature: AnyObject {
     /// Content of this feature's tab in the expanded panel; `nil` means no tab.
     /// Called once after activation; the returned view should observe its own state.
     func makeExpandedView() -> AnyView?
+    /// The icon of this feature's tab button, drawn in place of `symbol` within the
+    /// button's 28 × 28-point area; `nil` (the default) draws `symbol`. Called once
+    /// after activation, for features with a tab; the returned view should observe
+    /// its own state (e.g. a progress ring that fills over time).
+    func makeTabIcon() -> AnyView?
     /// Modules this feature offers for the Home tab (see `NotchHomeModule`); empty
     /// by default. Home asks once, after every feature is activated; the modules'
     /// views should observe their own state.
@@ -71,5 +77,6 @@ extension NotchFeature {
     public func activate(context: any NotchContext) {}
     public func deactivate() {}
     public func makeExpandedView() -> AnyView? { nil }
+    public func makeTabIcon() -> AnyView? { nil }
     public func makeHomeModules() -> [NotchHomeModule] { [] }
 }

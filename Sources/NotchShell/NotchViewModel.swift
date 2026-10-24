@@ -8,7 +8,8 @@ import SwiftUI
 ///
 /// State machine:
 /// - `.collapsed`: island exactly covers the hardware notch.
-/// - `.activity`: the top-priority activity is shown as wings beside the notch.
+/// - `.activity`: the top-priority activity is shown as wings beside the notch,
+///   or as a band of light around it (`NotchActivity.rim`).
 /// - `.expanded`: the full panel with feature tabs (a click on the hovered
 ///   island, content dragged onto the notch, or `requestExpand`). Only tabs
 ///   whose `isAvailable` is true show (`visibleTabs`).
@@ -48,6 +49,8 @@ final class NotchViewModel {
         /// the standard width. Read while the panel draws, so it can follow the
         /// feature's observable state.
         let expandedWidth: @MainActor () -> CGFloat?
+        /// Drawn in the tab button in place of `symbol`; `nil` draws the symbol.
+        let icon: AnyView?
         let content: AnyView
 
         init(
@@ -58,6 +61,7 @@ final class NotchViewModel {
             opensOnDrag: Bool = false,
             isAvailable: @escaping @MainActor () -> Bool = { true },
             expandedWidth: @escaping @MainActor () -> CGFloat? = { nil },
+            icon: AnyView? = nil,
             content: AnyView
         ) {
             self.id = id
@@ -67,6 +71,7 @@ final class NotchViewModel {
             self.opensOnDrag = opensOnDrag
             self.isAvailable = isAvailable
             self.expandedWidth = expandedWidth
+            self.icon = icon
             self.content = content
         }
     }
@@ -222,6 +227,10 @@ final class NotchViewModel {
         switch state {
         case .collapsed:
             size = notch
+        case .activity where currentActivity?.rim != nil:
+            // Just room for the band around the notch.
+            let thickness = NotchTheme.activityRimThickness
+            size = CGSize(width: notch.width + thickness * 2, height: notch.height + thickness)
         case .activity:
             let wingWidth = currentActivity?.wingWidth ?? NotchTheme.activityWingWidth
             size = CGSize(width: notch.width + wingWidth * 2, height: notch.height)

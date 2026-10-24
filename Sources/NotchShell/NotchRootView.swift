@@ -74,11 +74,23 @@ struct NotchRootView: View {
         // inside the outline's clip.
         .overlay(alignment: .top) {
             if let activity = wingsActivity {
-                ActivityWingsView(
-                    activity: activity,
-                    notchSize: model.geometry.notchRect.size,
-                    earInset: model.topCornerRadius
-                )
+                Group {
+                    if let rim = activity.rim {
+                        ActivityRimView(
+                            rim: rim,
+                            topCornerRadius: model.topCornerRadius,
+                            bottomCornerRadii: model.bottomCornerRadii
+                        )
+                        // Clicks go to the island beneath, which expands.
+                        .allowsHitTesting(false)
+                    } else {
+                        ActivityWingsView(
+                            activity: activity,
+                            notchSize: model.geometry.notchRect.size,
+                            earInset: model.topCornerRadius
+                        )
+                    }
+                }
                 .environment(\.notchIsHovered, model.isHovered)
                 .environment(\.notchActivityMorph, morph)
                 // A new activity replaces the old one with a blur instead of a cut.
@@ -314,6 +326,71 @@ private struct ActivityWingsView: View {
     }
 }
 
+/// An activity's band of light (`NotchActivityRim`): the lower arc of the island's
+/// outline, just inside the edge and following its current corners, showing the
+/// rim's fraction of it. Redrawn on every whole second, each step easing linearly
+/// over the second toward where the band will be at its end, so the band retracts
+/// smoothly; steps too small to see are drawn without animation, so a long timer
+/// does not keep the island redrawing at display rate. The island's clip keeps
+/// the glow inside.
+private struct ActivityRimView: View {
+    let rim: NotchActivityRim
+    let topCornerRadius: CGFloat
+    let bottomCornerRadii: CGSize
+
+    private static let lineWidth: CGFloat = 3
+    /// The least change in the band's length, in points, that a step animates.
+    private static let animatedStep: CGFloat = 1
+    /// Ticks on whole seconds whenever the view appears, so redraws that are not
+    /// ticks (a hover changing the corners) see the same date and the same fraction.
+    private static let schedule = PeriodicTimelineSchedule(from: Date(timeIntervalSinceReferenceDate: 0), by: 1)
+
+    var body: some View {
+        // Insetting the path by half the stroke keeps the whole band inside the
+        // outline; the corners shrink by as much, so they stay concentric with it.
+        let inset = Self.lineWidth / 2
+        let edge = NotchEdge(
+            arc: .lower,
+            topCornerRadius: topCornerRadius,
+            bottomCornerRadii: CGSize(
+                width: max(bottomCornerRadii.width - inset, 0),
+                height: max(bottomCornerRadii.height - inset, 0)
+            ),
+            horizon: 0
+        )
+        GeometryReader { proxy in
+            TimelineView(Self.schedule) { context in
+                // Aimed at the end of the second this tick starts, which the step
+                // reaches as the next tick arrives.
+                let fraction = clamped(rim.fraction(context.date.addingTimeInterval(1)))
+                let previous = clamped(rim.fraction(context.date))
+                // About the arc's length: down both sides and across the bottom.
+                let arcLength = proxy.size.height * 2 + proxy.size.width
+                let animates = abs(fraction - previous) * arcLength >= Self.animatedStep
+                let band = edge.trim(from: 1 - fraction, to: 1)
+                ZStack {
+                    if NotchAppearance.shared.isLightAndColorEnabled {
+                        band
+                            .stroke(rim.color, style: StrokeStyle(lineWidth: Self.lineWidth * 3, lineCap: .round))
+                            .blur(radius: 6)
+                            .opacity(0.6)
+                    }
+                    band
+                        .stroke(rim.color, style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round))
+                }
+                .padding(.horizontal, inset)
+                .padding(.bottom, inset)
+                .opacity(rim.isDimmed() ? 0.45 : 1)
+                .animation(animates ? .linear(duration: 1) : nil, value: fraction)
+            }
+        }
+    }
+
+    private func clamped(_ fraction: Double) -> Double {
+        min(max(fraction, 0), 1)
+    }
+}
+
 /// The expanded panel: a header row with tab buttons, and the selected feature's
 /// view below; or, with a detail, that view alone below an empty header band.
 /// Quitting lives in the island's right-click menu.
@@ -385,6 +462,7 @@ private struct ExpandedIslandView: View {
             ForEach(tabs) { tab in
                 TabButton(
                     symbol: tab.symbol(),
+                    icon: tab.icon,
                     isSelected: tab.id == selectedID,
                     help: tab.title()
                 ) {
@@ -441,21 +519,29 @@ private struct ExpandedIslandView: View {
     }
 }
 
-/// A tab's icon. It draws no background of its own; the selected tab's glass
-/// highlight belongs to the header.
+/// A tab's icon: the feature's own view when it draws one, else its symbol. It
+/// draws no background of its own; the selected tab's glass highlight belongs to
+/// the header.
 private struct TabButton: View {
     let symbol: String
+    let icon: AnyView?
     let isSelected: Bool
     let help: String
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(isSelected ? NotchTheme.primaryText : NotchTheme.secondaryText)
-                .frame(width: 28, height: 28)
-                .contentShape(.circle)
+            Group {
+                if let icon {
+                    icon
+                } else {
+                    Image(systemName: symbol)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(isSelected ? NotchTheme.primaryText : NotchTheme.secondaryText)
+                }
+            }
+            .frame(width: 28, height: 28)
+            .contentShape(.circle)
         }
         .buttonStyle(.plain)
         .help(help)

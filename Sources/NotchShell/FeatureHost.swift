@@ -37,6 +37,7 @@ final class FeatureHost {
                     opensOnDrag: feature.opensOnDrag,
                     isAvailable: { feature.isTabAvailable },
                     expandedWidth: { feature.expandedWidth },
+                    icon: feature.makeTabIcon(),
                     content: view
                 )
             }

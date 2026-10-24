@@ -6,6 +6,9 @@ public enum NotchTheme {
 
     /// Width of each wing beside the hardware notch while an activity is shown.
     public static let activityWingWidth: CGFloat = 72
+    /// How far the island grows past the notch, on each side and at the bottom,
+    /// while an activity drawn as a band of light (`NotchActivityRim`) is shown.
+    public static let activityRimThickness: CGFloat = 4
     /// Standard body size of the expanded island (excluding the ears). A tab may
     /// widen it (`NotchFeature.expandedWidth`) up to `maximumExpandedWidth`; the
     /// height never changes.

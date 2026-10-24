@@ -4,8 +4,8 @@ import SwiftUI
 
 /// The clock's Home module: the time with the date below. At its narrowest it is
 /// a square showing hours and minutes; from `secondsThreshold` on it adds seconds.
-/// A click opens the timer's panel; while a timer counts down or rings, the card
-/// shows it instead of the time.
+/// A click opens the timer's setter; while a timer counts down or rings, the card
+/// shows it instead of the time, and a click opens the timer's tab.
 enum TimeModule {
     static let id = "time"
     /// Wide enough for "00:00:00" at the clock's size plus the card's padding.
