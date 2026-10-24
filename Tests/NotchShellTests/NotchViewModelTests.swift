@@ -34,6 +34,25 @@ struct NotchViewModelTests {
         #expect(model.islandScreenFrame.maxY == 956)
     }
 
+    @Test func menuGroupsKeepFeatureOrderAndSkipFeaturesWithoutEntries() {
+        #expect(model.menuGroups.isEmpty)
+        final class TimerState {
+            var isRunning = false
+        }
+        let timer = TimerState()
+        model.setMenuSources([
+            { [.button("Timer") {}] + (timer.isRunning ? [.divider, .button("Cancel") {}] : []) },
+            { [] },
+            { [.submenu("Files", symbol: "folder", items: [.button("Clear") {}])] },
+        ])
+        #expect(model.menuGroups.map { $0.map(\.title) } == [["Timer"], ["Files"]])
+        // Read again on every draw, so the entries follow the feature's state.
+        timer.isRunning = true
+        #expect(model.menuGroups.map { $0.map(\.title) } == [["Timer", "", "Cancel"], ["Files"]])
+        model.setMenuSources([])
+        #expect(model.menuGroups.isEmpty)
+    }
+
     @Test func activityWingWidthSetsTheIslandWidth() {
         let wingWidth: CGFloat = 38
         model.present(NotchActivity(id: "narrow", featureID: "test", wingWidth: wingWidth) {

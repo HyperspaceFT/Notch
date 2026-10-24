@@ -10,7 +10,9 @@ public protocol NotchContext: AnyObject {
     func present(_ activity: NotchActivity)
     /// Removes a live activity previously presented by this feature.
     func dismiss(activityID: String)
-    /// Opens the expanded panel on this feature's tab, if it has one.
+    /// Opens the expanded panel on this feature's tab, if it has one. For a
+    /// feature without a tab it opens the panel (or returns it from a detail to
+    /// the tabs) on the tab it shows already.
     /// The panel collapses again once the pointer moves away from it.
     func requestExpand()
     /// Opens the expanded island on `detail` alone, without the panel's tab

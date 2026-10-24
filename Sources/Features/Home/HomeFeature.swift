@@ -2,9 +2,9 @@ import NotchKit
 import NotchUI
 import SwiftUI
 
-/// Home tab, the first one in the expanded panel: a row of modules, its own clock
-/// and those other features offer (such as the weather), which the user picks,
-/// orders, and sizes in the settings window. No activities.
+/// Home tab, the first one in the expanded panel: a row of modules other features
+/// offer (such as the clock and the weather), which the user picks, orders, and
+/// sizes in the settings window. No activities.
 @MainActor
 public final class HomeFeature: NotchFeature {
     public let id = "home"
@@ -15,7 +15,8 @@ public final class HomeFeature: NotchFeature {
     /// the settings window while the island is open.
     public var expandedWidth: CGFloat? { settings.expandedWidth }
 
-    /// Features whose `makeHomeModules()` Home shows besides its clock.
+    /// Features whose `makeHomeModules()` Home shows, in this order (the standard
+    /// layout's order).
     private let moduleSources: [any NotchFeature]
     private let settings: HomeLayoutSettings
 
@@ -27,7 +28,7 @@ public final class HomeFeature: NotchFeature {
     public func makeExpandedView() -> AnyView? {
         // The shell asks for views only after activating every feature, which is
         // when `makeHomeModules()` may be called.
-        settings.register([TimeModule.makeModule()] + moduleSources.flatMap { $0.makeHomeModules() })
+        settings.register(moduleSources.flatMap { $0.makeHomeModules() })
         return AnyView(HomeExpandedView(settings: settings))
     }
 }

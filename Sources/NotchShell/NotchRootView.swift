@@ -120,6 +120,18 @@ struct NotchRootView: View {
             including: isExpanded ? .subviews : .all
         )
         .contextMenu {
+            // Read inside the menu's builder, so the entries follow the features'
+            // state and the interface language.
+            let groups = model.menuGroups
+            ForEach(groups.indices, id: \.self) { index in
+                if index > 0 {
+                    Divider()
+                }
+                FeatureMenuEntries(items: groups[index])
+            }
+            if !groups.isEmpty {
+                Divider()
+            }
             Button(localized(en: "Settings…", zh: "设置…"), systemImage: "gearshape", action: openSettings)
             Divider()
             Button(localized(en: "Quit", zh: "退出"), systemImage: "power") {
@@ -150,6 +162,44 @@ struct NotchRootView: View {
         case .expanded: NotchTheme.expandAnimation
         case .collapsed: NotchTheme.collapseAnimation
         case .activity: NotchTheme.activityAnimation
+        }
+    }
+}
+
+/// Entries a feature adds to the right-click menu, submenus drawn recursively.
+private struct FeatureMenuEntries: View {
+    let items: [NotchMenuItem]
+
+    var body: some View {
+        ForEach(items.indices, id: \.self) { index in
+            FeatureMenuEntry(item: items[index])
+        }
+    }
+}
+
+private struct FeatureMenuEntry: View {
+    let item: NotchMenuItem
+
+    var body: some View {
+        switch item.kind {
+        case .action(let action):
+            if let symbol = item.symbol {
+                Button(item.title, systemImage: symbol, action: action)
+            } else {
+                Button(item.title, action: action)
+            }
+        case .submenu(let items):
+            Menu {
+                FeatureMenuEntries(items: items)
+            } label: {
+                if let symbol = item.symbol {
+                    Label(item.title, systemImage: symbol)
+                } else {
+                    Text(item.title)
+                }
+            }
+        case .divider:
+            Divider()
         }
     }
 }

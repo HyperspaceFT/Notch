@@ -2,12 +2,14 @@ import SwiftUI
 
 /// A self-contained module that lives inside the notch.
 ///
-/// A feature may contribute three things:
+/// A feature may contribute five things:
 /// - live activities (via `NotchContext.present`) shown as wings beside the
 ///   hardware notch while the island is collapsed,
-/// - a tab in the expanded panel (via `makeExpandedView`), and
+/// - a tab in the expanded panel (via `makeExpandedView`),
 /// - a detail the expanded island opens on alone, without the tabs (via
-///   `NotchContext.requestExpand(detail:)`).
+///   `NotchContext.requestExpand(detail:)`),
+/// - modules for the Home tab (via `makeHomeModules`), and
+/// - entries in the island's right-click menu (via `menuItems`).
 ///
 /// Features are created once in `FeatureCatalog`, activated when the shell
 /// starts, and deactivated when it stops. They must not touch windows directly.
@@ -34,6 +36,10 @@ public protocol NotchFeature: AnyObject {
     /// wide the modules Home shows are). `nil` uses the standard width; the shell
     /// keeps it between the standard and the maximum width (see `NotchTheme`).
     var expandedWidth: CGFloat? { get }
+    /// Entries in the island's right-click menu, above Settings…; empty by default.
+    /// Read while the island draws, so they may follow observable state (e.g. a
+    /// running timer) and the interface language.
+    var menuItems: [NotchMenuItem] { get }
 
     /// Called once when the shell starts. Keep the context to present activities later.
     func activate(context: any NotchContext)
@@ -61,6 +67,7 @@ extension NotchFeature {
     public var opensOnDrag: Bool { false }
     public var isTabAvailable: Bool { true }
     public var expandedWidth: CGFloat? { nil }
+    public var menuItems: [NotchMenuItem] { [] }
     public func activate(context: any NotchContext) {}
     public func deactivate() {}
     public func makeExpandedView() -> AnyView? { nil }

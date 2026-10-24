@@ -264,21 +264,6 @@ struct HomeLayoutTests {
     }
 }
 
-struct TimeModuleTests {
-    @Test func isASquareAtItsNarrowestAndFitsTheSecondsAtItsWidest() {
-        #expect(TimeModule.sizing.minimumWidth(in: row) == 134)
-        #expect(TimeModule.sizing.maximumWidth(in: row) == 184)
-        #expect(TimeModule.sizing.minimumWidth(in: HomeRowMetrics(width: 456, height: 128, spacing: 10)) == 128)
-    }
-
-    @Test func showsSecondsFromTheThreshold() {
-        #expect(!TimeModule.showsSeconds(width: 134))
-        #expect(!TimeModule.showsSeconds(width: 159.9))
-        #expect(TimeModule.showsSeconds(width: 160))
-        #expect(TimeModule.showsSeconds(width: 184))
-    }
-}
-
 @MainActor
 struct HomeLayoutSettingsTests {
     private let modules = [

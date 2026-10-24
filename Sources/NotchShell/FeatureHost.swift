@@ -2,7 +2,8 @@ import NotchKit
 import SwiftUI
 
 /// Owns the feature instances: activates them with a per-feature context,
-/// collects their expanded-panel tabs, and routes their activities to the view model.
+/// collects their expanded-panel tabs and right-click menu entries, and routes
+/// their activities to the view model.
 @MainActor
 final class FeatureHost {
     private let model: NotchViewModel
@@ -40,6 +41,7 @@ final class FeatureHost {
                 )
             }
         })
+        model.setMenuSources(features.map { feature in { feature.menuItems } })
     }
 
     func stop() {
@@ -52,6 +54,7 @@ final class FeatureHost {
         features = []
         contexts = []
         model.setTabs([])
+        model.setMenuSources([])
     }
 }
 

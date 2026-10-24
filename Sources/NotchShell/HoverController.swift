@@ -22,6 +22,10 @@ final class HoverController {
     static let hoverDelay: Duration = .milliseconds(80)
     /// Debounce before collapsing after the pointer leaves the expanded island.
     static let collapseDelay: Duration = .milliseconds(250)
+    /// The same while the pointer has not been on the expanded island yet: opened
+    /// from a right-click menu entry, the island appears with the pointer still
+    /// where the menu was, which may be outside it, and needs time to get there.
+    static let arrivalDelay: Duration = .milliseconds(1500)
     /// How far the hot zone extends beyond the collapsed island.
     static let hotZoneInset = CGSize(width: 6, height: 4)
     /// How far beyond the notch dragged content already opens the island: `width`
@@ -64,7 +68,8 @@ final class HoverController {
     /// follows the selected tab, so a click on a tab button near the edge of a wide
     /// tab can leave the pointer outside the narrower new frame; that is not a
     /// departure. Replaced as soon as the pointer is inside the current frame again,
-    /// and cleared whenever the island is not expanded.
+    /// and cleared whenever the island is not expanded, so while expanded `nil`
+    /// means the pointer has not been on the island yet (see `arrivalDelay`).
     private var frameWithPointer: CGRect?
 
     init(model: NotchViewModel) {
@@ -135,7 +140,7 @@ final class HoverController {
             if isInsideExpandedIsland(location) {
                 cancelPending(.collapse)
             } else {
-                schedule(.collapse, after: Self.collapseDelay)
+                schedule(.collapse, after: frameWithPointer == nil ? Self.arrivalDelay : Self.collapseDelay)
             }
         } else if model.isHovered {
             frameWithPointer = nil

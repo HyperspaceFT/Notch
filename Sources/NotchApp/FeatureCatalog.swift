@@ -1,6 +1,7 @@
 import AirPodsFeature
 import BatteryFeature
 import CalendarFeature
+import ClockFeature
 import FilesFeature
 import HomeFeature
 import NotchKit
@@ -26,6 +27,8 @@ import WeatherFeature
 enum FeatureCatalog {
     static func makeFeatures() -> [any NotchFeature] {
         let features: [any NotchFeature] = [
+            // First, so its clock is the first module Home registers and leads Home's standard layout.
+            ClockFeature(),
             FilesFeature(),
             NowPlayingFeature(),
             AirPodsFeature(),

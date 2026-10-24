@@ -97,6 +97,9 @@ final class NotchViewModel {
     /// The pointer rests on the collapsed or activity island. Always false while expanded.
     private(set) var isHovered = false
     private(set) var tabs: [Tab] = []
+    /// One per feature, in feature order: the entries it adds to the island's
+    /// right-click menu (`NotchFeature.menuItems`).
+    private(set) var menuSources: [@MainActor () -> [NotchMenuItem]] = []
     /// Shown instead of the tabs while set. Kept after collapsing until the
     /// expanded content unmounts, so the detail rises out rather than the tabs.
     private(set) var detail: Detail?
@@ -284,6 +287,16 @@ final class NotchViewModel {
         if selectedTabID == nil || !tabs.contains(where: { $0.id == selectedTabID }) {
             selectedTabID = (tabs.first { $0.isAvailable() } ?? tabs.first)?.id
         }
+    }
+
+    func setMenuSources(_ sources: [@MainActor () -> [NotchMenuItem]]) {
+        menuSources = sources
+    }
+
+    /// The features' menu entries as the right-click menu shows them: one group
+    /// per feature that has any, in feature order. Read while the menu draws.
+    var menuGroups: [[NotchMenuItem]] {
+        menuSources.map { $0() }.filter { !$0.isEmpty }
     }
 
     /// Expanding from collapsed shows the tabs, even while a detail still rises out.
