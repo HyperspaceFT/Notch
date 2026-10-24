@@ -102,6 +102,11 @@ final class FileShelf {
         selectionOutsideRange = selection.subtracting(selectionAnchor.map { [$0] } ?? [])
     }
 
+    /// ⌘A: selects every item.
+    func selectAll() {
+        setSelection(Set(items.map(\.id)))
+    }
+
     func clearSelection() {
         selection = []
         selectionAnchor = nil

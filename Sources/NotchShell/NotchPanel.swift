@@ -28,7 +28,7 @@ final class NotchPanel: NSPanel {
         hidesOnDeactivate = false
         isReleasedWhenClosed = false
         animationBehavior = .none
-        // Only take key status when a control that types (a text view) needs it.
+        // Only take key status when a view that takes keys (a text view, say) needs it.
         becomesKeyOnlyIfNeeded = true
         acceptsMouseMovedEvents = true
         ignoresMouseEvents = true

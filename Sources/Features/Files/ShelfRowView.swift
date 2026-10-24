@@ -22,6 +22,7 @@ struct ShelfCellFramesKey: PreferenceKey {
 /// - Dragging with Shift or Command held draws a selection rectangle that adds
 ///   to the selection; dragging from empty space draws one that replaces it.
 /// - Dragging an item drags it out, with the rest of the selection when it is selected.
+/// - ⌘A selects every item once a click in the row has given it the keyboard.
 struct ShelfRowView: NSViewRepresentable {
     static let coordinateSpace = "ShelfRow"
 
@@ -84,6 +85,35 @@ final class ShelfRowNSView: NSView {
 
     // The island panel is never key, so the first click must already count.
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    // ⌘A needs the keyboard: a click in the row makes the panel key and this
+    // view its first responder. The panel gives the keyboard back when it collapses.
+    override var acceptsFirstResponder: Bool { true }
+    override var needsPanelToBecomeKey: Bool { true }
+
+    // The app has no menu bar, whose Edit menu would turn ⌘A into Select All, so
+    // the row maps it itself. Every view in the window is offered key
+    // equivalents, so it takes them only while it has the keyboard.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if window?.firstResponder === self, performShortcut(event) { return true }
+        return super.performKeyEquivalent(with: event)
+    }
+
+    // Reached instead when the hosting view does not pass key equivalents on.
+    override func keyDown(with event: NSEvent) {
+        if performShortcut(event) { return }
+        super.keyDown(with: event)
+    }
+
+    private func performShortcut(_ event: NSEvent) -> Bool {
+        guard
+            let shelf,
+            event.modifierFlags.intersection([.command, .shift, .option, .control]) == .command,
+            event.charactersIgnoringModifiers?.lowercased() == "a"
+        else { return false }
+        shelf.selectAll()
+        return true
+    }
 
     override func mouseDown(with event: NSEvent) {
         // A press whose mouseUp went missing must not leak into this one.

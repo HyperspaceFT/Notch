@@ -96,7 +96,7 @@ struct NoteTextView: NSViewRepresentable {
             Task { @MainActor [weak textView] in
                 guard let textView, let window = textView.window else { return }
                 // The one window call a feature makes: the panel takes the
-                // keyboard only for a text view, and this is its own.
+                // keyboard only for a view that handles keys, and this is its own.
                 window.makeKey()
                 window.makeFirstResponder(textView)
             }

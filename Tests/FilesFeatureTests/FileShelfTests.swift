@@ -75,6 +75,13 @@ struct FileShelfTests {
         #expect(shelf.selection == [ids[0]])
     }
 
+    @Test func commandASelectsEveryItem() {
+        shelf.select(ids[2])
+        shelf.selectAll()
+        #expect(shelf.selection == Set(ids))
+        #expect(shelf.items(actingOn: ids[0]).map(\.id) == ids)
+    }
+
     @Test func actionsOnASelectedItemTakeTheWholeSelectionInShelfOrder() {
         shelf.select(ids[3])
         shelf.toggleSelection(ids[1])
