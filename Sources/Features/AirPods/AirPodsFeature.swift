@@ -23,6 +23,11 @@ public final class AirPodsFeature: NotchFeature {
     static let activityDuration: TimeInterval = 4
     /// How long the activity for the Mac's speakers taking over stays visible.
     static let speakerActivityDuration: TimeInterval = 3
+    /// Width of each wing of the connection activity: room for "100%" on the
+    /// right, about as far from the notch as from the island's edge.
+    static let activityWingWidth: CGFloat = 52
+    /// Width of each wing of the speaker activity, which shows only a symbol on each side.
+    static let speakerActivityWingWidth: CGFloat = 38
 
     private let model = AirPodsModel()
     private let authorizer = BluetoothAuthorizer()
@@ -93,11 +98,14 @@ public final class AirPodsFeature: NotchFeature {
         context?.present(NotchActivity(
             id: "connected",
             priority: .high,
-            duration: Self.activityDuration
+            duration: Self.activityDuration,
+            wingWidth: Self.activityWingWidth
         ) {
             Image(systemName: product.symbol)
+                .wingHoverShifted(outward: -1)
         } trailing: { [model] in
             AirPodsActivityTrailing(model: model)
+                .wingHoverShifted(outward: 1)
         })
     }
 
@@ -122,11 +130,14 @@ public final class AirPodsFeature: NotchFeature {
         context?.present(NotchActivity(
             id: "speaker",
             priority: .high,
-            duration: Self.speakerActivityDuration
+            duration: Self.speakerActivityDuration,
+            wingWidth: Self.speakerActivityWingWidth
         ) {
             Image(systemName: "macbook")
+                .wingHoverShifted(outward: -1)
         } trailing: {
             Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.3.fill", variableValue: Double(volume))
+                .wingHoverShifted(outward: 1)
         })
     }
 }
@@ -274,6 +285,30 @@ final class AirPodsModel {
 private func levelTint(_ level: Int?) -> Color {
     guard let level, level <= 20 else { return NotchTheme.primaryText }
     return .red
+}
+
+/// Moves a wing's content out and down with the hovered island, by half the ring
+/// it grows by (`NotchTheme.hoverGrowth`), so it stays centered in its grown wing.
+/// `outward` is -1 for the left wing, 1 for the right.
+private struct WingHoverShift: ViewModifier {
+    let outward: CGFloat
+    @Environment(\.notchIsHovered) private var isIslandHovered
+
+    func body(content: Content) -> some View {
+        // An offset, not padding: the content keeps its size. The island's hover
+        // animation carries the move.
+        content.offset(
+            isIslandHovered
+                ? CGSize(width: NotchTheme.hoverGrowth.width / 2 * outward, height: NotchTheme.hoverGrowth.height / 2)
+                : .zero
+        )
+    }
+}
+
+private extension View {
+    func wingHoverShifted(outward: CGFloat) -> some View {
+        modifier(WingHoverShift(outward: outward))
+    }
 }
 
 /// The lowest battery level, filled in once the AirPods report it.

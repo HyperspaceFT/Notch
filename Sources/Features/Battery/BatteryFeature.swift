@@ -16,6 +16,9 @@ public final class BatteryFeature: NotchFeature {
 
     /// How long the plug/unplug activity stays visible.
     static let activityDuration: TimeInterval = 3
+    /// Width of each wing of the activity: room for "100%" on the right, about as
+    /// far from the notch as from the island's edge.
+    static let activityWingWidth: CGFloat = 52
 
     private let model = BatteryModel()
     private var monitor: PowerSourceMonitor?
@@ -59,11 +62,14 @@ public final class BatteryFeature: NotchFeature {
         context?.present(NotchActivity(
             id: "power-adapter",
             priority: .high,
-            duration: Self.activityDuration
+            duration: Self.activityDuration,
+            wingWidth: Self.activityWingWidth
         ) {
             BatteryActivityLeading(status: current, bounce: bounce)
+                .wingHoverShifted(outward: -1)
         } trailing: {
             BatteryActivityTrailing(status: current, bounce: bounce)
+                .wingHoverShifted(outward: 1)
         })
     }
 }
@@ -216,6 +222,30 @@ private extension View {
             // A plug or unplug replacing the activity on screen keeps the wings'
             // views; a new identity per presentation makes them appear, and bounce, again.
             .id(ObjectIdentifier(bounce))
+    }
+}
+
+/// Moves a wing's content out and down with the hovered island, by half the ring
+/// it grows by (`NotchTheme.hoverGrowth`), so it stays centered in its grown wing.
+/// `outward` is -1 for the left wing, 1 for the right.
+private struct WingHoverShift: ViewModifier {
+    let outward: CGFloat
+    @Environment(\.notchIsHovered) private var isIslandHovered
+
+    func body(content: Content) -> some View {
+        // An offset, not padding: the content keeps its size. The island's hover
+        // animation carries the move.
+        content.offset(
+            isIslandHovered
+                ? CGSize(width: NotchTheme.hoverGrowth.width / 2 * outward, height: NotchTheme.hoverGrowth.height / 2)
+                : .zero
+        )
+    }
+}
+
+private extension View {
+    func wingHoverShifted(outward: CGFloat) -> some View {
+        modifier(WingHoverShift(outward: outward))
     }
 }
 
