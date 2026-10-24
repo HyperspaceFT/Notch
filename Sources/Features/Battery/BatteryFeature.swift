@@ -23,12 +23,16 @@ public final class BatteryFeature: NotchFeature {
     private let model = BatteryModel()
     private var monitor: PowerSourceMonitor?
     private weak var context: (any NotchContext)?
+    /// The last status macOS reported. `model.status` can hold a Debug pane sample
+    /// instead, which a real change must not be compared with.
+    private var lastReadStatus: PowerStatus?
 
     public init() {}
 
     public func activate(context: any NotchContext) {
         self.context = context
         model.status = PowerStatus.read()
+        lastReadStatus = model.status
         if model.status != nil {
             model.refreshHealth()
         }
@@ -50,14 +54,43 @@ public final class BatteryFeature: NotchFeature {
         AnyView(BatteryExpandedView(model: model))
     }
 
+    /// Plug and unplug as the adapter activity shows them, and a low charge on
+    /// battery. The tab shows the same sample status until the next real power
+    /// source change replaces it, or "Use Real Status" puts the last reading back;
+    /// nothing is read from or sent to the system.
+    public var debugItems: [NotchMenuItem] {
+        func show(_ status: PowerStatus) -> @MainActor () -> Void {
+            { [weak self] in
+                self?.model.status = status
+                self?.presentPowerAdapter(status)
+            }
+        }
+        return [
+            .button(localized(en: "Plug In (Charging)", zh: "接上电源（充电中）"), symbol: "battery.100percent.bolt", action: show(.samplePluggedIn)),
+            .button(localized(en: "Unplug", zh: "拔下电源"), symbol: "battery.75percent", action: show(.sampleUnplugged)),
+            .button(localized(en: "Low Battery", zh: "电量低"), symbol: "battery.25percent", action: show(.sampleLow)),
+            .divider,
+            .button(localized(en: "Use Real Status", zh: "使用真实状态"), symbol: "arrow.uturn.backward") { [weak self] in
+                // The last reading, with no activity: a Mac without a battery would
+                // otherwise keep the sample, as no power source change comes to end it.
+                self?.model.status = self?.lastReadStatus
+            },
+        ]
+    }
+
     private func powerSourcesChanged() {
-        let previous = model.status
+        let previous = lastReadStatus
         let current = PowerStatus.read()
+        lastReadStatus = current
         model.status = current
 
         // Only the adapter being connected or removed is worth an activity;
         // routine percentage updates just refresh the expanded card.
         guard let previous, let current, previous.isOnACPower != current.isOnACPower else { return }
+        presentPowerAdapter(current)
+    }
+
+    private func presentPowerAdapter(_ current: PowerStatus) {
         let bounce = ActivityBounce()
         context?.present(NotchActivity(
             id: "power-adapter",

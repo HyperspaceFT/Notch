@@ -33,6 +33,8 @@ public final class NotificationsFeature: NotchFeature {
     private let apps = NotificationAppResolver()
     private var watcher: NotificationBannerWatcher?
     private var accessPoll: Task<Void, Never>?
+    /// Shows the Debug pane's notifications one after another.
+    private var sampleSequence: Task<Void, Never>?
     /// Bumped on activate and deactivate; an observation armed under another
     /// generation is stale and does nothing when it fires.
     private var observationGeneration = 0
@@ -54,6 +56,8 @@ public final class NotificationsFeature: NotchFeature {
         // its pending change handler a no-op.
         observationGeneration += 1
         stopWatching()
+        sampleSequence?.cancel()
+        sampleSequence = nil
         context?.dismiss(activityID: Self.activityID)
         inbox.removeAll()
         apps.onResolved = nil
@@ -64,6 +68,22 @@ public final class NotificationsFeature: NotchFeature {
         AnyView(NotificationsTabView(inbox: inbox, apps: apps) { [weak self] item in
             self?.openApp(of: item)
         })
+    }
+
+    /// Sample notifications, listed and shown as banners' are, with or without
+    /// mirroring on and Accessibility access; no system banner is moved for them.
+    public var debugItems: [NotchMenuItem] {
+        [
+            .button(localized(en: "Short Notification", zh: "短通知"), symbol: "bell") { [weak self] in
+                self?.showSamples([NotificationSample.short])
+            },
+            .button(localized(en: "Long Notification", zh: "长通知"), symbol: "text.alignleft") { [weak self] in
+                self?.showSamples([NotificationSample.long])
+            },
+            .button(localized(en: "Three Notifications in a Row", zh: "连续 3 条通知"), symbol: "square.stack") { [weak self] in
+                self?.showSamples(NotificationSample.sequence)
+            },
+        ]
     }
 
     /// Starts or stops watching to match `isEnabled`, and passes on
@@ -138,10 +158,9 @@ public final class NotificationsFeature: NotchFeature {
     /// Lists every new banner and shows the newest beside the notch.
     private func bannersArrived(_ captures: [BannerCapture]) {
         let now = Date()
-        var newest: NotificationItem?
-        for capture in captures {
+        notificationsArrived(captures.map { capture in
             let app = capture.appName.flatMap(apps.resolve)
-            let item = NotificationItem(
+            return NotificationItem(
                 token: capture.token,
                 appName: capture.appName,
                 bundleIdentifier: app?.bundleIdentifier,
@@ -151,10 +170,31 @@ public final class NotificationsFeature: NotchFeature {
                 body: capture.body,
                 received: now
             )
-            inbox.insert(item)
-            newest = item
+        })
+    }
+
+    /// Shows the Debug pane's samples about a second apart, replacing a run
+    /// still going.
+    private func showSamples(_ samples: [NotificationSample]) {
+        sampleSequence?.cancel()
+        sampleSequence = Task { [weak self] in
+            for (index, sample) in samples.enumerated() {
+                if index > 0 {
+                    try? await Task.sleep(for: .seconds(1))
+                }
+                guard !Task.isCancelled, let self else { return }
+                notificationsArrived([sample.item(received: Date())])
+            }
+            self?.sampleSequence = nil
         }
-        guard let newest else { return }
+    }
+
+    /// Lists `items` and shows the last beside the notch.
+    private func notificationsArrived(_ items: [NotificationItem]) {
+        for item in items {
+            inbox.insert(item)
+        }
+        guard let newest = items.last else { return }
         // The same id replaces the previous banner's activity and restarts its timer.
         let open: @MainActor () -> Void = { [weak self] in
             self?.openDetail(of: newest)

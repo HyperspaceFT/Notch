@@ -17,7 +17,44 @@ public final class FilesFeature: NotchFeature {
     private let airDropTarget = DropTarget()
     private let shelfTarget = DropTarget()
 
+    private var highlightTask: Task<Void, Never>?
+
     public init() {}
+
+    public func deactivate() {
+        highlightTask?.cancel()
+        highlightTask = nil
+    }
+
+    /// Sample files on the shelf, and the AirDrop zone's drop highlight, for
+    /// checking the tab. The files are written to the temporary directory and
+    /// only these leave the shelf again; nothing is sent with AirDrop.
+    public var debugItems: [NotchMenuItem] {
+        [
+            .button(localized(en: "Add Sample Files", zh: "添加示例文件"), symbol: "doc.badge.plus") { [shelf] in
+                shelf.add(FileSamples.create())
+            },
+            .button(localized(en: "Remove Sample Files", zh: "移除示例文件"), symbol: "doc.badge.minus") { [shelf] in
+                shelf.removeItems(inside: FileSamples.directory)
+                FileSamples.delete()
+            },
+            .divider,
+            .button(localized(en: "Highlight the AirDrop Zone", zh: "高亮 AirDrop 区域"), symbol: "dot.radiowaves.left.and.right") { [weak self] in
+                self?.highlightAirDropZone()
+            },
+        ]
+    }
+
+    private func highlightAirDropZone() {
+        highlightTask?.cancel()
+        airDropTarget.isTargeted = true
+        highlightTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled, let self else { return }
+            airDropTarget.isTargeted = false
+            highlightTask = nil
+        }
+    }
 
     public func makeExpandedView() -> AnyView? {
         AnyView(FilesExpandedView(shelf: shelf, airDropTarget: airDropTarget, shelfTarget: shelfTarget))

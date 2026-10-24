@@ -2,7 +2,7 @@ import SwiftUI
 
 /// A self-contained module that lives inside the notch.
 ///
-/// A feature may contribute five things:
+/// A feature may contribute six things:
 /// - live activities (via `NotchContext.present`) shown as wings beside the
 ///   hardware notch, or as a band of light around it, while the island is collapsed,
 /// - a tab in the expanded panel (via `makeExpandedView`, its button's icon
@@ -10,7 +10,9 @@ import SwiftUI
 /// - a detail the expanded island opens on alone, without the tabs (via
 ///   `NotchContext.requestExpand(detail:)`),
 /// - modules for the Home tab (via `makeHomeModules`), and
-/// - entries in the island's right-click menu (via `menuItems`).
+/// - entries in the island's right-click menu (via `menuItems`), and
+/// - actions in the settings window's Debug pane (via `debugItems`), which show
+///   its views at once with sample data, for checking how they look.
 ///
 /// Features are created once in `FeatureCatalog`, activated when the shell
 /// starts, and deactivated when it stops. They must not touch windows directly.
@@ -41,6 +43,11 @@ public protocol NotchFeature: AnyObject {
     /// Read while the island draws, so they may follow observable state (e.g. a
     /// running timer) and the interface language.
     var menuItems: [NotchMenuItem] { get }
+    /// Actions in the settings window's Debug pane, shown while debug mode is on
+    /// (General settings); empty by default. Each shows some of the feature's views
+    /// at once, with sample data where needed, for checking how they look; none
+    /// may change the user's own data. Read while the pane draws, like `menuItems`.
+    var debugItems: [NotchMenuItem] { get }
 
     /// Called once when the shell starts. Keep the context to present activities later.
     func activate(context: any NotchContext)
@@ -74,6 +81,7 @@ extension NotchFeature {
     public var isTabAvailable: Bool { true }
     public var expandedWidth: CGFloat? { nil }
     public var menuItems: [NotchMenuItem] { [] }
+    public var debugItems: [NotchMenuItem] { [] }
     public func activate(context: any NotchContext) {}
     public func deactivate() {}
     public func makeExpandedView() -> AnyView? { nil }

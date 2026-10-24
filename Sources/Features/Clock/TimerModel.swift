@@ -38,6 +38,9 @@ final class TimerModel {
     @ObservationIgnored var onEvent: ((Event) -> Void)?
 
     @ObservationIgnored private let defaults: UserDefaults
+    /// Whether the running or finished timer was started as one to remember (see
+    /// `start(duration:now:remembering:)`), so a restart keeps to it.
+    @ObservationIgnored private var remembersDuration = true
     /// Wakes when the running timer is due; cancelled whenever it stops running.
     @ObservationIgnored private var finishTask: Task<Void, Never>?
     /// Repeats the alert sound while the finished timer is not dismissed.
@@ -64,11 +67,16 @@ final class TimerModel {
 
     /// Starts a timer for `duration` seconds, replacing whatever ran or sounded
     /// before, and remembers it, in whole minutes, as the setter's next value.
-    func start(duration: TimeInterval, now: Date = Date()) {
+    /// With `remembering` false the setter and the saved value stay as they are;
+    /// only the Debug pane starts that way.
+    func start(duration: TimeInterval, now: Date = Date(), remembering: Bool = true) {
         stopAlert(notifying: false)
-        let minutes = CountdownTimer.clampedSetterMinutes(Int((duration / 60).rounded()))
-        setterMinutes = minutes
-        defaults.set(minutes, forKey: Self.lastMinutesKey)
+        remembersDuration = remembering
+        if remembering {
+            let minutes = CountdownTimer.clampedSetterMinutes(Int((duration / 60).rounded()))
+            setterMinutes = minutes
+            defaults.set(minutes, forKey: Self.lastMinutesKey)
+        }
         phase = .counting(CountdownTimer(duration: duration, startingAt: now))
         scheduleFinish()
         onEvent?(.started)
@@ -110,9 +118,23 @@ final class TimerModel {
     func restart(now: Date = Date()) {
         switch phase {
         case .idle: return
-        case .counting(let timer): start(duration: timer.total, now: now)
-        case .finished(let total): start(duration: total, now: now)
+        case .counting(let timer): start(duration: timer.total, now: now, remembering: remembersDuration)
+        case .finished(let total): start(duration: total, now: now, remembering: remembersDuration)
         }
+    }
+
+    /// For the Debug pane: rings at once, as a one-minute timer that just ran
+    /// out, without remembering its duration.
+    func startFinished(now: Date = Date()) {
+        stopAlert(notifying: false)
+        finishTask?.cancel()
+        finishTask = nil
+        remembersDuration = false
+        let duration: TimeInterval = 60
+        phase = .counting(CountdownTimer(duration: duration, startingAt: now.addingTimeInterval(-duration)))
+        // Not through `onEvent(.started)`: the wings and band would flash up
+        // for a moment before the bell replaces them.
+        finish()
     }
 
     /// Silences and dismisses the finished timer's alert.

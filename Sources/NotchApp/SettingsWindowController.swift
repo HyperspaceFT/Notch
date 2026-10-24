@@ -10,15 +10,35 @@ import SwiftUI
 import SystemHUDFeature
 import WeatherFeature
 
+/// Tells the settings controller that its window is closing.
+@MainActor
+private final class SettingsWindowDelegate: NSObject, NSWindowDelegate {
+    var onClose: () -> Void = {}
+
+    func windowWillClose(_ notification: Notification) {
+        onClose()
+    }
+}
+
 /// The settings window: a standalone window with one toolbar tab per pane
-/// (General, Island, Home, Weather, and Calendar). Built on first use and kept for later openings.
+/// (General, Island, Home, Weather, and Calendar, and Debug while debug mode is on).
+/// Built on first use and kept for later openings.
 @MainActor
 final class SettingsWindowController {
     private var window: NSWindow?
     private var tabs: NSTabViewController?
     /// Each pane's tab and its title in the interface language.
     private var panes: [(item: NSTabViewItem, title: @MainActor () -> String)] = []
+    /// The Debug pane's tab, one of `panes` that is in the window only while debug mode is on.
+    private var debugItem: NSTabViewItem?
     private let launchAtLogin = LaunchAtLogin()
+
+    /// What the Debug pane lists; set before the window is first shown.
+    var debugSources = DebugSources(islandItems: { [] }, features: [])
+    /// Ends the island pins the Debug pane makes; called when debug mode goes off
+    /// and when the window closes, so a pin never outlives the pane that undoes it.
+    var onEndDebugPins: () -> Void = {}
+    private let windowDelegate = SettingsWindowDelegate()
 
     func show() {
         launchAtLogin.refresh()
@@ -34,7 +54,12 @@ final class SettingsWindowController {
 
     private func makeWindow() -> NSWindow {
         addPane(
-            GeneralSettingsView(localization: .shared, launchAtLogin: launchAtLogin, appearance: .shared),
+            GeneralSettingsView(
+                localization: .shared,
+                launchAtLogin: launchAtLogin,
+                appearance: .shared,
+                debug: .shared
+            ),
             symbol: "gearshape"
         ) { localized(en: "General", zh: "通用") }
         addPane(IslandSettingsView(systemHUD: .shared, nowPlaying: .shared, notifications: .shared), symbol: "capsule") {
@@ -57,10 +82,19 @@ final class SettingsWindowController {
         }
         self.tabs = tabs
 
+        // Last, and not in the window until debug mode is on.
+        addPane(DebugSettingsView(sources: debugSources), symbol: "ladybug") {
+            localized(en: "Debug", zh: "调试")
+        }
+        debugItem = panes.last?.item
+        updateDebugPane()
+
         let window = NSWindow(contentViewController: tabs)
         window.styleMask = [.titled, .closable]
         window.toolbarStyle = .preference
         window.isReleasedWhenClosed = false
+        windowDelegate.onClose = { [weak self] in self?.onEndDebugPins() }
+        window.delegate = windowDelegate
         window.center()
         self.window = window
 
@@ -79,6 +113,29 @@ final class SettingsWindowController {
         let item = NSTabViewItem(viewController: controller)
         item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
         panes.append((item, title))
+    }
+
+    /// Puts the Debug pane in the window while debug mode is on and takes it out
+    /// when it goes off, again on every switch.
+    private func updateDebugPane() {
+        let isEnabled = withObservationTracking {
+            DebugSettings.shared.isEnabled
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.updateDebugPane()
+            }
+        }
+        guard let tabs, let debugItem else { return }
+        let index = tabs.tabViewItems.firstIndex(of: debugItem)
+        if isEnabled, index == nil {
+            tabs.addTabViewItem(debugItem)
+        } else if !isEnabled, let index {
+            if tabs.selectedTabViewItemIndex == index {
+                tabs.selectedTabViewItemIndex = 0
+            }
+            tabs.removeTabViewItem(debugItem)
+            onEndDebugPins()
+        }
     }
 
     /// Sets the AppKit labels for the interface language, again on every switch.
@@ -105,6 +162,7 @@ private struct GeneralSettingsView: View {
     @Bindable var localization: Localization
     @Bindable var launchAtLogin: LaunchAtLogin
     @Bindable var appearance: NotchAppearance
+    @Bindable var debug: DebugSettings
 
     var body: some View {
         Form {
@@ -132,6 +190,14 @@ private struct GeneralSettingsView: View {
                         .tag(AppLanguage?.some(language))
                 }
             }
+            Toggle(isOn: $debug.isEnabled) {
+                Text(localized(en: "Debug Mode", zh: "调试模式"))
+                Text(localized(
+                    en: "Adds a Debug pane to Settings that shows each part of the island at once, with sample data where needed, for checking how it looks.",
+                    zh: "在设置中加入「调试」面板，可立即显示岛的各个界面（必要时使用示例数据），用于检查界面。"
+                ))
+            }
+            .toggleStyle(.switch)
         }
         .formStyle(.grouped)
         .frame(width: 420)

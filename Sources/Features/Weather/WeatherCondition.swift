@@ -1,7 +1,7 @@
 import NotchKit
 
 /// The sky and precipitation an Open-Meteo WMO `weather_code` describes.
-enum WeatherCondition: Equatable, Sendable {
+enum WeatherCondition: Equatable, Sendable, CaseIterable {
     case clear
     case mostlyClear
     case partlyCloudy

@@ -16,6 +16,9 @@ final class NowPlayingModel {
     /// switch), so the tab does not vanish and send the open panel back to Home.
     private(set) var hasTrack = false
     private(set) var isPlaying = false
+    /// Whether the shown track is the Debug pane's sample. Observable, so the pane
+    /// redraws with its sample-only actions; the sample's controls reach no real app.
+    private(set) var isShowingSample = false
     /// The cover, else the player's icon, else `nil` (a placeholder is drawn).
     private(set) var cover: NSImage?
     /// The track `cover` belongs to. Changes together with `cover`, so the flip to
@@ -54,7 +57,8 @@ final class NowPlayingModel {
         self.trackGrace = trackGrace
     }
 
-    func show(_ new: PlaybackSnapshot?) {
+    func show(_ new: PlaybackSnapshot?, isSample: Bool = false) {
+        if isShowingSample != isSample { isShowingSample = isSample }
         guard let reading = new else {
             if isPlaying { isPlaying = false }
             if hasTrack, trackLoss == nil {
@@ -122,9 +126,11 @@ final class NowPlayingModel {
     }
 
     /// Brings the app that plays the shown track to the front; nothing when it
-    /// is not running, so a click never launches anything.
+    /// is not running, so a click never launches anything. A sample claims a real
+    /// app (Music) but plays in none, so it brings nothing to the front.
     func showPlayingApp() {
         guard
+            !isShowingSample,
             let bundleIdentifier = snapshot?.bundleIdentifier,
             let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
                 .first(where: { !$0.isTerminated }),
@@ -147,6 +153,7 @@ final class NowPlayingModel {
         trackLoss = nil
         hasTrack = false
         isPlaying = false
+        isShowingSample = false
         appName = nil
         appIcon = nil
         cover = nil

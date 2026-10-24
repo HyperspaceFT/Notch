@@ -73,6 +73,33 @@ public final class AirPodsFeature: NotchFeature {
         AnyView(AirPodsExpandedView(model: model))
     }
 
+    /// Sample AirPods and the speakers taking over, for checking the activities
+    /// and the tab. A sample reaches no device: its controls change only what it
+    /// shows, and a real connection or disconnection replaces it.
+    public var debugItems: [NotchMenuItem] {
+        var items: [NotchMenuItem] = [
+            .button(localized(en: "Connect AirPods Pro", zh: "连接 AirPods Pro"), symbol: "airpods.pro") { [weak self] in
+                self?.connectSample(.pro)
+            },
+            .button(localized(en: "Connect AirPods Max", zh: "连接 AirPods Max"), symbol: "airpods.max") { [weak self] in
+                self?.connectSample(.max)
+            },
+            .button(localized(en: "Connect with a Low Battery", zh: "连接（电量低）"), symbol: "battery.25percent") { [weak self] in
+                self?.connectSample(.lowBattery)
+            },
+            .button(localized(en: "Switch to the Speakers", zh: "切换到扬声器"), symbol: "macbook") { [weak self] in
+                self?.presentSpeakerActivity(volume: 0.5, isMuted: false)
+            },
+        ]
+        if model.isShowingSample {
+            items.append(.divider)
+            items.append(.button(localized(en: "Disconnect the Sample", zh: "断开示例设备"), symbol: "xmark") { [weak self] in
+                self?.disconnectSample()
+            })
+        }
+        return items
+    }
+
     private func startMonitoring() {
         guard monitor == nil else { return }
         let monitor = AirPodsMonitor { [weak self] device, isNewConnection in
@@ -95,6 +122,29 @@ public final class AirPodsFeature: NotchFeature {
         context?.dismiss(activityID: "connected")
         model.connect(device, product: product)
         guard isNewConnection else { return }
+        presentConnectedActivity(product: product)
+    }
+
+    /// Shows a sample as newly connected AirPods, in place of what the tab showed.
+    private func connectSample(_ sample: AirPodsSample) {
+        context?.dismiss(activityID: "connected")
+        model.showSample(sample)
+        presentConnectedActivity(product: sample.connection.product)
+    }
+
+    /// Takes the sample away, back to the AirPods connected for real, if any,
+    /// without their connection activity.
+    private func disconnectSample() {
+        guard model.isShowingSample else { return }
+        context?.dismiss(activityID: "connected")
+        if let device = monitor?.current, let product = device.airPodsProduct {
+            model.connect(device, product: product)
+        } else {
+            model.disconnect()
+        }
+    }
+
+    private func presentConnectedActivity(product: AirPodsProduct) {
         context?.present(NotchActivity(
             id: "connected",
             priority: .high,
@@ -126,7 +176,10 @@ public final class AirPodsFeature: NotchFeature {
         defaultOutput = output?.device
         guard let output, output.device != previous, output.isBuiltInSpeaker else { return }
         let volume = output.volume ?? 0
-        let isMuted = output.isMuted == true || volume == 0
+        presentSpeakerActivity(volume: volume, isMuted: output.isMuted == true || volume == 0)
+    }
+
+    private func presentSpeakerActivity(volume: Float, isMuted: Bool) {
         context?.present(NotchActivity(
             id: "speaker",
             priority: .high,
@@ -164,6 +217,9 @@ final class AirPodsModel {
     private(set) var supportedModes: [ListeningMode] = []
     /// `nil` for Off and unknown values.
     private(set) var listeningMode: ListeningMode?
+    /// Whether the connection is the Debug pane's sample (`showSample`), with
+    /// no device behind it.
+    private(set) var isShowingSample = false
 
     /// While the slider is dragged, refreshes leave `volume` alone.
     @ObservationIgnored var isEditingVolume = false
@@ -171,14 +227,19 @@ final class AirPodsModel {
     @ObservationIgnored private var audio: AirPodsAudioDevice?
     @ObservationIgnored private var connectPoll: Task<Void, Never>?
     @ObservationIgnored private var viewPoll: Task<Void, Never>?
+    /// Whether the expanded panel holds the AirPods view (`startViewPoll` and
+    /// `stopViewPoll`), whether or not a poll runs: a sample or no device starts none.
+    @ObservationIgnored private var isViewShown = false
 
     func connect(_ device: IOBluetoothDevice, product: AirPodsProduct) {
-        // The view poll keeps running: when another pair takes over, the tab stays
-        // on screen without a new onAppear, and the poll reads the new device.
+        // The view poll keeps running when another pair takes over: the tab stays
+        // on screen without a new onAppear, and the poll reads the new device. After
+        // a sample or no device none runs, so one starts below if the view is shown.
         connectPoll?.cancel()
         connectPoll = nil
         isEditingVolume = false
         self.device = device
+        isShowingSample = false
         connection = Connection(address: device.addressString, name: device.name, product: product)
         battery = AirPodsBattery()
         volume = nil
@@ -187,11 +248,31 @@ final class AirPodsModel {
         audio = nil
         refresh()
         startConnectPoll()
+        if isViewShown {
+            beginViewPoll()
+        }
+    }
+
+    /// Shows `sample` as the connected AirPods, for the Debug pane. With no
+    /// device or audio device behind it, refreshes leave it alone and its
+    /// controls change only what it shows.
+    func showSample(_ sample: AirPodsSample) {
+        stopPolling()
+        device = nil
+        audio = nil
+        isShowingSample = true
+        connection = sample.connection
+        battery = sample.battery
+        volume = sample.volume
+        supportedModes = sample.supportedModes
+        listeningMode = sample.listeningMode
+        isEditingVolume = false
     }
 
     func disconnect() {
         stopPolling()
         device = nil
+        isShowingSample = false
         audio = nil
         connection = nil
         battery = AirPodsBattery()
@@ -232,6 +313,10 @@ final class AirPodsModel {
     /// Shows the mode right away; the next refresh reads it back, so a mode the
     /// AirPods reject reverts on screen.
     func setListeningMode(_ mode: ListeningMode) {
+        if isShowingSample {
+            listeningMode = mode
+            return
+        }
         guard audio?.setListeningMode(mode) == true else { return }
         listeningMode = mode
     }
@@ -239,8 +324,15 @@ final class AirPodsModel {
     /// Refreshes every second while the expanded panel holds the AirPods view,
     /// selected or not: the panel keeps every visible tab's view in place.
     func startViewPoll() {
+        isViewShown = true
         guard viewPoll == nil, device != nil else { return }
         refresh()
+        beginViewPoll()
+    }
+
+    /// Starts the view poll unless it runs or there is no device to read.
+    private func beginViewPoll() {
+        guard viewPoll == nil, device != nil else { return }
         viewPoll = Task { [weak self] in
             while true {
                 try? await Task.sleep(for: Self.pollInterval)
@@ -251,6 +343,11 @@ final class AirPodsModel {
     }
 
     func stopViewPoll() {
+        isViewShown = false
+        cancelViewPoll()
+    }
+
+    private func cancelViewPoll() {
         viewPoll?.cancel()
         viewPoll = nil
         isEditingVolume = false
@@ -277,7 +374,7 @@ final class AirPodsModel {
     private func stopPolling() {
         connectPoll?.cancel()
         connectPoll = nil
-        stopViewPoll()
+        cancelViewPoll()
     }
 }
 

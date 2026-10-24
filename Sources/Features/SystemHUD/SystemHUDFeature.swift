@@ -44,6 +44,30 @@ public final class SystemHUDFeature: NotchFeature {
         context = nil
     }
 
+    /// The level activity at fixed levels, for checking its wings. It goes through
+    /// `show` only: no volume or brightness is read or changed, and neither the
+    /// HUD switch nor Accessibility access matters.
+    public var debugItems: [NotchMenuItem] {
+        [
+            .button(localized(en: "Volume 60%", zh: "音量 60%"), symbol: "speaker.wave.2.fill") { [weak self] in
+                self?.show(.volume, level: 0.6, isMuted: false)
+            },
+            .button(localized(en: "Muted", zh: "静音"), symbol: "speaker.slash.fill") { [weak self] in
+                self?.show(.volume, level: 0.6, isMuted: true)
+            },
+            // One for each of the sun icon's three ray lengths.
+            .button(localized(en: "Brightness 20%", zh: "亮度 20%"), symbol: "sun.min") { [weak self] in
+                self?.show(.brightness, level: 0.2, isMuted: false)
+            },
+            .button(localized(en: "Brightness 70%", zh: "亮度 70%"), symbol: "sun.max") { [weak self] in
+                self?.show(.brightness, level: 0.7, isMuted: false)
+            },
+            .button(localized(en: "Brightness 100%", zh: "亮度 100%"), symbol: "sun.max.fill") { [weak self] in
+                self?.show(.brightness, level: 1, isMuted: false)
+            },
+        ]
+    }
+
     /// Starts or stops interception to match `isEnabled`, again on every change.
     private func followSettings(generation: Int) {
         guard generation == observationGeneration else { return }

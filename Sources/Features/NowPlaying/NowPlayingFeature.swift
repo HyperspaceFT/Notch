@@ -27,6 +27,9 @@ public final class NowPlayingFeature: NotchFeature {
     /// The MediaRemote adapter's stream; `nil` when it is not in use.
     private var mediaRemote: MediaRemoteMonitor?
     private var systemSnapshot: PlaybackSnapshot?
+    /// The Debug pane's sample track, shown over every real source until it is
+    /// stopped; commands on it change only it.
+    private var sampleSnapshot: PlaybackSnapshot?
     /// The scripting fallback; `nil` while the adapter's stream is in use.
     private var monitor: NowPlayingMonitor?
     private var snapshots: [SupportedPlayer: PlaybackSnapshot] = [:]
@@ -67,6 +70,7 @@ public final class NowPlayingFeature: NotchFeature {
         }
         isPresented = false
         snapshots = [:]
+        sampleSnapshot = nil
         presence = PresenceTracker()
         model.onCommand = nil
         model.onOpenDetail = nil
@@ -76,6 +80,31 @@ public final class NowPlayingFeature: NotchFeature {
 
     public func makeExpandedView() -> AnyView? {
         AnyView(NowPlayingDetailView(model: model))
+    }
+
+    /// A sample track over the real ones, for checking the wings, the cover's
+    /// flight into the tab, and the tab; its controls act on the sample alone.
+    public var debugItems: [NotchMenuItem] {
+        var items: [NotchMenuItem] = [
+            .button(localized(en: "Play a Sample Track", zh: "播放示例曲目"), symbol: "play.fill") { [weak self] in
+                self?.showSample(NowPlayingSample.track(now: Date()))
+            },
+            .button(localized(en: "Sample with a Long Title", zh: "长标题示例"), symbol: "text.append") { [weak self] in
+                self?.showSample(NowPlayingSample.longTitle(now: Date()))
+            },
+        ]
+        if model.isShowingSample {
+            items.append(contentsOf: [
+                .button(localized(en: "Pause the Sample", zh: "暂停示例曲目"), symbol: "pause.fill") { [weak self] in
+                    self?.pauseSample()
+                },
+                .divider,
+                .button(localized(en: "Stop the Sample", zh: "停止示例"), symbol: "stop.fill") { [weak self] in
+                    self?.showSample(nil)
+                },
+            ])
+        }
+        return items
     }
 
     /// Picks the source to match `usesMediaRemote`, again on every change.
@@ -143,6 +172,17 @@ public final class NowPlayingFeature: NotchFeature {
     private func perform(_ command: PlaybackCommand, shown: PlaybackSnapshot) {
         // The model already changed its copy; follow it until the player answers.
         let now = Date()
+        // The sample is all that shows while there is one: nothing reaches a real player.
+        if let sample = sampleSnapshot {
+            switch command {
+            case .next, .previous:
+                sampleSnapshot = NowPlayingSample.other(than: sample, now: now)
+            case .playPause, .seek:
+                sampleSnapshot?.apply(command, at: now)
+            }
+            update()
+            return
+        }
         guard let player = shown.player else {
             performOnSystemPlayer(command, at: now)
             return
@@ -161,12 +201,39 @@ public final class NowPlayingFeature: NotchFeature {
         }
     }
 
+    /// Shows `sample` over the real sources; `nil` shows them again.
+    private func showSample(_ sample: PlaybackSnapshot?) {
+        sampleSnapshot = sample
+        update()
+    }
+
+    private func pauseSample() {
+        guard sampleSnapshot?.isPlaying == true else { return }
+        sampleSnapshot?.setPlaying(false, at: Date())
+        update()
+    }
+
     private func update() {
-        let current = systemSnapshot
-            ?? PlaybackSnapshot.current(from: snapshots, preferring: model.snapshot?.player)
+        let current = Self.shown(
+            sample: sampleSnapshot,
+            system: systemSnapshot,
+            players: snapshots,
+            preferring: model.snapshot?.player
+        )
         presence.update(current, now: Date())
-        model.show(current)
+        model.show(current, isSample: sampleSnapshot != nil)
         followPresence()
+    }
+
+    /// The snapshot to show: the Debug pane's sample while there is one, else
+    /// the system's, else the scripted players' (`PlaybackSnapshot.current`).
+    static func shown(
+        sample: PlaybackSnapshot?,
+        system: PlaybackSnapshot?,
+        players: [SupportedPlayer: PlaybackSnapshot],
+        preferring preferred: SupportedPlayer?
+    ) -> PlaybackSnapshot? {
+        sample ?? system ?? PlaybackSnapshot.current(from: players, preferring: preferred)
     }
 
     private func followPresence() {

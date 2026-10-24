@@ -22,6 +22,8 @@ public final class NotchShellController {
     private var panel: NotchPanel?
     private var hoverController: HoverController?
     private var featureHost: FeatureHost?
+    /// Whether a Debug pane action turned hover off (`debugItems`).
+    private var isPinnedByDebugPane = false
     private let screenLocator = ScreenLocator()
 
     /// Called from the island's right-click menu to open the settings window.
@@ -111,6 +113,7 @@ public final class NotchShellController {
         panel?.orderOut(nil)
         panel = nil
         model = nil
+        isPinnedByDebugPane = false
     }
 
     private func apply(_ geometry: NotchGeometry) {
@@ -131,6 +134,74 @@ public final class NotchShellController {
             guard let data = rep.representation(using: .png, properties: [:]) else { return }
             try? data.write(to: URL(fileURLWithPath: path))
         }
+    }
+
+    /// Actions for the settings window's Debug pane that pin the island's own
+    /// state. Pinning turns the hover controller off (as `-NotchDebugState` does),
+    /// so the island stays as it is while the pointer is in the settings window;
+    /// without it an island opened from there closes again about a second and a
+    /// half later (`HoverController.arrivalDelay`).
+    public var debugItems: [NotchMenuItem] {
+        guard model != nil else { return [] }
+        return [
+            .button(
+                localized(en: "Expand and Keep Open", zh: "展开并保持"),
+                symbol: "arrow.up.left.and.arrow.down.right"
+            ) { [weak self] in
+                self?.pinIsland { $0.requestExpand(tabID: nil) }
+            },
+            .button(
+                localized(en: "Hover and Keep", zh: "悬停并保持"),
+                symbol: "cursorarrow.rays"
+            ) { [weak self] in
+                self?.pinIsland {
+                    $0.setExpanded(false)
+                    $0.setHovered(true)
+                }
+            },
+            .button(
+                localized(en: "Collapse and Keep", zh: "收起并保持"),
+                symbol: "arrow.down.right.and.arrow.up.left"
+            ) { [weak self] in
+                self?.pinIsland {
+                    $0.setHovered(false)
+                    $0.setExpanded(false)
+                }
+            },
+            .divider,
+            .button(
+                localized(en: "Follow the Pointer Again", zh: "恢复跟随鼠标"),
+                symbol: "cursorarrow.motionlines"
+            ) { [weak self] in
+                self?.followPointer()
+            },
+        ]
+    }
+
+    /// Ends a pin: the island follows the pointer again, as it does without debug mode.
+    public func followPointer() {
+        guard let model else { return }
+        isPinnedByDebugPane = false
+        model.isHoverEnabled = true
+        // Judge the pointer now, so a pinned hover or expansion does not
+        // wait for the next mouse move to end.
+        hoverController?.refresh()
+    }
+
+    /// Ends a pin made from the Debug pane, if there is one; leaves alone the
+    /// pin of a `-NotchDebugState` launch, which no pane action made. A pin
+    /// must not outlive the pane: a collapsed, pinned island ignores the mouse,
+    /// so its right-click menu (the way back to Settings… and Quit) would be gone.
+    public func endDebugPins() {
+        guard isPinnedByDebugPane else { return }
+        followPointer()
+    }
+
+    private func pinIsland(_ change: (NotchViewModel) -> Void) {
+        guard let model else { return }
+        isPinnedByDebugPane = true
+        model.isHoverEnabled = false
+        change(model)
     }
 
     private func applyDebugState(to model: NotchViewModel) {

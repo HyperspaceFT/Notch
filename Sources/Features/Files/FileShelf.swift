@@ -62,6 +62,19 @@ final class FileShelf {
         }
     }
 
+    /// Takes off the items that are `directory` or inside it, leaving the others.
+    func removeItems(inside directory: URL) {
+        let root = directory.standardizedFileURL.path(percentEncoded: false)
+        let prefix = root.hasSuffix("/") ? root : root + "/"
+        let ids = items.filter { item in
+            let path = item.url.standardizedFileURL.path(percentEncoded: false)
+            return path == root || path.hasPrefix(prefix)
+        }.map(\.id)
+        for id in ids {
+            remove(id)
+        }
+    }
+
     // MARK: Selection
 
     /// A click: selects `id` alone.

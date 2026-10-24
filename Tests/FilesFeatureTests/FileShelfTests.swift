@@ -108,3 +108,66 @@ struct FileShelfTests {
         #expect(shelf.items.count == 5)
     }
 }
+
+@MainActor
+struct FileSamplesTests {
+    private let directory = FileManager.default.temporaryDirectory
+        .appending(path: "NotchFileSamplesTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+
+    @Test func writesTextImageDocumentAndFolder() throws {
+        defer { FileSamples.delete(in: directory) }
+        let urls = FileSamples.create(in: directory)
+        #expect(urls.count == 4)
+        let extensions = Set(urls.map(\.pathExtension))
+        #expect(extensions == ["txt", "png", "pdf", ""])
+        for url in urls {
+            #expect(FileManager.default.fileExists(atPath: url.path(percentEncoded: false)))
+            #expect(url.deletingLastPathComponent().standardizedFileURL == directory.standardizedFileURL)
+        }
+        let png = try Data(contentsOf: urls.first { $0.pathExtension == "png" }!)
+        #expect(png.starts(with: [0x89, 0x50, 0x4E, 0x47]))
+        let pdf = try Data(contentsOf: urls.first { $0.pathExtension == "pdf" }!)
+        #expect(pdf.starts(with: Array("%PDF".utf8)))
+    }
+
+    @Test func creatingAgainReplacesTheFolder() {
+        defer { FileSamples.delete(in: directory) }
+        _ = FileSamples.create(in: directory)
+        let stray = directory.appending(path: "stray.txt")
+        FileManager.default.createFile(atPath: stray.path(percentEncoded: false), contents: Data())
+        #expect(FileSamples.create(in: directory).count == 4)
+        #expect(!FileManager.default.fileExists(atPath: stray.path(percentEncoded: false)))
+    }
+
+    @Test func deleteRemovesTheFolder() {
+        _ = FileSamples.create(in: directory)
+        FileSamples.delete(in: directory)
+        #expect(!FileManager.default.fileExists(atPath: directory.path(percentEncoded: false)))
+    }
+
+    @Test func removingSampleItemsKeepsTheOthers() {
+        let shelf = FileShelf()
+        let own = URL(fileURLWithPath: "/tmp/own-files/report.txt")
+        // Starts with the folder's path but is a sibling folder.
+        let lookalike = URL(fileURLWithPath: directory.deletingLastPathComponent().path(percentEncoded: false)
+            + "/\(directory.lastPathComponent)-other/file.txt")
+        shelf.add([own])
+        shelf.add(FileSamples.create(in: directory))
+        shelf.add([lookalike])
+        #expect(shelf.items.count == 6)
+        defer { FileSamples.delete(in: directory) }
+
+        shelf.removeItems(inside: directory)
+        #expect(shelf.items.map(\.url) == [own, lookalike])
+    }
+
+    @Test func removingSampleItemsAlsoDropsTheirSelection() {
+        let shelf = FileShelf()
+        defer { FileSamples.delete(in: directory) }
+        shelf.add(FileSamples.create(in: directory))
+        shelf.selectAll()
+        shelf.removeItems(inside: directory)
+        #expect(shelf.items.isEmpty)
+        #expect(shelf.selection.isEmpty)
+    }
+}

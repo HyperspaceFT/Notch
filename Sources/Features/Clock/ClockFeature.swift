@@ -111,6 +111,35 @@ public final class ClockFeature: NotchFeature {
         return [.submenu(localized(en: "Timer", zh: "计时器"), symbol: "timer", items: items)]
     }
 
+    /// Timers that start at once without touching the remembered duration, and
+    /// the ringing state, for checking the wings, band, tab, and bell.
+    public var debugItems: [NotchMenuItem] {
+        var items: [NotchMenuItem] = [
+            .button(localized(en: "Start a 10-Second Timer", zh: "开始 10 秒计时"), symbol: "timer") { [model] in
+                model.start(duration: 10, remembering: false)
+            },
+            .button(localized(en: "Start a 5-Minute Timer", zh: "开始 5 分钟计时"), symbol: "timer") { [model] in
+                model.start(duration: 5 * 60, remembering: false)
+            },
+            // The long h:mm:ss layout of the wings and the tab.
+            .button(localized(en: "Start a 1-Hour 5-Minute Timer", zh: "开始 1 小时 5 分钟计时"), symbol: "timer") { [model] in
+                model.start(duration: 65 * 60, remembering: false)
+            },
+            .button(localized(en: "Ring Now", zh: "立刻响铃"), symbol: "bell.fill") { [model] in
+                model.startFinished()
+            },
+        ]
+        if model.phase != .idle {
+            items.append(.divider)
+            items.append(.button(localized(en: "Cancel Timer", zh: "取消计时"), symbol: "xmark") { [model] in
+                // Each does nothing unless the timer is in its phase.
+                model.cancel()
+                model.stopAlert()
+            })
+        }
+        return items
+    }
+
     /// Opens the island on the timer's setter (`TimerPanel`, shown while idle).
     private func openPanel() {
         context?.requestExpand(detail: AnyView(TimerPanel(model: model) { [weak self] in

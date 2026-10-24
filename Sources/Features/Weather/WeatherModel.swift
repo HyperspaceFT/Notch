@@ -60,6 +60,43 @@ final class WeatherModel {
         }
     }
 
+    /// For the Debug pane: shows `report` as if just fetched, in place of the
+    /// real one and for as long as a fresh one lasts. Leaves `Daylight` alone,
+    /// so the island's edge keeps following the real sun.
+    func showSample(_ report: WeatherReport) {
+        cancelRefresh()
+        lastSuccess = Date()
+        lastFailure = nil
+        self.report = report
+        status = .ready
+    }
+
+    /// For the Debug pane: shows `status`, which has no report, for as long as a
+    /// fresh report would last.
+    func showStatus(_ status: Status) {
+        cancelRefresh()
+        lastSuccess = Date()
+        lastFailure = nil
+        report = nil
+        self.status = status
+    }
+
+    /// For the Debug pane: drops any sample and fetches the real weather now.
+    func useRealWeather() {
+        lastSuccess = nil
+        lastFailure = nil
+        report = nil
+        status = .loading
+        refreshIfNeeded()
+    }
+
+    /// Lets no fetch in progress replace a sample when it ends.
+    private func cancelRefresh() {
+        if refreshTask != nil {
+            stop()
+        }
+    }
+
     /// Cancels the refresh in progress and the location request with it.
     func stop() {
         refreshTask?.cancel()

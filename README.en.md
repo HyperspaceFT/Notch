@@ -45,6 +45,8 @@ The interface is available in English and Simplified Chinese. It follows the sys
 
 The **General** pane of **Settings…** has a **Light and Color** switch (on by default). Cards are lit from above with a fine rim; the weather, calendar, charging, low-battery, and AirDrop cards take a color from what they show; and large numbers get a slight sheen. Once open, the island's edge follows the sky: by day a soft halo marks where the sun stands (rising on the left side, at the bottom center at noon, setting on the right), turning more orange the closer it is to sunrise or sunset; after sunset moonlight takes over, climbing the right side and crossing the top from right to left (partly hidden behind the notch around midnight) to come down the left side at sunrise, so the light goes once around the island a day; the fuller the moon, the brighter and larger its halo. Sunrise and sunset come from the Weather module and are kept, so they still serve while the weather has not refreshed; until they are first fetched, Notch assumes sunrise at 6:00 and sunset at 18:00. With the switch off, cards are plain gray.
 
+The **Debug Mode** switch at the bottom of the **General** pane (off by default) is for checking how the interface looks. With it on, **Settings…** gets a **Debug** pane that lists actions grouped by source; one click shows the matching view on the notch at once, with sample data where needed, so you need not wait for a real notification, weather, or device. The first group is the **Island** itself: Expand and Keep Open, Hover and Keep, Collapse and Keep, and Follow the Pointer Again. Since the pointer is in the settings window and not on the island, an island opened from there closes again after about a second and a half; the first three keep it as it is until you choose Follow the Pointer Again, close Settings, or turn Debug Mode off. After that come the features' own actions: for now Timer, Calendar (event reminders), Weather, Notifications, Now Playing, AirPods, Battery, Volume & Brightness, and Files. Home, Notes, and Reminders show your own content and have none. The actions only show sample content: they do not change your notes, reminders, calendars, the files on the shelf, or any setting, and do not control the system volume, brightness, or other apps. Turn the switch off and the **Debug** pane goes away.
+
 More features are planned; see the [roadmap](#roadmap) below.
 
 ## Requirements
@@ -188,6 +190,8 @@ A feature can also implement `makeHomeModules()` to offer modules for the Home t
 
 Through `menuItems` a feature can add entries to the notch's right-click menu (`NotchMenuItem`: buttons, submenus, and dividers), shown above **Settings…** and free to follow the feature's state. See `Sources/Features/Clock` for an example.
 
+Through `debugItems` (also `NotchMenuItem`s) a feature can add actions to the **Debug** pane of **Settings…**, shown only while **Debug Mode** is on in the **General** pane. Each action shows one of the feature's views at once with sample data, for checking how it looks; none may change the user's own data or act on the system or other apps. Like `menuItems`, they are read while the pane draws. A feature whose content is the user's own data (Home, Notes, Reminders) has none.
+
 Write interface text with `localized(en:zh:)`, giving both the English and the Chinese, and read it while the view draws (for example, make `title` a computed property) so it updates as soon as the language changes.
 
 ## Roadmap
@@ -203,7 +207,7 @@ Write interface text with `localized(en:zh:)`, giving both the English and the C
 - [x] ✅ Reminders (a Home module, reading and writing the Reminders app)
 - [x] 🔔 Notifications (other apps' banners in the island, optionally hiding the system banner)
 - [x] ⏱️ Timer (started from Home's time module or the right-click menu, counting down beside the notch)
-- [x] ⚙️ Settings window (launch at login, Light and Color, the volume/brightness HUD switch, the notification switches, the Home layout, weather periods, the calendar, and language for now)
+- [x] ⚙️ Settings window (launch at login, Light and Color, Debug Mode, the volume/brightness HUD switch, the notification switches, the Home layout, weather periods, the calendar, and language for now)
 - [x] 🚀 Launch at login
 - [ ] 🔄 Automatic updates
 

@@ -8,7 +8,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         shell.onOpenSettings = { [settings] in settings.show() }
-        shell.start(features: FeatureCatalog.makeFeatures())
+        let features = FeatureCatalog.makeFeatures()
+        settings.debugSources = DebugSources(islandItems: { [shell] in shell.debugItems }, features: features)
+        settings.onEndDebugPins = { [shell] in shell.endDebugPins() }
+        shell.start(features: features)
     }
 
     func applicationWillTerminate(_ notification: Notification) {

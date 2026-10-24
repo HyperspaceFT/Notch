@@ -16,6 +16,9 @@ public final class CalendarFeature: NotchFeature {
     public let symbol = "calendar"
 
     static let reminderActivityID = "event-reminder"
+    /// The Debug pane's sample reminders: their own id, so showing one never
+    /// replaces a real reminder on screen.
+    static let sampleReminderActivityID = "event-reminder-sample"
     /// How long a reminder's activity stays visible.
     static let reminderDuration: TimeInterval = 10
     /// The longest the reminder loop sleeps, so events added meanwhile, a
@@ -52,6 +55,7 @@ public final class CalendarFeature: NotchFeature {
         reminderLoop = nil
         presentedNotice = nil
         context?.dismiss(activityID: Self.reminderActivityID)
+        context?.dismiss(activityID: Self.sampleReminderActivityID)
         context = nil
         local.stop()
         feeds.stop()
@@ -80,6 +84,26 @@ public final class CalendarFeature: NotchFeature {
                 }
             ),
         ]
+    }
+
+    /// Sample reminders, shown like real ones (wings, held while the island is
+    /// expanded, a click opens the detail). They bypass the planner and
+    /// `firedReminders`, read no calendar, and leave a real reminder alone (their
+    /// own activity id, and no `presentedNotice`).
+    public var debugItems: [NotchMenuItem] {
+        let reminders: [(title: String, notice: @MainActor (Date) -> EventReminderNotice)] = [
+            (localized(en: "Reminder: Starts in 5 Minutes", zh: "提醒：5 分钟后开始"),
+             EventReminderSamples.startsInFiveMinutes),
+            (localized(en: "Reminder: Starting Now, with a Meeting Link", zh: "提醒：正在开始（含会议链接）"),
+             EventReminderSamples.startingNowWithMeetingLink),
+            (localized(en: "Reminder: 3 Events at Once", zh: "提醒：3 个日程同时开始"),
+             EventReminderSamples.threeAtOnce),
+        ]
+        return reminders.map { reminder in
+            .button(reminder.title, symbol: "calendar.badge.clock") { [weak self] in
+                self?.present(reminder.notice(Date()), isSample: true)
+            }
+        }
     }
 
     // MARK: Reminders
@@ -145,15 +169,18 @@ public final class CalendarFeature: NotchFeature {
         )
     }
 
-    private func present(_ notice: EventReminderNotice) {
+    private func present(_ notice: EventReminderNotice, isSample: Bool = false) {
+        let activityID = isSample ? Self.sampleReminderActivityID : Self.reminderActivityID
         let open: @MainActor () -> Void = { [weak self] in
-            self?.openDetail(of: notice)
+            self?.openDetail(of: notice, activityID: activityID)
         }
-        presentedNotice = notice
+        if !isSample {
+            presentedNotice = notice
+        }
         // The same id replaces an earlier reminder still showing and restarts its
         // timer. Held while the island is expanded, so it is seen once it collapses.
         context?.present(NotchActivity(
-            id: Self.reminderActivityID,
+            id: activityID,
             priority: .high,
             duration: Self.reminderDuration,
             wingWidth: eventReminderWingWidth,
@@ -166,9 +193,13 @@ public final class CalendarFeature: NotchFeature {
     }
 
     /// Opens the island on the due events, in place of their activity.
-    private func openDetail(of notice: EventReminderNotice) {
+    private func openDetail(of notice: EventReminderNotice, activityID: String) {
         context?.requestExpand(detail: AnyView(EventReminderDetailView(notice: notice)))
-        dismissReminder()
+        if activityID == Self.reminderActivityID {
+            dismissReminder()
+        } else {
+            context?.dismiss(activityID: activityID)
+        }
     }
 
     private func dismissReminder() {
