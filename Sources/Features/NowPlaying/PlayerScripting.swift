@@ -65,6 +65,12 @@ enum SupportedPlayer: String, CaseIterable, Sendable {
         var artworkData: FourCharCode?
         /// Event class and id of the playpause command.
         var playPause: (eventClass: FourCharCode, eventID: FourCharCode)
+        /// Event class and id of the next track command.
+        var nextTrack: (eventClass: FourCharCode, eventID: FourCharCode)
+        /// Event class and id of the command that goes back: Music's `back track`,
+        /// which restarts the track unless it is near its start, as its own button
+        /// does, and Spotify's `previous track`.
+        var previousTrack: (eventClass: FourCharCode, eventID: FourCharCode)
     }
 
     var codes: Codes {
@@ -75,7 +81,9 @@ enum SupportedPlayer: String, CaseIterable, Sendable {
                 artworkURL: nil,
                 artworkClass: fourCharCode("cArt"),
                 artworkData: fourCharCode("pPCT"),
-                playPause: (fourCharCode("hook"), fourCharCode("PlPs"))
+                playPause: (fourCharCode("hook"), fourCharCode("PlPs")),
+                nextTrack: (fourCharCode("hook"), fourCharCode("Next")),
+                previousTrack: (fourCharCode("hook"), fourCharCode("Back"))
             )
         case .spotify:
             Codes(
@@ -83,8 +91,19 @@ enum SupportedPlayer: String, CaseIterable, Sendable {
                 artworkURL: fourCharCode("aUrl"),
                 artworkClass: nil,
                 artworkData: nil,
-                playPause: (fourCharCode("spfy"), fourCharCode("PlPs"))
+                playPause: (fourCharCode("spfy"), fourCharCode("PlPs")),
+                nextTrack: (fourCharCode("spfy"), fourCharCode("Next")),
+                previousTrack: (fourCharCode("spfy"), fourCharCode("Prev"))
             )
+        }
+    }
+
+    /// Seconds from the track `duration` the player reports. Spotify's dictionary
+    /// says seconds, but it answers in milliseconds; Music answers in seconds.
+    func durationSeconds(fromReported value: Double) -> TimeInterval {
+        switch self {
+        case .music: value
+        case .spotify: value / 1000
         }
     }
 }
@@ -111,15 +130,15 @@ func fourCharCode(_ text: String) -> FourCharCode {
     text.utf8.prefix(4).reduce(0) { $0 << 8 | FourCharCode($1) }
 }
 
-/// Reads and controls the players with raw Apple events (`core/getd` and the
-/// players' playpause command), sent from serial background queues with a reply
+/// Reads and controls the players with raw Apple events (`core/getd`, `core/setd`
+/// for the position, and the players' playpause and track commands), sent from serial background queues with a reply
 /// timeout, so the main thread never blocks. Not `NSAppleScript`: it is
 /// main-thread-only, and run off the main thread it stalled for many seconds,
 /// past its own `with timeout`. Descriptors stay on the queue; only plain values
 /// come back.
 ///
-/// Each player has its own queue for state reads and play/pause, so a player that
-/// hangs cannot hold up the other and a toggle is ordered against the reads
+/// Each player has its own queue for state reads and commands, so a player that
+/// hangs cannot hold up the other and a command is ordered against the reads
 /// around it, and a second queue for artwork, which can be slow and is not urgent.
 final class PlayerScripting: Sendable {
     enum StateRead: Sendable, Equatable {
@@ -189,17 +208,16 @@ final class PlayerScripting: Sendable {
         }
     }
 
-    /// Plays or pauses. The command is queued before this returns, behind the
-    /// player's reads already waiting and ahead of every later one, so a read
-    /// started afterwards sees its effect. A refusal or timeout does nothing; the
-    /// next read shows the real state. `completion` runs on the queue once the
+    /// Plays or pauses, skips, or seeks. The command is queued before this returns,
+    /// behind the player's reads already waiting and ahead of every later one, so a
+    /// read started afterwards sees its effect. A refusal or timeout does nothing;
+    /// the next read shows the real state. `completion` runs on the queue once the
     /// command has been answered or given up. Gate on `isRunning` before calling;
     /// it is checked again when the command gets its turn.
-    func toggle(_ player: SupportedPlayer, completion: @escaping @Sendable () -> Void) {
+    func perform(_ command: PlaybackCommand, on player: SupportedPlayer, completion: @escaping @Sendable () -> Void) {
         queues(for: player).state.async {
             if player.isRunning {
-                let command = player.codes.playPause
-                _ = try? Self.send(Self.event(command.eventClass, command.eventID, to: player), timeout: Self.stateTimeout)
+                _ = try? Self.send(Self.event(for: command, to: player), timeout: Self.stateTimeout)
             }
             completion()
         }
@@ -240,7 +258,9 @@ final class PlayerScripting: Sendable {
 
     /// Player state first; then the current track's fields, one event each. The
     /// title failing with -1728 means there is no current track (Music can report
-    /// paused with none); any other field missing just stays empty.
+    /// paused with none); any other field missing just stays empty. The position
+    /// and length come last and never fail the read: a track is worth showing
+    /// without a progress bar.
     private static func readSnapshot(of player: SupportedPlayer) throws(EventError) -> PlaybackSnapshot? {
         let codes = player.codes
         let stateReply = try get(property(fourCharCode("pPlS"), of: .null()), from: player, timeout: stateTimeout)
@@ -272,6 +292,24 @@ final class PlayerScripting: Sendable {
         if let code = codes.artworkURL {
             artworkURL = try field(code)
         }
+        /// A timing value; `nil` when the player cannot give it, so the track still
+        /// shows, without a progress bar. Only a timeout fails the read, which then
+        /// keeps what is shown rather than dropping the bar until the next poll.
+        func timing(_ specifier: NSAppleEventDescriptor) throws(EventError) -> Double? {
+            do throws(EventError) {
+                return try get(specifier, from: player, timeout: stateTimeout).flatMap(number)
+            } catch {
+                guard error.code != -1712 else { throw error }
+                return nil
+            }
+        }
+        let duration = try timing(property(fourCharCode("pDur"), of: track))
+            .map(player.durationSeconds(fromReported:))
+        // `player position` belongs to the application, not the track. Its moment
+        // is when the answer arrived; the event's own travel time is far below what
+        // the progress bar shows.
+        let position = try timing(property(fourCharCode("pPos"), of: .null()))
+            .map { PlaybackPosition(elapsed: $0, date: Date()) }
         return PlaybackSnapshot(
             player: player,
             isPlaying: state == .playing,
@@ -279,14 +317,44 @@ final class PlayerScripting: Sendable {
             artist: artist,
             album: album,
             trackID: trackID,
-            artworkURL: artworkURL
+            artworkURL: artworkURL,
+            duration: duration,
+            position: position
         )
+    }
+
+    /// The event that carries `command` to `player`. Seeking sets the
+    /// application's `player position` (`core/setd` with the new value as `data`).
+    private static func event(for command: PlaybackCommand, to player: SupportedPlayer) -> NSAppleEventDescriptor {
+        let codes = player.codes
+        let code: (eventClass: FourCharCode, eventID: FourCharCode)
+        switch command {
+        case .playPause:
+            code = codes.playPause
+        case .next:
+            code = codes.nextTrack
+        case .previous:
+            code = codes.previousTrack
+        case .seek(let seconds):
+            let set = event(fourCharCode("core"), fourCharCode("setd"), to: player)
+            set.setParam(property(fourCharCode("pPos"), of: .null()), forKeyword: fourCharCode("----"))
+            set.setParam(NSAppleEventDescriptor(double: seconds), forKeyword: fourCharCode("data"))
+            return set
+        }
+        return event(code.eventClass, code.eventID, to: player)
     }
 
     /// Text of a reply value; `nil` for `missing value` or anything not text.
     private static func text(_ descriptor: NSAppleEventDescriptor) -> String? {
         guard descriptor.descriptorType != fourCharCode("msng") else { return nil }
         return descriptor.stringValue
+    }
+
+    /// A reply value as a number; `nil` for `missing value` or anything that is
+    /// not one. Coerced first: `doubleValue` alone reads 0 for what it cannot convert.
+    private static func number(_ descriptor: NSAppleEventDescriptor) -> Double? {
+        guard descriptor.descriptorType != fourCharCode("msng") else { return nil }
+        return descriptor.coerce(toDescriptorType: fourCharCode("doub"))?.doubleValue
     }
 
     /// Sends `core/getd` for `specifier`; the reply's direct object, if any.

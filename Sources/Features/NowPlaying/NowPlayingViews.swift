@@ -90,7 +90,7 @@ private struct FlipModifier: ViewModifier {
     }
 }
 
-private extension AnyTransition {
+extension AnyTransition {
     /// The old cover turns away to its edge, then the new one turns in from the other side.
     static var flip: AnyTransition {
         .asymmetric(
@@ -131,29 +131,10 @@ private struct WaveIcon: View {
     var body: some View {
         let isPlaying = model.isPlaying
         let isHovered = model.isPulseHovered
-        let rhythm = model.rhythm
-        let styles = strandStyles
         ZStack {
-            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isPlaying)) { timeline in
-                let time = timeline.date.timeIntervalSinceReferenceDate
-                let levels = rhythm.levels(at: time, count: WaveStrand.voices.count)
-                ZStack {
-                    ForEach(WaveStrand.voices.indices, id: \.self) { index in
-                        WaveStrand(
-                            voice: WaveStrand.voices[index],
-                            level: levels[index],
-                            time: time,
-                            tempo: rhythm.tempo,
-                            amplitude: isPlaying ? 1 : 0
-                        )
-                        .stroke(styles[index], style: StrokeStyle(lineWidth: WaveStrand.lineWidth, lineCap: .round))
-                        // Where strands cross they add up and glow, as light does on black.
-                        .blendMode(.plusLighter)
-                    }
-                }
-            }
-            .blur(radius: isHovered ? 4 : 0)
-            .opacity(isHovered ? 0 : 1)
+            WaveStrands(model: model)
+                .blur(radius: isHovered ? 4 : 0)
+                .opacity(isHovered ? 0 : 1)
 
             Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                 .font(.system(size: 13, weight: .semibold))
@@ -169,6 +150,46 @@ private struct WaveIcon: View {
         .animation(.smooth(duration: 0.2), value: isHovered)
     }
 
+    private var symbolStyle: AnyShapeStyle {
+        guard NotchAppearance.shared.isLightAndColorEnabled, let palette = model.palette else {
+            return AnyShapeStyle(NotchTheme.primaryText)
+        }
+        return AnyShapeStyle(palette.primary.color)
+    }
+}
+
+/// The three strands themselves, filling the frame they are given; the wing's
+/// wave and the tab's small copy. They swing while playing and lie flat while
+/// paused; the caller animates the change. `isActive` false stops the clock
+/// too, for a copy that is not on screen.
+struct WaveStrands: View {
+    let model: NowPlayingModel
+    var isActive = true
+
+    var body: some View {
+        let isPlaying = model.isPlaying
+        let rhythm = model.rhythm
+        let styles = strandStyles
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isPlaying || !isActive)) { timeline in
+            let time = timeline.date.timeIntervalSinceReferenceDate
+            let levels = rhythm.levels(at: time, count: WaveStrand.voices.count)
+            ZStack {
+                ForEach(WaveStrand.voices.indices, id: \.self) { index in
+                    WaveStrand(
+                        voice: WaveStrand.voices[index],
+                        level: levels[index],
+                        time: time,
+                        tempo: rhythm.tempo,
+                        amplitude: isPlaying ? 1 : 0
+                    )
+                    .stroke(styles[index], style: StrokeStyle(lineWidth: WaveStrand.lineWidth, lineCap: .round))
+                    // Where strands cross they add up and glow, as light does on black.
+                    .blendMode(.plusLighter)
+                }
+            }
+        }
+    }
+
     /// Front to back: the cover's main color, its second color, then a soft white;
     /// without Light and Color, white at falling strengths.
     private var strandStyles: [Color] {
@@ -176,13 +197,6 @@ private struct WaveIcon: View {
             return [NotchTheme.primaryText, NotchTheme.primaryText.opacity(0.55), NotchTheme.primaryText.opacity(0.3)]
         }
         return [palette.primary.color, palette.secondary.color, NotchTheme.primaryText.opacity(0.45)]
-    }
-
-    private var symbolStyle: AnyShapeStyle {
-        guard NotchAppearance.shared.isLightAndColorEnabled, let palette = model.palette else {
-            return AnyShapeStyle(NotchTheme.primaryText)
-        }
-        return AnyShapeStyle(palette.primary.color)
     }
 }
 

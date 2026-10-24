@@ -26,10 +26,10 @@ enum FeatureCatalog {
     static func makeFeatures() -> [any NotchFeature] {
         let features: [any NotchFeature] = [
             FilesFeature(),
+            NowPlayingFeature(),
             AirPodsFeature(),
             BatteryFeature(),
             SystemHUDFeature(),
-            NowPlayingFeature(),
             WeatherFeature(),
             CalendarFeature(),
             NotesFeature(),

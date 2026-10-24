@@ -122,6 +122,66 @@ struct MediaRemoteUpdateTests {
         #expect(snapshot.artworkData == nil)
     }
 
+    @Test func microsecondTimesBecomeLengthAndPosition() throws {
+        let state = state(
+            applying: #"{"type":"data","diff":false,"payload":{"bundleIdentifier":"a","title":"One","playing":true,"durationMicros":215000000,"elapsedTimeMicros":12500000,"timestampEpochMicros":1700000000000000,"playbackRate":1}}"#
+        )
+        let snapshot = try #require(state.snapshot)
+        #expect(snapshot.duration == 215)
+        #expect(snapshot.position == PlaybackPosition(elapsed: 12.5, date: Date(timeIntervalSince1970: 1_700_000_000), rate: 1))
+    }
+
+    @Test func diffWithoutTimesKeepsThem() throws {
+        let state = state(
+            applying: #"{"type":"data","diff":false,"payload":{"bundleIdentifier":"a","title":"One","playing":true,"durationMicros":215000000,"elapsedTimeMicros":12500000,"timestampEpochMicros":1700000000000000,"playbackRate":1}}"#,
+            #"{"type":"data","diff":true,"payload":{"artist":"Me"}}"#
+        )
+        let snapshot = try #require(state.snapshot)
+        #expect(snapshot.duration == 215)
+        #expect(snapshot.position?.elapsed == 12.5)
+        #expect(snapshot.position?.date == Date(timeIntervalSince1970: 1_700_000_000))
+    }
+
+    @Test func diffSetsAndClearsTimes() throws {
+        let start = #"{"type":"data","diff":false,"payload":{"bundleIdentifier":"a","title":"One","playing":true,"durationMicros":215000000,"elapsedTimeMicros":12500000,"timestampEpochMicros":1700000000000000}}"#
+        let moved = state(
+            applying: start,
+            #"{"type":"data","diff":true,"payload":{"elapsedTimeMicros":60000000,"timestampEpochMicros":1700000010000000}}"#
+        )
+        #expect(moved.snapshot?.position == PlaybackPosition(elapsed: 60, date: Date(timeIntervalSince1970: 1_700_000_010)))
+        #expect(moved.snapshot?.duration == 215)
+
+        let cleared = state(
+            applying: start,
+            #"{"type":"data","diff":true,"payload":{"durationMicros":null,"elapsedTimeMicros":null}}"#
+        )
+        let snapshot = try #require(cleared.snapshot)
+        #expect(snapshot.duration == nil)
+        // A time without its moment is no position.
+        #expect(snapshot.position == nil)
+    }
+
+    @Test func pausedRateOfZeroLeavesTheRateToThePlayState() throws {
+        let state = state(
+            applying: #"{"type":"data","diff":false,"payload":{"bundleIdentifier":"a","title":"One","playing":false,"elapsedTimeMicros":5000000,"timestampEpochMicros":1700000000000000,"playbackRate":0}}"#
+        )
+        var snapshot = try #require(state.snapshot)
+        #expect(snapshot.position?.rate == 1)
+        let date = Date(timeIntervalSince1970: 1_700_000_000)
+        #expect(snapshot.elapsed(at: date + 10) == 5)
+        snapshot.isPlaying = true
+        #expect(snapshot.elapsed(at: date + 10) == 15)
+    }
+
+    @Test func getOutputWithMicrosGivesTheTimes() throws {
+        let output = #"{"bundleIdentifier":"a","title":"One","playing":true,"durationMicros":166000000,"elapsedTimeMicros":0,"timestampEpochMicros":1700000000000000}"#
+        let update = try #require(MediaRemoteUpdate(getOutput: Data(output.utf8)))
+        #expect(update.duration == .set(166))
+        #expect(update.elapsedTime == .set(0))
+        #expect(update.timestamp == .set(Date(timeIntervalSince1970: 1_700_000_000)))
+        #expect(update.playbackRate == .keep)
+    }
+
     @Test func linesThatAreNotDataAreIgnored() {
         #expect(MediaRemoteUpdate(streamLine: "") == nil)
         #expect(MediaRemoteUpdate(streamLine: "not json") == nil)
@@ -255,13 +315,86 @@ struct SystemArtworkTests {
 
     @Test func toggleHandsTheFlippedSnapshotToTheFeature() throws {
         let model = NowPlayingModel(scripting: PlayerScripting())
-        var received: PlaybackSnapshot?
-        model.onToggle = { received = $0 }
+        var received: (command: PlaybackCommand, snapshot: PlaybackSnapshot)?
+        model.onCommand = { received = ($0, $1) }
         model.show(try #require(PlaybackSnapshot(bundleIdentifier: "test.browser", isPlaying: true, title: "Clip")))
         model.togglePlayPause()
-        #expect(received?.isPlaying == false)
-        #expect(received?.player == nil)
+        #expect(received?.command == .playPause)
+        #expect(received?.snapshot.isPlaying == false)
+        #expect(received?.snapshot.player == nil)
         #expect(model.isPlaying == false)
+    }
+
+    @Test func seekMovesTheShownPositionAtOnce() throws {
+        let model = NowPlayingModel(scripting: PlayerScripting())
+        var received: (command: PlaybackCommand, snapshot: PlaybackSnapshot)?
+        model.onCommand = { received = ($0, $1) }
+        model.show(try #require(PlaybackSnapshot(
+            bundleIdentifier: "test.browser",
+            isPlaying: false,
+            title: "Clip",
+            duration: 200,
+            position: PlaybackPosition(elapsed: 10, date: Date())
+        )))
+        model.seek(to: 120)
+        #expect(received?.command == .seek(120))
+        #expect(model.snapshot?.elapsed(at: Date()) == 120)
+        #expect(received?.snapshot.elapsed(at: Date()) == 120)
+    }
+
+    @Test func skippingChangesNothingOnScreen() throws {
+        let model = NowPlayingModel(scripting: PlayerScripting())
+        var commands: [PlaybackCommand] = []
+        model.onCommand = { command, _ in commands.append(command) }
+        let shown = try #require(PlaybackSnapshot(bundleIdentifier: "test.browser", isPlaying: true, title: "Clip"))
+        model.show(shown)
+        model.next()
+        model.previous()
+        #expect(commands == [.next, .previous])
+        #expect(model.snapshot == shown)
+    }
+
+    @Test func tabFollowsWhetherATrackIsKnownWhileTheWingsKeepTheLastOne() async throws {
+        let model = NowPlayingModel(scripting: PlayerScripting(), trackGrace: .milliseconds(20))
+        #expect(!model.hasTrack)
+        let shown = try #require(PlaybackSnapshot(bundleIdentifier: "test.browser", isPlaying: true, title: "Clip"))
+        model.show(shown)
+        #expect(model.hasTrack)
+        model.show(nil)
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(!model.hasTrack)
+        #expect(model.snapshot == shown)
+    }
+
+    @Test func aBriefGapKeepsTheTab() async throws {
+        let model = NowPlayingModel(scripting: PlayerScripting(), trackGrace: .milliseconds(100))
+        let shown = try #require(PlaybackSnapshot(bundleIdentifier: "test.browser", isPlaying: true, title: "Clip"))
+        model.show(shown)
+        // A stream restart: nothing for a moment, then the track again.
+        model.show(nil)
+        #expect(model.hasTrack)
+        model.show(shown)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(model.hasTrack)
+    }
+
+    @Test func readingThatOnlyMovesThePositionOnKeepsTheShownSnapshot() throws {
+        let model = NowPlayingModel(scripting: PlayerScripting())
+        let start = Date()
+        let first = try #require(PlaybackSnapshot(
+            player: .music,
+            isPlaying: true,
+            title: "Song",
+            trackID: "1",
+            duration: 200,
+            position: PlaybackPosition(elapsed: 10, date: start)
+        ))
+        model.show(first)
+        // Three seconds on, read 0.2 s behind where the anchor puts it.
+        var later = first
+        later.position = PlaybackPosition(elapsed: 12.8, date: start + 3)
+        model.show(later)
+        #expect(model.snapshot == first)
     }
 }
 
@@ -418,6 +551,38 @@ struct MediaRemoteMonitorTests {
 
         await monitor.togglePlayPause()
         #expect(recorder.latest?.isPlaying == false)
+        monitor.stop()
+    }
+
+    @Test func seekSendsMicrosecondsAndTakesThePositionReadBack() async throws {
+        // The stream runs with --micros; the app ignores the seek, and `get` says
+        // where it still is: the held position must give way to that.
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let seekFile = directory.appendingPathComponent("seek")
+        let timed = #"{"type":"data","diff":false,"payload":{"bundleIdentifier":"a","title":"One","playing":false,"durationMicros":200000000,"elapsedTimeMicros":10000000,"timestampEpochMicros":1700000000000000}}"#
+        let adapter = try stub("""
+        if ($function eq 'stream') {
+            if (grep { $_ eq '--micros' } @ARGV) { print q(\(timed)), "\\n"; }
+            sleep 60;
+        } elsif ($function eq 'seek') {
+            open(my $out, '>', '\(seekFile.path)') or die; print $out $ARGV[2]; close $out;
+        } elsif ($function eq 'get' && grep { $_ eq '--micros' } @ARGV) {
+            print q({"bundleIdentifier":"a","title":"One","playing":false,"elapsedTimeMicros":10000000,"timestampEpochMicros":1700000000000000}), "\\n";
+        }
+        """, in: directory)
+        let recorder = MonitorRecorder()
+        let monitor = monitor(adapter, recorder: recorder)
+        monitor.start()
+        #expect(await recorder.eventually { recorder.latest?.title == "One" })
+        let before = recorder.snapshots.count
+
+        await monitor.seek(to: 90.5)
+        #expect(try String(contentsOf: seekFile, encoding: .utf8) == "90500000")
+        #expect(recorder.snapshots.count == before + 1)
+        let latest = try #require(recorder.latest)
+        #expect(latest.position?.elapsed == 10)
+        #expect(latest.duration == 200)
         monitor.stop()
     }
 

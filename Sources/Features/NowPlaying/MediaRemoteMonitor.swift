@@ -29,6 +29,8 @@ final class MediaRemoteMonitor {
     /// How many stream lines have set the play state (a full line does); lets a
     /// read-back tell that the stream has spoken since it started.
     private var playStateLines = 0
+    /// The same for the position, for the read-back after a seek.
+    private var positionLines = 0
 
     init(
         adapter: MediaRemoteAdapter,
@@ -59,6 +61,22 @@ final class MediaRemoteMonitor {
         state = MediaRemoteState()
     }
 
+    /// Sends `command` to the now-playing app. Skipping is left to the stream: a
+    /// skip it obeys changes the title, which the stream always reports, and one
+    /// it ignores showed nothing in advance that would need taking back.
+    func perform(_ command: PlaybackCommand) async {
+        switch command {
+        case .playPause:
+            await togglePlayPause()
+        case .next:
+            _ = await adapter.output(of: ["send", String(MediaRemoteAdapter.nextTrackCommand)])
+        case .previous:
+            _ = await adapter.output(of: ["send", String(MediaRemoteAdapter.previousTrackCommand)])
+        case .seek(let seconds):
+            await seek(to: seconds)
+        }
+    }
+
     /// Plays or pauses the now-playing app, then reads its play state back so a
     /// command it ignored does not leave the wings showing the wrong one. The stream
     /// reports a change on its own; it cannot report that nothing changed.
@@ -69,6 +87,7 @@ final class MediaRemoteMonitor {
     /// meanwhile: the read-back may be the older of the two.
     func togglePlayPause() async {
         if let isPlaying = state.isPlaying {
+            state.reanchor(at: Date())
             state.isPlaying = !isPlaying
         }
         _ = await adapter.output(of: ["send", String(MediaRemoteAdapter.togglePlayPauseCommand)])
@@ -83,6 +102,31 @@ final class MediaRemoteMonitor {
             state.isPlaying != isPlaying
         else { return }
         state.isPlaying = isPlaying
+        onChange(state.snapshot)
+    }
+
+    /// Moves the now-playing app to `seconds`, then reads its position back, for
+    /// the same reasons as `togglePlayPause`: the stream reports a seek the app
+    /// made, not one it ignored. The new position is held meanwhile, and the
+    /// read-back is dropped once the stream has given a position of its own.
+    func seek(to seconds: TimeInterval) async {
+        let seconds = max(seconds, 0)
+        // Also rules out a length an app made up so large it has no Int64 in microseconds.
+        guard let micros = Int64(exactly: (seconds * 1_000_000).rounded()) else { return }
+        state.reanchor(at: Date(), elapsed: seconds)
+        _ = await adapter.output(of: ["seek", String(micros)])
+        try? await Task.sleep(for: settleDelay)
+        let linesBefore = positionLines
+        guard
+            task != nil,
+            let data = await adapter.output(of: ["get", "--micros"]),
+            task != nil,
+            positionLines == linesBefore,
+            let update = MediaRemoteUpdate(getOutput: data)
+        else { return }
+        let held = state
+        state.applyTiming(of: update)
+        guard state != held else { return }
         onChange(state.snapshot)
     }
 
@@ -105,7 +149,7 @@ final class MediaRemoteMonitor {
 
     /// Runs one stream process to its end.
     private func streamOnce() async {
-        let process = adapter.makeProcess(["stream", "--debounce=\(Self.debounceMilliseconds)"])
+        let process = adapter.makeProcess(["stream", "--debounce=\(Self.debounceMilliseconds)", "--micros"])
         let pipe = Pipe()
         process.standardOutput = pipe
         do {
@@ -135,6 +179,9 @@ final class MediaRemoteMonitor {
     private func apply(_ update: MediaRemoteUpdate) {
         if !update.isDiff || update.isPlaying != .keep {
             playStateLines += 1
+        }
+        if !update.isDiff || update.elapsedTime != .keep {
+            positionLines += 1
         }
         state.apply(update)
         onChange(state.snapshot)

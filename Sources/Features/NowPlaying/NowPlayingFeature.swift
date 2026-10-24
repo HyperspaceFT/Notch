@@ -5,7 +5,8 @@ import SwiftUI
 /// Shows the track the system is playing, from any app (a browser tab, Music,
 /// Spotify, ...), as an activity beside the notch: its cover on the left, a pulse
 /// that plays and pauses it on the right. It stays for a while after a pause, then
-/// leaves. No tab in the expanded panel.
+/// leaves. While any track is known, playing or paused, a tab in the expanded
+/// panel shows it in full, with its progress and the transport controls.
 ///
 /// With "Read Now Playing from Any App" on (`NowPlayingSettings`, off by default),
 /// the track comes from the bundled MediaRemote adapter. Otherwise, or where the
@@ -16,6 +17,7 @@ public final class NowPlayingFeature: NotchFeature {
     public let id = "now-playing"
     public var title: String { localized(en: "Now Playing", zh: "正在播放") }
     public let symbol = "music.note"
+    public var isTabAvailable: Bool { model.hasTrack }
 
     static let activityID = "track"
 
@@ -44,8 +46,8 @@ public final class NowPlayingFeature: NotchFeature {
     public func activate(context: any NotchContext) {
         self.context = context
         generation += 1
-        model.onToggle = { [weak self] shown in
-            self?.toggle(shown)
+        model.onCommand = { [weak self] command, shown in
+            self?.perform(command, shown: shown)
         }
         followSettings(generation: generation)
     }
@@ -63,12 +65,14 @@ public final class NowPlayingFeature: NotchFeature {
         isPresented = false
         snapshots = [:]
         presence = PresenceTracker()
-        model.onToggle = nil
+        model.onCommand = nil
         model.reset()
         context = nil
     }
 
-    public func makeExpandedView() -> AnyView? { nil }
+    public func makeExpandedView() -> AnyView? {
+        AnyView(NowPlayingDetailView(model: model))
+    }
 
     /// Picks the source to match `usesMediaRemote`, again on every change.
     private func followSettings(generation: Int) {
@@ -132,23 +136,24 @@ public final class NowPlayingFeature: NotchFeature {
         update()
     }
 
-    private func toggle(_ shown: PlaybackSnapshot) {
-        // The model already flipped its copy; follow it until the player answers.
+    private func perform(_ command: PlaybackCommand, shown: PlaybackSnapshot) {
+        // The model already changed its copy; follow it until the player answers.
+        let now = Date()
         guard let player = shown.player else {
-            toggleSystemPlayback()
+            performOnSystemPlayer(command, at: now)
             return
         }
-        snapshots[player]?.isPlaying.toggle()
+        snapshots[player]?.apply(command, at: now)
         update()
-        monitor?.toggle(player)
+        monitor?.perform(command, on: player)
     }
 
-    private func toggleSystemPlayback() {
-        systemSnapshot?.isPlaying.toggle()
+    private func performOnSystemPlayer(_ command: PlaybackCommand, at now: Date) {
+        systemSnapshot?.apply(command, at: now)
         update()
         guard let mediaRemote else { return }
         Task {
-            await mediaRemote.togglePlayPause()
+            await mediaRemote.perform(command)
         }
     }
 

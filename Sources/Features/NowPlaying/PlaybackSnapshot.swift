@@ -1,5 +1,26 @@
 import Foundation
 
+/// What the user asks the playing app to do.
+enum PlaybackCommand: Sendable, Equatable {
+    case playPause
+    case next
+    /// The player's own previous command (for Music its back button, which
+    /// restarts the track unless it is near its start).
+    case previous
+    /// To this many seconds into the track.
+    case seek(TimeInterval)
+}
+
+/// Where playback stood at a known moment; the position now is worked out from
+/// it (`PlaybackSnapshot.elapsed(at:)`) rather than read again and again.
+struct PlaybackPosition: Sendable, Equatable {
+    /// Seconds into the track at `date`.
+    var elapsed: TimeInterval
+    var date: Date
+    /// Seconds of track per second of time while playing.
+    var rate: Double = 1
+}
+
 /// What one player is playing, as last read. A player with nothing to show (stopped,
 /// no current track, no title) has no snapshot at all.
 struct PlaybackSnapshot: Sendable, Equatable {
@@ -20,6 +41,10 @@ struct PlaybackSnapshot: Sendable, Equatable {
     var artworkData: Data?
     /// Stable identity of the track across reads, see `trackKey(player:id:title:artist:album:)`.
     var trackKey: String
+    /// Length of the track in seconds; `nil` when unknown or not positive (a live stream).
+    var duration: TimeInterval?
+    /// The position as last read; `nil` when the player did not say.
+    var position: PlaybackPosition?
 
     /// `nil` when `title` is empty: a track without a name is nothing worth showing.
     init?(
@@ -29,7 +54,9 @@ struct PlaybackSnapshot: Sendable, Equatable {
         artist: String? = nil,
         album: String? = nil,
         trackID: String? = nil,
-        artworkURL: String? = nil
+        artworkURL: String? = nil,
+        duration: TimeInterval? = nil,
+        position: PlaybackPosition? = nil
     ) {
         self.init(
             bundleIdentifier: player.bundleIdentifier,
@@ -40,7 +67,9 @@ struct PlaybackSnapshot: Sendable, Equatable {
             album: album,
             trackID: trackID,
             artworkURL: artworkURL,
-            artworkData: nil
+            artworkData: nil,
+            duration: duration,
+            position: position
         )
     }
 
@@ -51,7 +80,9 @@ struct PlaybackSnapshot: Sendable, Equatable {
         title: String,
         artist: String? = nil,
         album: String? = nil,
-        artworkData: Data? = nil
+        artworkData: Data? = nil,
+        duration: TimeInterval? = nil,
+        position: PlaybackPosition? = nil
     ) {
         self.init(
             bundleIdentifier: bundleIdentifier,
@@ -62,7 +93,9 @@ struct PlaybackSnapshot: Sendable, Equatable {
             album: album,
             trackID: nil,
             artworkURL: nil,
-            artworkData: artworkData
+            artworkData: artworkData,
+            duration: duration,
+            position: position
         )
     }
 
@@ -75,7 +108,9 @@ struct PlaybackSnapshot: Sendable, Equatable {
         album: String?,
         trackID: String?,
         artworkURL: String?,
-        artworkData: Data?
+        artworkData: Data?,
+        duration: TimeInterval?,
+        position: PlaybackPosition?
     ) {
         guard !title.isEmpty else { return nil }
         self.bundleIdentifier = bundleIdentifier
@@ -87,6 +122,8 @@ struct PlaybackSnapshot: Sendable, Equatable {
         self.trackID = trackID.flatMap { $0.isEmpty ? nil : $0 }
         self.artworkURL = artworkURL.flatMap { $0.isEmpty ? nil : $0 }
         self.artworkData = artworkData.flatMap { $0.isEmpty ? nil : $0 }
+        self.duration = duration.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+        self.position = position.flatMap { $0.elapsed.isFinite && $0.rate.isFinite ? $0 : nil }
         trackKey = Self.trackKey(
             bundleIdentifier: bundleIdentifier,
             id: self.trackID,
@@ -129,6 +166,74 @@ struct PlaybackSnapshot: Sendable, Equatable {
             hash = hash &* 0x0000_0100_0000_01b3
         }
         return hash
+    }
+
+    /// How far into the track playback is at `now`: the anchor's position, moved on
+    /// by the time since while playing, frozen while paused, and kept within the
+    /// track. `nil` without an anchor.
+    func elapsed(at now: Date) -> TimeInterval? {
+        guard let position else { return nil }
+        var elapsed = position.elapsed
+        if isPlaying {
+            elapsed += now.timeIntervalSince(position.date) * position.rate
+        }
+        return min(max(elapsed, 0), duration ?? .infinity)
+    }
+
+    /// Plays or pauses, with the anchor moved to `now` at the position reached, so
+    /// the position neither jumps nor keeps running while paused.
+    mutating func setPlaying(_ playing: Bool, at now: Date) {
+        if let elapsed = elapsed(at: now), let position {
+            self.position = PlaybackPosition(elapsed: elapsed, date: now, rate: position.rate)
+        }
+        isPlaying = playing
+    }
+
+    /// What `command` is expected to do, shown before the player confirms it.
+    /// Skipping changes nothing here: the next reading brings the new track.
+    mutating func apply(_ command: PlaybackCommand, at now: Date) {
+        switch command {
+        case .playPause:
+            setPlaying(!isPlaying, at: now)
+        case .seek(let seconds):
+            position = PlaybackPosition(
+                elapsed: min(max(seconds, 0), duration ?? .infinity),
+                date: now,
+                rate: position?.rate ?? 1
+            )
+        case .next, .previous:
+            break
+        }
+    }
+
+    /// Readings closer than this to where the shown anchor puts playback keep that
+    /// anchor: the time an Apple event takes moves every poll's anchor a little,
+    /// and each would otherwise nudge the progress bar back and forth.
+    static let positionTolerance: TimeInterval = 1
+
+    /// `self`, with `previous`'s position anchor when that one already says where
+    /// playback is (same track, play state, length, and rate, within
+    /// `positionTolerance`), so a poll that only re-reads the position compares
+    /// equal and changes nothing on screen.
+    func steadied(against previous: PlaybackSnapshot?) -> PlaybackSnapshot {
+        guard
+            let previous,
+            previous.trackKey == trackKey,
+            previous.isPlaying == isPlaying,
+            previous.duration == duration,
+            let anchor = previous.position,
+            let position,
+            anchor.rate == position.rate,
+            // At the later of the two anchors: at the earlier one, the shown
+            // prediction can clamp to 0 and seem to agree with a reading that
+            // is really far behind (a seek the app ignored).
+            let expected = previous.elapsed(at: max(anchor.date, position.date)),
+            let read = elapsed(at: max(anchor.date, position.date)),
+            abs(expected - read) < Self.positionTolerance
+        else { return self }
+        var steadied = self
+        steadied.position = anchor
+        return steadied
     }
 
     /// The snapshot to show out of every player's: `preferred` (the one shown now)

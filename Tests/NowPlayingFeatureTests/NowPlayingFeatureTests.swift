@@ -248,3 +248,200 @@ struct NowPlayingSettingsTests {
         #expect(NowPlayingSettings(defaults: defaults).usesMediaRemote)
     }
 }
+
+struct PlaybackPositionTests {
+    let start = Date(timeIntervalSinceReferenceDate: 1_000)
+
+    func snapshot(playing: Bool, elapsed: TimeInterval? = 30, duration: TimeInterval? = 200, rate: Double = 1) -> PlaybackSnapshot? {
+        PlaybackSnapshot(
+            player: .music,
+            isPlaying: playing,
+            title: "Song",
+            trackID: "1",
+            duration: duration,
+            position: elapsed.map { PlaybackPosition(elapsed: $0, date: start, rate: rate) }
+        )
+    }
+
+    @Test func advancesWhilePlaying() throws {
+        let playing = try #require(snapshot(playing: true))
+        #expect(playing.elapsed(at: start) == 30)
+        #expect(playing.elapsed(at: start + 12.5) == 42.5)
+        let double = try #require(snapshot(playing: true, rate: 2))
+        #expect(double.elapsed(at: start + 10) == 50)
+    }
+
+    @Test func frozenWhilePaused() throws {
+        let paused = try #require(snapshot(playing: false))
+        #expect(paused.elapsed(at: start + 100) == 30)
+    }
+
+    @Test func clampedToTheTrack() throws {
+        let playing = try #require(snapshot(playing: true))
+        #expect(playing.elapsed(at: start + 500) == 200)
+        // A clock that reads earlier than the anchor's.
+        #expect(playing.elapsed(at: start - 60) == 0)
+        // Without a length only the start bounds it.
+        let live = try #require(snapshot(playing: true, duration: nil))
+        #expect(live.elapsed(at: start + 500) == 530)
+    }
+
+    @Test func nothingWithoutAnAnchor() throws {
+        let unknown = try #require(snapshot(playing: true, elapsed: nil))
+        #expect(unknown.elapsed(at: start) == nil)
+    }
+
+    @Test func zeroOrMissingLengthIsUnknown() throws {
+        #expect(try #require(snapshot(playing: true, duration: 0)).duration == nil)
+        #expect(try #require(snapshot(playing: true, duration: -1)).duration == nil)
+        #expect(try #require(snapshot(playing: true, duration: .infinity)).duration == nil)
+    }
+
+    @Test func pausingFreezesWherePlaybackGotTo() throws {
+        var snapshot = try #require(snapshot(playing: true))
+        snapshot.setPlaying(false, at: start + 10)
+        #expect(!snapshot.isPlaying)
+        #expect(snapshot.elapsed(at: start + 60) == 40)
+        snapshot.setPlaying(true, at: start + 60)
+        #expect(snapshot.elapsed(at: start + 65) == 45)
+    }
+
+    @Test func seekReanchorsWithinTheTrack() throws {
+        var snapshot = try #require(snapshot(playing: true))
+        snapshot.apply(.seek(120), at: start + 5)
+        #expect(snapshot.elapsed(at: start + 5) == 120)
+        #expect(snapshot.elapsed(at: start + 7) == 122)
+        snapshot.apply(.seek(999), at: start + 5)
+        #expect(snapshot.elapsed(at: start + 5) == 200)
+        snapshot.apply(.seek(-3), at: start + 5)
+        #expect(snapshot.elapsed(at: start + 5) == 0)
+    }
+
+    @Test func skippingLeavesTheSnapshotAlone() throws {
+        let original = try #require(snapshot(playing: true))
+        var snapshot = original
+        snapshot.apply(.next, at: start + 5)
+        snapshot.apply(.previous, at: start + 5)
+        #expect(snapshot == original)
+    }
+
+    @Test func spotifyReportsItsLengthInMilliseconds() {
+        #expect(SupportedPlayer.spotify.durationSeconds(fromReported: 215_000) == 215)
+        #expect(SupportedPlayer.spotify.durationSeconds(fromReported: 1_500) == 1.5)
+        #expect(SupportedPlayer.music.durationSeconds(fromReported: 215.4) == 215.4)
+    }
+}
+
+struct SteadyPositionTests {
+    let start = Date(timeIntervalSinceReferenceDate: 1_000)
+
+    func snapshot(playing: Bool = true, trackID: String = "1", elapsed: TimeInterval, at date: Date) -> PlaybackSnapshot? {
+        PlaybackSnapshot(
+            player: .spotify,
+            isPlaying: playing,
+            title: "Song",
+            trackID: trackID,
+            duration: 200,
+            position: PlaybackPosition(elapsed: elapsed, date: date)
+        )
+    }
+
+    @Test func positionWhereTheAnchorPutsItKeepsTheAnchor() throws {
+        let shown = try #require(snapshot(elapsed: 10, at: start))
+        let read = try #require(snapshot(elapsed: 13.3, at: start + 3))
+        // Equal, so the model writes nothing and nothing redraws.
+        #expect(read.steadied(against: shown) == shown)
+    }
+
+    @Test func pausedRereadKeepsTheAnchor() throws {
+        let shown = try #require(snapshot(playing: false, elapsed: 10, at: start))
+        let read = try #require(snapshot(playing: false, elapsed: 10, at: start + 30))
+        #expect(read.steadied(against: shown) == shown)
+    }
+
+    @Test func anOlderReadingFarBehindIsTaken() throws {
+        // The user seeked to 30 s; the app ignored it and still reports its own
+        // anchor from two minutes earlier. Compared at that old moment, the shown
+        // anchor clamps to 0 and would seem to agree.
+        let shown = try #require(snapshot(elapsed: 30, at: start + 120))
+        let read = try #require(snapshot(elapsed: 0, at: start))
+        #expect(read.steadied(against: shown) == read)
+    }
+
+    @Test func aJumpIsTaken() throws {
+        let shown = try #require(snapshot(elapsed: 10, at: start))
+        let read = try #require(snapshot(elapsed: 60, at: start + 3))
+        #expect(read.steadied(against: shown) == read)
+    }
+
+    @Test func aNewPlayStateOrTrackIsTaken() throws {
+        let shown = try #require(snapshot(elapsed: 10, at: start))
+        let paused = try #require(snapshot(playing: false, elapsed: 13, at: start + 3))
+        #expect(paused.steadied(against: shown) == paused)
+        let other = try #require(snapshot(trackID: "2", elapsed: 13, at: start + 3))
+        #expect(other.steadied(against: shown) == other)
+        #expect(other.steadied(against: nil) == other)
+    }
+
+    @Test func positionDoesNotChangeTheTrackKey() throws {
+        let a = try #require(snapshot(elapsed: 10, at: start))
+        let b = try #require(snapshot(elapsed: 90, at: start + 50))
+        #expect(a.trackKey == b.trackKey)
+    }
+}
+
+struct PlaybackTimeTests {
+    @Test func formatsMinutesAndHours() {
+        #expect(PlaybackTime.format(0) == "0:00")
+        #expect(PlaybackTime.format(59) == "0:59")
+        #expect(PlaybackTime.format(61) == "1:01")
+        #expect(PlaybackTime.format(3599) == "59:59")
+        #expect(PlaybackTime.format(3600) == "1:00:00")
+        #expect(PlaybackTime.format(3661) == "1:01:01")
+        #expect(PlaybackTime.format(-5) == "0:00")
+    }
+
+    @Test func remainingCarriesAMinusSign() {
+        let labels = PlaybackTime.labels(elapsed: 42, duration: 215)
+        #expect(labels.elapsed == "0:42")
+        #expect(labels.remaining == "-2:53")
+        let long = PlaybackTime.labels(elapsed: 5, duration: 4000)
+        #expect(long.remaining == "-1:06:35")
+        let end = PlaybackTime.labels(elapsed: 300, duration: 215)
+        #expect(end.elapsed == "3:35")
+        #expect(end.remaining == "-0:00")
+    }
+
+    /// Seconds back from "m:ss", "h:mm:ss", or either with a leading minus.
+    func seconds(_ label: String) -> Int {
+        label.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+            .split(separator: ":")
+            .reduce(0) { $0 * 60 + Int($1)! }
+    }
+
+    @Test func elapsedAndRemainingAlwaysAddUpToTheLength() {
+        for duration in [215.0, 215.4, 215.5, 215.6, 59.99, 3600.5] {
+            let total = Int(duration.rounded())
+            for step in 0...Int(duration * 20) {
+                let elapsed = Double(step) / 20
+                let labels = PlaybackTime.labels(elapsed: elapsed, duration: duration)
+                #expect(seconds(labels.elapsed) + seconds(labels.remaining) == total, "at \(elapsed) of \(duration)")
+            }
+        }
+    }
+
+    @Test func wholeSecondsTurnOverTogether() {
+        let before = PlaybackTime.labels(elapsed: 41.999, duration: 215)
+        let at = PlaybackTime.labels(elapsed: 42, duration: 215)
+        #expect(before.elapsed == "0:41")
+        #expect(before.remaining == "-2:54")
+        #expect(at.elapsed == "0:42")
+        #expect(at.remaining == "-2:53")
+    }
+
+    @Test func nonFiniteTimesShowZero() {
+        let labels = PlaybackTime.labels(elapsed: .nan, duration: 100)
+        #expect(labels.elapsed == "0:00")
+        #expect(labels.remaining == "-1:40")
+    }
+}

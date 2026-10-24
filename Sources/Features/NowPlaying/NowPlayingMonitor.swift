@@ -27,9 +27,10 @@ final class NowPlayingMonitor {
     private var readAgain: Set<SupportedPlayer> = []
     /// The last notification's text per player, for when Apple events are refused.
     private var notified: [SupportedPlayer: PlaybackSnapshot] = [:]
-    /// Per player, bumped by every `toggle`: a read that started before one still
-    /// carries the old play state and is dropped, so it cannot undo what the user just did.
-    private var toggleEpochs: [SupportedPlayer: Int] = [:]
+    /// Per player, bumped by every command (`perform`): a read that started before
+    /// one still carries the old play state, track, or position and is dropped, so
+    /// it cannot undo what the user just did.
+    private var commandEpochs: [SupportedPlayer: Int] = [:]
     /// Bumped on start and stop; a read that returns under another generation is dropped.
     private var generation = 0
 
@@ -100,17 +101,17 @@ final class NowPlayingMonitor {
         reading = []
         readAgain = []
         notified = [:]
-        toggleEpochs = [:]
+        commandEpochs = [:]
     }
 
-    /// Plays or pauses `player`, then reads it again to show what it really did.
+    /// Sends `command` to `player`, then reads it again to show what it really did.
     /// The command is queued at once, ahead of every later read, so only reads
     /// already under way can still report the old state; those are dropped.
-    func toggle(_ player: SupportedPlayer) {
+    func perform(_ command: PlaybackCommand, on player: SupportedPlayer) {
         guard poll != nil, player.isRunning else { return }
-        toggleEpochs[player, default: 0] += 1
+        commandEpochs[player, default: 0] += 1
         let generation = generation
-        scripting.toggle(player) { [weak self] in
+        scripting.perform(command, on: player) { [weak self] in
             Task { @MainActor in
                 guard let self, generation == self.generation else { return }
                 self.refreshSoon(player)
@@ -147,13 +148,13 @@ final class NowPlayingMonitor {
         }
         reading.insert(player)
         let generation = generation
-        let epoch = toggleEpochs[player, default: 0]
+        let epoch = commandEpochs[player, default: 0]
         Task { [weak self, scripting] in
             let read = await scripting.readState(of: player)
             guard let self, generation == self.generation else { return }
             reading.remove(player)
-            // A toggle came in while this was reading: its own refresh follows.
-            if epoch == toggleEpochs[player, default: 0] {
+            // A command came in while this was reading: its own refresh follows.
+            if epoch == commandEpochs[player, default: 0] {
                 switch read {
                 case .snapshot(let snapshot):
                     onChange(player, snapshot)

@@ -4,12 +4,18 @@ import Foundation
 /// Apple-signed processes read the system's now-playing information, so the adapter
 /// is a framework that `/usr/bin/perl` loads: `stream` prints what the system's
 /// now-playing app (a browser tab, Music, Spotify, ...) plays as JSON lines, `send`
-/// sends it a command, and `get` prints the current state once.
+/// sends it a command, `seek` moves its position, and `get` prints the current
+/// state once. `stream`, and the `get` after a seek, run with `--micros`, which
+/// gives the times as whole microseconds and the moment of the position as epoch time.
 struct MediaRemoteAdapter: Sendable {
     static let perl = URL(fileURLWithPath: "/usr/bin/perl")
     /// MediaRemote's `kMRTogglePlayPause`.
     static let togglePlayPauseCommand = 2
-    /// A one-shot `send` or `get` that runs longer than this is killed.
+    /// MediaRemote's `kMRNextTrack`.
+    static let nextTrackCommand = 4
+    /// MediaRemote's `kMRPreviousTrack`.
+    static let previousTrackCommand = 5
+    /// A one-shot `send`, `seek`, or `get` that runs longer than this is killed.
     static let oneShotTimeout: TimeInterval = 5
 
     let script: URL
@@ -84,6 +90,13 @@ struct MediaRemoteUpdate: Sendable, Equatable {
     var album: Change<String> = .keep
     var isPlaying: Change<Bool> = .keep
     var artworkData: Change<Data> = .keep
+    /// Seconds, from `durationMicros`.
+    var duration: Change<TimeInterval> = .keep
+    /// Seconds into the track at `timestamp`, from `elapsedTimeMicros`.
+    var elapsedTime: Change<TimeInterval> = .keep
+    /// From `timestampEpochMicros`.
+    var timestamp: Change<Date> = .keep
+    var playbackRate: Change<Double> = .keep
 
     init() {}
 
@@ -116,6 +129,17 @@ struct MediaRemoteUpdate: Sendable, Equatable {
         artworkData = Self.change("artworkData", in: payload) { value in
             (value as? String).flatMap { Data(base64Encoded: $0, options: .ignoreUnknownCharacters) }
         }
+        duration = Self.change("durationMicros", in: payload) { Self.seconds(fromMicros: $0) }
+        elapsedTime = Self.change("elapsedTimeMicros", in: payload) { Self.seconds(fromMicros: $0) }
+        timestamp = Self.change("timestampEpochMicros", in: payload) { value in
+            Self.seconds(fromMicros: value).map { Date(timeIntervalSince1970: $0) }
+        }
+        playbackRate = Self.change("playbackRate", in: payload) { ($0 as? NSNumber)?.doubleValue }
+    }
+
+    private static func seconds(fromMicros value: Any) -> TimeInterval? {
+        guard let micros = (value as? NSNumber)?.doubleValue, micros.isFinite else { return nil }
+        return micros / 1_000_000
     }
 
     /// A value that is there but not of the expected type is as good as removed:
@@ -140,6 +164,10 @@ struct MediaRemoteState: Sendable, Equatable {
     var album: String?
     var isPlaying: Bool?
     var artworkData: Data?
+    var duration: TimeInterval?
+    var elapsedTime: TimeInterval?
+    var timestamp: Date?
+    var playbackRate: Double?
 
     /// A full line replaces everything (an empty payload means nothing plays); a
     /// diff line changes only the keys it names.
@@ -154,6 +182,34 @@ struct MediaRemoteState: Sendable, Equatable {
         album.apply(update.album)
         isPlaying.apply(update.isPlaying)
         artworkData.apply(update.artworkData)
+        applyTiming(of: update)
+    }
+
+    /// Only the length, position, and rate of `update`, as the diff of a line would.
+    mutating func applyTiming(of update: MediaRemoteUpdate) {
+        duration.apply(update.duration)
+        elapsedTime.apply(update.elapsedTime)
+        timestamp.apply(update.timestamp)
+        playbackRate.apply(update.playbackRate)
+    }
+
+    /// Moves the position's anchor to `now`: to `elapsed` when given (a seek),
+    /// else to where playback has got to, so a change of play state held before
+    /// the stream confirms it neither jumps nor runs on while paused.
+    mutating func reanchor(at now: Date, elapsed: TimeInterval? = nil) {
+        guard let elapsed = elapsed ?? snapshot?.elapsed(at: now) else { return }
+        elapsedTime = elapsed
+        timestamp = now
+    }
+
+    /// The position, when the line gave both its time and its moment. The rate is
+    /// 0 while paused, and the play state may be held ahead of it (see
+    /// `MediaRemoteMonitor.togglePlayPause`), so only a positive rate counts;
+    /// the play state decides whether the position moves.
+    private var position: PlaybackPosition? {
+        guard let elapsedTime, let timestamp else { return nil }
+        let rate = playbackRate.flatMap { $0 > 0 ? $0 : nil } ?? 1
+        return PlaybackPosition(elapsed: elapsedTime, date: timestamp, rate: rate)
     }
 
     /// `nil` without a title: nothing worth showing is playing.
@@ -164,7 +220,9 @@ struct MediaRemoteState: Sendable, Equatable {
             title: title ?? "",
             artist: artist,
             album: album,
-            artworkData: artworkData
+            artworkData: artworkData,
+            duration: duration,
+            position: position
         )
     }
 }
