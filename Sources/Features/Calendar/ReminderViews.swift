@@ -64,7 +64,8 @@ private func timeRange(_ event: AgendaEvent) -> String {
 }
 
 /// Left wing: a calendar symbol in the first event's calendar color and its
-/// start time, with "+N" when more events are due. A click opens the detail.
+/// start time, with "+N" when more events are due, next to the notch. A click
+/// opens the detail.
 struct EventReminderWingLeading: View {
     let notice: EventReminderNotice
     let open: @MainActor () -> Void
@@ -74,6 +75,7 @@ struct EventReminderWingLeading: View {
         let event = notice.first.event
         Button(action: open) {
             HStack(spacing: 5) {
+                Spacer(minLength: 0)
                 Image(systemName: "calendar")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(event.color.color)
@@ -89,7 +91,6 @@ struct EventReminderWingLeading: View {
                         .monospacedDigit()
                         .lineLimit(1)
                 }
-                Spacer(minLength: 0)
             }
             // An offset, not padding: the text keeps its width. The island's
             // hover animation carries the move.

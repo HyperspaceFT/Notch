@@ -21,8 +21,8 @@ private func wingHoverOffset(isHovered: Bool, outward: CGFloat) -> CGSize {
     return CGSize(width: NotchTheme.hoverGrowth.width / 2 * outward, height: NotchTheme.hoverGrowth.height / 2)
 }
 
-/// Left wing: the app's icon and name. A click opens the island on the whole
-/// notification.
+/// Left wing: the app's icon and name, next to the notch. A click opens the
+/// island on the whole notification.
 struct NotificationWingLeading: View {
     let item: NotificationItem
     let inbox: NotificationInbox
@@ -36,13 +36,13 @@ struct NotificationWingLeading: View {
         Button(action: open) {
             ZStack {
                 HStack(spacing: 6) {
+                    Spacer(minLength: 0)
                     NotificationAppIcon(image: apps.icon(for: shown.appURL), side: 20)
                     Text(shown.appName ?? "")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(NotchTheme.secondaryText)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                    Spacer(minLength: 0)
                 }
                 // Every banner presents the same activity, so the shell keeps these
                 // wings and only their item changes: a notification that takes over
