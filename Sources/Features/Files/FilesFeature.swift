@@ -64,20 +64,29 @@ private struct ShelfCard: View {
                     .foregroundStyle(NotchTheme.secondaryText)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(shelf.items) { item in
-                            ShelfItemCell(item: item, shelf: shelf)
+                GeometryReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 4) {
+                            ForEach(shelf.items) { item in
+                                ShelfItemCell(item: item, shelf: shelf)
+                            }
+                        }
+                        // As big as the visible card below the header, so a click
+                        // or a selection rectangle can start beside the items too.
+                        .frame(minWidth: proxy.size.width, minHeight: proxy.size.height, alignment: .topLeading)
+                        .coordinateSpace(.named(ShelfRowView.coordinateSpace))
+                        .overlayPreferenceValue(ShelfCellFramesKey.self) { frames in
+                            ShelfRowView(shelf: shelf, cellFrames: frames)
                         }
                     }
                 }
             }
         }
-        // While one of the shelf's own items is dragged, dropping it back is not
-        // an addition (no duplicate) and must not count as a paste.
-        .dropZone(isTargeted: target.isTargeted && shelf.draggingItemID == nil)
+        // While the shelf's own items are dragged, dropping them back is not an
+        // addition (no duplicates) and must not count as a paste.
+        .dropZone(isTargeted: target.isTargeted && shelf.draggingItemIDs.isEmpty)
         .onDrop(of: [.fileURL], isTargeted: $target.isTargeted) { providers in
-            guard shelf.draggingItemID == nil else { return false }
+            guard shelf.draggingItemIDs.isEmpty else { return false }
             Task { @MainActor [shelf] in
                 shelf.add(await loadFileURLs(from: providers))
             }
@@ -94,16 +103,27 @@ private struct ShelfItemCell: View {
         VStack(spacing: 4) {
             Image(nsImage: NSWorkspace.shared.icon(forFile: item.url.path(percentEncoded: false)))
                 .resizable()
-                .frame(width: ShelfItemDragNSView.iconSize, height: ShelfItemDragNSView.iconSize)
+                .frame(width: ShelfRowNSView.iconSize, height: ShelfRowNSView.iconSize)
             Text(item.url.lastPathComponent)
                 .font(.system(size: 10))
                 .lineLimit(1)
                 .truncationMode(.middle)
         }
         .frame(width: 64)
-        .opacity(shelf.draggingItemID == item.id ? 0.4 : 1)
-        .overlay {
-            ShelfItemDragView(item: item, shelf: shelf)
+        .padding(ShelfRowNSView.cellPadding)
+        .background {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(.white.opacity(shelf.selection.contains(item.id) ? 0.16 : 0))
+        }
+        .opacity(shelf.draggingItemIDs.contains(item.id) ? 0.4 : 1)
+        // The row's AppKit overlay hit-tests the cells by these frames.
+        .background {
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: ShelfCellFramesKey.self,
+                    value: [item.id: proxy.frame(in: .named(ShelfRowView.coordinateSpace))]
+                )
+            }
         }
     }
 }

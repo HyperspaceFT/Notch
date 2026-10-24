@@ -57,6 +57,7 @@ let package = Package(
         .testTarget(name: "RemindersFeatureTests", dependencies: ["RemindersFeature"]),
         .testTarget(name: "NowPlayingFeatureTests", dependencies: ["NowPlayingFeature"]),
         .testTarget(name: "NotificationsFeatureTests", dependencies: ["NotificationsFeature"]),
+        .testTarget(name: "FilesFeatureTests", dependencies: ["FilesFeature"]),
     ] + featureTargets,
     swiftLanguageModes: [.v6]
 )
