@@ -84,4 +84,8 @@ private final class FeatureContext: NotchContext {
     func requestExpand() {
         model?.requestExpand(tabID: featureID)
     }
+
+    func requestExpand(detail: AnyView) {
+        model?.requestExpand(detail: detail, featureID: featureID)
+    }
 }

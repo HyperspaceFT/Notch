@@ -13,12 +13,22 @@ private let wingCornerClearance: CGFloat = 12
 /// Space between a wing's content and the notch.
 private let wingNotchClearance: CGFloat = 6
 
-/// Left wing: the app's icon and name. A click opens the Notifications tab.
+/// How far a wing's content moves while the island is hovered: half the ring it
+/// grows by, outward (`outward` is -1 for the left wing, 1 for the right) and
+/// down, so it keeps its place in the grown outline.
+private func wingHoverOffset(isHovered: Bool, outward: CGFloat) -> CGSize {
+    guard isHovered else { return .zero }
+    return CGSize(width: NotchTheme.hoverGrowth.width / 2 * outward, height: NotchTheme.hoverGrowth.height / 2)
+}
+
+/// Left wing: the app's icon and name. A click opens the island on the whole
+/// notification.
 struct NotificationWingLeading: View {
     let item: NotificationItem
     let inbox: NotificationInbox
     let apps: NotificationAppResolver
     let open: @MainActor () -> Void
+    @Environment(\.notchIsHovered) private var isIslandHovered
 
     var body: some View {
         // The listed copy, once a slow lookup has found the app's icon.
@@ -42,6 +52,9 @@ struct NotificationWingLeading: View {
                 .transition(.blurReplace)
             }
             .animation(NotchTheme.activityAnimation, value: item.id)
+            // An offset, not padding: the text keeps its width. The island's
+            // hover animation carries the move.
+            .offset(wingHoverOffset(isHovered: isIslandHovered, outward: -1))
             .padding(.leading, wingCornerClearance)
             .padding(.trailing, wingNotchClearance)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -53,11 +66,12 @@ struct NotificationWingLeading: View {
 }
 
 /// Right wing: the title over the body (or subtitle), a line each. A click opens
-/// the Notifications tab.
+/// the island on the whole notification.
 struct NotificationWingTrailing: View {
     let item: NotificationItem
     let inbox: NotificationInbox
     let open: @MainActor () -> Void
+    @Environment(\.notchIsHovered) private var isIslandHovered
 
     var body: some View {
         let summary = (inbox.item(id: item.id) ?? item).summary
@@ -84,6 +98,8 @@ struct NotificationWingTrailing: View {
                 .transition(.blurReplace)
             }
             .animation(NotchTheme.activityAnimation, value: item.id)
+            // Moves with the hovered island, like the left wing.
+            .offset(wingHoverOffset(isHovered: isIslandHovered, outward: 1))
             .padding(.leading, wingNotchClearance)
             .padding(.trailing, wingCornerClearance)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -197,6 +213,91 @@ struct NotificationsTabView: View {
                     LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
                         .frame(height: Self.fadeHeight)
                 }
+            }
+        }
+    }
+}
+
+/// One notification in full, opened from its activity: a card with its app's
+/// icon, name, and when it arrived, and one with its title, subtitle, and whole
+/// body, which scrolls when it does not fit. Display only.
+struct NotificationDetailView: View {
+    let item: NotificationItem
+    let inbox: NotificationInbox
+    let apps: NotificationAppResolver
+
+    private static let sourceWidth: CGFloat = 150
+    /// Height of the fade at the bottom, where text longer than the card is cut off.
+    private static let fadeHeight: CGFloat = 14
+
+    var body: some View {
+        // The listed copy, once a slow lookup has found the app's icon; the item
+        // itself once it has left the list.
+        let shown = inbox.item(id: item.id) ?? item
+        HStack(spacing: 10) {
+            NotchCard {
+                source(shown)
+            }
+            .frame(width: Self.sourceWidth)
+            NotchCard {
+                message(shown)
+            }
+        }
+    }
+
+    private func source(_ item: NotificationItem) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            NotificationAppIcon(image: apps.icon(for: item.appURL), side: 40)
+            if let appName = item.appName {
+                Text(appName)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(NotchTheme.primaryText)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            // Redrawn every minute, like the tab's list.
+            TimelineView(.everyMinute) { context in
+                Text(NotificationFormat.relative(item.received, now: context.date, language: Localization.shared.language))
+                    .font(.system(size: 10))
+                    .monospacedDigit()
+                    .foregroundStyle(NotchTheme.secondaryText)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+
+    private func message(_ item: NotificationItem) -> some View {
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 2) {
+                if let title = item.title {
+                    Text(title)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(NotchTheme.primaryText)
+                }
+                if let subtitle = item.subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(NotchTheme.primaryText)
+                }
+                if let body = item.body {
+                    Text(body)
+                        .font(.system(size: 11))
+                        .foregroundStyle(NotchTheme.secondaryText)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // Room to scroll the last line clear of the fade.
+            .padding(.bottom, Self.fadeHeight)
+        }
+        .scrollIndicators(.hidden)
+        // Text cut off at the bottom fades out instead of ending at a hard edge,
+        // as in the tab's list.
+        .mask {
+            VStack(spacing: 0) {
+                Color.black
+                LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(height: Self.fadeHeight)
             }
         }
     }

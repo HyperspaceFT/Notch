@@ -18,19 +18,27 @@ struct NotchRootView: View {
             bottomCornerRadii: model.bottomCornerRadii
         )
         let isExpanded = model.state == .expanded
-        let wingsActivity: NotchActivity? = switch model.state {
-        case .collapsed: nil
-        case .activity: model.currentActivity
-        // Kept over the open panel only for the heroes that fly into its tab,
-        // even while another activity is current (it draws nothing there).
-        case .expanded: model.morphingActivity
+        let wingsActivity: NotchActivity? = if isExpanded && model.detail != nil {
+            // A detail covers the tab buttons' band and has no tab for heroes to
+            // fly into, so they leave with their wings. Once it collapses, the
+            // current activity's wings return over the rising detail, as they do
+            // over the rising tabs.
+            nil
+        } else {
+            switch model.state {
+            case .collapsed: nil
+            case .activity: model.currentActivity
+            // Kept over the open panel only for the heroes that fly into its tab,
+            // even while another activity is current (it draws nothing there).
+            case .expanded: model.morphingActivity
+            }
         }
         let morph = NotchActivityMorph(
             namespace: activityMorph,
             state: NotchMorphState(
                 isExpanded: isExpanded,
                 wingFeatureID: wingsActivity.flatMap { $0.morphsIntoTab ? $0.featureID : nil },
-                shownTabID: model.selectedTab?.id
+                shownTabID: model.detail == nil ? model.selectedTab?.id : nil
             )
         )
 
@@ -257,7 +265,8 @@ private struct ActivityWingsView: View {
 }
 
 /// The expanded panel: a header row with tab buttons, and the selected feature's
-/// view below. Quitting lives in the island's right-click menu.
+/// view below; or, with a detail, that view alone below an empty header band.
+/// Quitting lives in the island's right-click menu.
 private struct ExpandedIslandView: View {
     let model: NotchViewModel
     /// Set on every tab's content, so a tab can leave its places to the heroes
@@ -276,8 +285,18 @@ private struct ExpandedIslandView: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            header
-            content
+            if let detail = model.detail {
+                // Keeps the detail clear of the hardware notch, where the tab buttons would be.
+                Color.clear
+                    .frame(height: headerHeight)
+                detail.content
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // A new detail replaces the old one's views rather than updating them.
+                    .id(detail.sequence)
+            } else {
+                header
+                content
+            }
         }
         .foregroundStyle(NotchTheme.primaryText)
         // The expanded radius, not the current one: the content stays on screen
@@ -299,7 +318,11 @@ private struct ExpandedIslandView: View {
             Spacer(minLength: model.geometry.notchRect.width)
             tabButtons(.trailing)
         }
-        .frame(height: max(model.geometry.notchRect.height, 30))
+        .frame(height: headerHeight)
+    }
+
+    private var headerHeight: CGFloat {
+        max(model.geometry.notchRect.height, 30)
     }
 
     /// One side's buttons. Only the selected button has a glass background: one

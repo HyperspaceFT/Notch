@@ -2,10 +2,12 @@ import SwiftUI
 
 /// A self-contained module that lives inside the notch.
 ///
-/// A feature may contribute two things:
+/// A feature may contribute three things:
 /// - live activities (via `NotchContext.present`) shown as wings beside the
-///   hardware notch while the island is collapsed, and
-/// - a tab in the expanded panel (via `makeExpandedView`).
+///   hardware notch while the island is collapsed,
+/// - a tab in the expanded panel (via `makeExpandedView`), and
+/// - a detail the expanded island opens on alone, without the tabs (via
+///   `NotchContext.requestExpand(detail:)`).
 ///
 /// Features are created once in `FeatureCatalog`, activated when the shell
 /// starts, and deactivated when it stops. They must not touch windows directly.

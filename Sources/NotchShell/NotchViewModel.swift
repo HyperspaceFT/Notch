@@ -12,6 +12,10 @@ import SwiftUI
 /// - `.expanded`: the full panel with feature tabs (a click on the hovered
 ///   island, content dragged onto the notch, or `requestExpand`). Only tabs
 ///   whose `isAvailable` is true show (`visibleTabs`).
+///   With a `detail` (`requestExpand(detail:featureID:)`) it shows that one view
+///   instead, without the tabs. The detail stays while the collapsed content
+///   rises out of sight and goes with it; every ordinary expansion (a click,
+///   `requestExpand(tabID:)`, a drop) clears it and brings the tabs back.
 ///
 /// Expansion always wins over activities; activities keep their queue and
 /// timers while expanded and reappear on collapse.
@@ -65,6 +69,15 @@ final class NotchViewModel {
         }
     }
 
+    /// A view a feature opened the island on in place of the tabs.
+    struct Detail {
+        let featureID: String
+        /// Distinct for every request, so a new detail replaces the old one's views
+        /// even when it comes from the same feature.
+        let sequence: Int
+        let content: AnyView
+    }
+
     private struct ActivityEntry {
         var activity: NotchActivity
         /// Monotonic insertion order; breaks priority ties in favour of the newest.
@@ -84,6 +97,9 @@ final class NotchViewModel {
     /// The pointer rests on the collapsed or activity island. Always false while expanded.
     private(set) var isHovered = false
     private(set) var tabs: [Tab] = []
+    /// Shown instead of the tabs while set. Kept after collapsing until the
+    /// expanded content unmounts, so the detail rises out rather than the tabs.
+    private(set) var detail: Detail?
     var selectedTabID: String? {
         didSet {
             guard selectedTabID != oldValue else { return }
@@ -104,13 +120,15 @@ final class NotchViewModel {
     @ObservationIgnored var onInteractivityChange: ((Bool) -> Void)?
 
     /// Invoked whenever `selectedTabID` changes, and when the expanded panel finds
-    /// another tab shown in the selected one's place (`shownTabDidChange()`), so a
-    /// switch may report twice. The shell uses it to end text editing, since hidden
-    /// tabs stay mounted and could keep the keyboard.
+    /// another tab shown in the selected one's place (`shownTabDidChange()`), or a
+    /// detail replaces what the open panel shows, so a switch may report twice.
+    /// The shell uses it to end text editing, since hidden tabs stay mounted and
+    /// could keep the keyboard.
     @ObservationIgnored var onSelectedTabChange: (() -> Void)?
 
     private var entries: [ActivityEntry] = []
     @ObservationIgnored private var nextSequence = 0
+    @ObservationIgnored private var nextDetailSequence = 0
     @ObservationIgnored private var expiryTask: Task<Void, Never>?
     @ObservationIgnored private var contentUnmountTask: Task<Void, Never>?
 
@@ -182,11 +200,12 @@ final class NotchViewModel {
     }
 
     /// Body width of the expanded island: what the selected tab asks for, kept
-    /// between the standard and the maximum width. Also read while collapsed, so
-    /// the expanded content keeps its layout while it rises and drops.
+    /// between the standard and the maximum width; the standard width for a
+    /// detail. Also read while collapsed, so the expanded content keeps its
+    /// layout while it rises and drops.
     var expandedBodyWidth: CGFloat {
         let standard = NotchTheme.expandedSize.width
-        guard let width = selectedTab?.expandedWidth() else { return standard }
+        guard detail == nil, let width = selectedTab?.expandedWidth() else { return standard }
         return min(max(width, standard), NotchTheme.maximumExpandedWidth)
     }
 
@@ -267,8 +286,16 @@ final class NotchViewModel {
         }
     }
 
+    /// Expanding from collapsed shows the tabs, even while a detail still rises out.
     func setExpanded(_ expanded: Bool) {
         guard expanded != isExpanded else { return }
+        if expanded {
+            detail = nil
+        }
+        applyExpanded(expanded)
+    }
+
+    private func applyExpanded(_ expanded: Bool) {
         let wasInteractive = isInteractive
         isExpanded = expanded
         // Expanding replaces the hover; collapsing happens with the pointer outside.
@@ -296,6 +323,7 @@ final class NotchViewModel {
             guard !Task.isCancelled, let self, !self.isExpanded else { return }
             self.isExpandedContentMounted = false
             self.hasExpandedContentAppeared = false
+            self.detail = nil
         }
     }
 
@@ -321,11 +349,30 @@ final class NotchViewModel {
     }
 
     /// Expands the island, selecting `tabID` when such a tab exists and is visible.
+    /// Already expanded on a detail, it brings the tabs back.
     func requestExpand(tabID: String?) {
+        let replacesDetail = isExpanded && detail != nil
+        detail = nil
         if let tabID, visibleTabs.contains(where: { $0.id == tabID }) {
             selectedTabID = tabID
         }
         setExpanded(true)
+        if replacesDetail {
+            shownTabDidChange()
+        }
+    }
+
+    /// Expands the island on `content` alone, without the tabs. Already expanded,
+    /// it replaces what is shown (the tabs or another detail), which ends any text
+    /// editing as a tab switch does.
+    func requestExpand(detail content: AnyView, featureID: String) {
+        nextDetailSequence += 1
+        detail = Detail(featureID: featureID, sequence: nextDetailSequence, content: content)
+        if isExpanded {
+            shownTabDidChange()
+        } else {
+            applyExpanded(true)
+        }
     }
 
     /// Expands the island for content dragged onto the notch, on the first visible

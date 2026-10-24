@@ -6,9 +6,11 @@ import SwiftUI
 /// Mirrors other apps' notification banners into the island: each new banner
 /// shows as an activity beside the notch, its app on the left and its text on
 /// the right, and joins a tab right of the notch that lists the notifications
-/// caught since launch, in memory only. There is no API for this: the banners
-/// are read from NotificationCenter through Accessibility
-/// (`NotificationBannerWatcher`), so the feature waits until Notch has that access.
+/// caught since launch, in memory only. A click on the activity opens the island
+/// on that notification alone, in full (`NotificationDetailView`). There is no
+/// API for this: the banners are read from NotificationCenter through
+/// Accessibility (`NotificationBannerWatcher`), so the feature waits until Notch
+/// has that access.
 ///
 /// With "Hide System Banners" on (`NotificationsSettings`, off by default), the
 /// system's banner moves off screen while the island shows it.
@@ -155,7 +157,7 @@ public final class NotificationsFeature: NotchFeature {
         guard let newest else { return }
         // The same id replaces the previous banner's activity and restarts its timer.
         let open: @MainActor () -> Void = { [weak self] in
-            self?.openTab()
+            self?.openDetail(of: newest)
         }
         context?.present(NotchActivity(
             id: Self.activityID,
@@ -169,8 +171,9 @@ public final class NotificationsFeature: NotchFeature {
         })
     }
 
-    private func openTab() {
-        context?.requestExpand()
+    /// Opens the island on the whole notification, in place of its activity.
+    private func openDetail(of item: NotificationItem) {
+        context?.requestExpand(detail: AnyView(NotificationDetailView(item: item, inbox: inbox, apps: apps)))
         context?.dismiss(activityID: Self.activityID)
     }
 

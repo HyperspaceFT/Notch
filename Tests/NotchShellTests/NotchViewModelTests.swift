@@ -417,6 +417,92 @@ struct NotchViewModelTests {
         #expect(model.bodySize == CGSize(width: 190 + NotchTheme.activityWingWidth * 2, height: 32))
     }
 
+    @Test func requestingADetailExpandsOnIt() {
+        model.requestExpand(detail: AnyView(EmptyView()), featureID: "notifications")
+        #expect(model.state == .expanded)
+        #expect(model.isExpandedContentMounted)
+        #expect(model.detail?.featureID == "notifications")
+    }
+
+    @Test func aDetailRisesOutWithTheContentAndGoesWithIt() async throws {
+        model.expandedContentLinger = .milliseconds(20)
+        model.requestExpand(detail: AnyView(EmptyView()), featureID: "notifications")
+        model.expandedContentDidAppear()
+
+        model.setExpanded(false)
+        #expect(model.isExpandedContentMounted)
+        #expect(model.detail != nil)
+
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(!model.isExpandedContentMounted)
+        #expect(model.detail == nil)
+    }
+
+    @Test func clickingTheIslandWhileADetailRisesShowsTheTabs() {
+        model.expandedContentLinger = .seconds(10)
+        model.requestExpand(detail: AnyView(EmptyView()), featureID: "notifications")
+        model.setExpanded(false)
+        #expect(model.detail != nil)
+
+        model.setExpanded(true)
+        #expect(model.state == .expanded)
+        #expect(model.detail == nil)
+    }
+
+    @Test func requestingATabOverADetailShowsTheTabs() {
+        model.setTabs([
+            .init(id: "home", title: { "主页" }, symbol: { "house" }, content: AnyView(EmptyView())),
+            .init(id: "battery", title: { "电池" }, symbol: { "battery.75percent" }, content: AnyView(EmptyView())),
+        ])
+        model.requestExpand(detail: AnyView(EmptyView()), featureID: "notifications")
+        var tabChanges = 0
+        model.onSelectedTabChange = { tabChanges += 1 }
+
+        model.requestExpand(tabID: "battery")
+        #expect(model.state == .expanded)
+        #expect(model.detail == nil)
+        #expect(model.selectedTabID == "battery")
+        #expect(tabChanges >= 1)
+    }
+
+    @Test func aDropOverADetailShowsTheTabs() {
+        model.setTabs([
+            .init(id: "home", title: { "主页" }, symbol: { "house" }, content: AnyView(EmptyView())),
+            .init(id: "files", title: { "文件" }, symbol: { "folder" }, opensOnDrag: true, content: AnyView(EmptyView())),
+        ])
+        model.requestExpand(detail: AnyView(EmptyView()), featureID: "notifications")
+
+        model.expandForDrop()
+        #expect(model.detail == nil)
+        #expect(model.selectedTabID == "files")
+    }
+
+    @Test func aDetailTakesTheStandardWidth() {
+        model.setTabs([
+            .init(id: "home", title: { "主页" }, symbol: { "house" }, expandedWidth: { 760 }, content: AnyView(EmptyView())),
+        ])
+        model.requestExpand(detail: AnyView(EmptyView()), featureID: "notifications")
+        #expect(model.bodySize == CGSize(width: 520, height: 190))
+
+        model.requestExpand(tabID: "home")
+        #expect(model.bodySize.width == 760)
+    }
+
+    @Test func aNewDetailReplacesTheShownOne() {
+        model.requestExpand(detail: AnyView(EmptyView()), featureID: "notifications")
+        let first = model.detail?.sequence
+        #expect(first != nil)
+        var tabChanges = 0
+        model.onSelectedTabChange = { tabChanges += 1 }
+
+        model.requestExpand(detail: AnyView(EmptyView()), featureID: "notifications")
+        #expect(model.state == .expanded)
+        #expect(model.detail != nil)
+        #expect(model.detail?.sequence != first)
+        // Ends text editing as a tab switch does.
+        #expect(tabChanges == 1)
+    }
+
     @Test func activitiesDoNotMorphIntoTheirTabUnlessAsked() {
         #expect(!activity("a").morphsIntoTab)
         let morphing = NotchActivity(id: "b", featureID: "test", morphsIntoTab: true) {
