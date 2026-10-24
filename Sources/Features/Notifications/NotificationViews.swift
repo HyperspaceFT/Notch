@@ -24,15 +24,24 @@ struct NotificationWingLeading: View {
         // The listed copy, once a slow lookup has found the app's icon.
         let shown = inbox.item(id: item.id) ?? item
         Button(action: open) {
-            HStack(spacing: 6) {
-                NotificationAppIcon(image: apps.icon(for: shown.appURL), side: 20)
-                Text(shown.appName ?? "")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(NotchTheme.secondaryText)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Spacer(minLength: 0)
+            ZStack {
+                HStack(spacing: 6) {
+                    NotificationAppIcon(image: apps.icon(for: shown.appURL), side: 20)
+                    Text(shown.appName ?? "")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(NotchTheme.secondaryText)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Spacer(minLength: 0)
+                }
+                // Every banner presents the same activity, so the shell keeps these
+                // wings and only their item changes: a notification that takes over
+                // from one still showing blurs in, as a new activity replacing
+                // another does.
+                .id(item.id)
+                .transition(.blurReplace)
             }
+            .animation(NotchTheme.activityAnimation, value: item.id)
             .padding(.leading, wingCornerClearance)
             .padding(.trailing, wingNotchClearance)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -53,22 +62,28 @@ struct NotificationWingTrailing: View {
     var body: some View {
         let summary = (inbox.item(id: item.id) ?? item).summary
         Button(action: open) {
-            VStack(alignment: .leading, spacing: 1) {
-                if let headline = summary.headline {
-                    Text(headline)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(NotchTheme.primaryText)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+            ZStack(alignment: .leading) {
+                VStack(alignment: .leading, spacing: 1) {
+                    if let headline = summary.headline {
+                        Text(headline)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(NotchTheme.primaryText)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    if let detail = summary.detail {
+                        Text(detail)
+                            .font(.system(size: 10))
+                            .foregroundStyle(NotchTheme.secondaryText)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
                 }
-                if let detail = summary.detail {
-                    Text(detail)
-                        .font(.system(size: 10))
-                        .foregroundStyle(NotchTheme.secondaryText)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
+                // Blurs in over the one it replaces, like the left wing.
+                .id(item.id)
+                .transition(.blurReplace)
             }
+            .animation(NotchTheme.activityAnimation, value: item.id)
             .padding(.leading, wingNotchClearance)
             .padding(.trailing, wingCornerClearance)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
