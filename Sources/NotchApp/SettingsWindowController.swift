@@ -3,6 +3,7 @@ import CalendarFeature
 import HomeFeature
 import NotchKit
 import NotchUI
+import NotificationsFeature
 import NowPlayingFeature
 import Observation
 import SwiftUI
@@ -22,6 +23,7 @@ final class SettingsWindowController {
     func show() {
         launchAtLogin.refresh()
         SystemHUDSettings.shared.refreshAccessibilityAccess()
+        NotificationsSettings.shared.refreshAccessibilityAccess()
         LocalCalendars.shared.refreshAccess()
         let window = window ?? makeWindow()
         // An accessory app is never active on its own; without this the window
@@ -35,7 +37,7 @@ final class SettingsWindowController {
             GeneralSettingsView(localization: .shared, launchAtLogin: launchAtLogin, appearance: .shared),
             symbol: "gearshape"
         ) { localized(en: "General", zh: "通用") }
-        addPane(IslandSettingsView(systemHUD: .shared, nowPlaying: .shared), symbol: "capsule") {
+        addPane(IslandSettingsView(systemHUD: .shared, nowPlaying: .shared, notifications: .shared), symbol: "capsule") {
             localized(en: "Island", zh: "灵动岛")
         }
         addPane(HomeSettingsView(settings: .shared), symbol: "house") {
@@ -154,10 +156,12 @@ private struct GeneralSettingsView: View {
 }
 
 /// What the island shows: whether it replaces the system volume and brightness HUD,
-/// and where Now Playing reads the track from.
+/// where Now Playing reads the track from, and whether it shows other apps'
+/// notifications and hides the system's banners.
 private struct IslandSettingsView: View {
     @Bindable var systemHUD: SystemHUDSettings
     @Bindable var nowPlaying: NowPlayingSettings
+    @Bindable var notifications: NotificationsSettings
 
     var body: some View {
         Form {
@@ -198,6 +202,36 @@ private struct IslandSettingsView: View {
                         .foregroundStyle(.yellow)
                 }
             }
+            Section {
+                Toggle(isOn: $notifications.isEnabled) {
+                    Text(localized(en: "Show Notifications in the Island", zh: "在灵动岛显示通知"))
+                    Text(localized(
+                        en: "Banners from other apps show beside the notch, with their full text in a Notifications tab. Notch reads them through Accessibility and keeps them only in memory.",
+                        zh: "其他 App 的通知横幅会显示在刘海两侧，完整内容在「通知」标签页中。Notch 通过辅助功能读取通知，且只保存在内存中。"
+                    ))
+                    if needsNotificationsAccess {
+                        Text(localized(
+                            en: "Allow Notch in System Settings → Privacy & Security → Accessibility.",
+                            zh: "请在「系统设置 → 隐私与安全性 → 辅助功能」中允许 Notch。"
+                        ))
+                    }
+                }
+                .toggleStyle(.switch)
+                if needsNotificationsAccess {
+                    Button(localized(en: "Open Accessibility Settings…", zh: "打开辅助功能设置…")) {
+                        notifications.requestAccessibilityAccess()
+                    }
+                }
+                Toggle(isOn: $notifications.hidesSystemBanners) {
+                    Text(localized(en: "Hide System Banners", zh: "隐藏系统通知横幅"))
+                    Text(localized(
+                        en: "While the island shows a notification, the system's banner moves off screen. It can still flash for a moment first, and its buttons, such as Reply, are out of reach, so open the app from the island. Alerts that wait for an answer stay on screen.",
+                        zh: "灵动岛显示通知时，系统横幅会移到屏幕之外。横幅仍可能先闪现片刻；横幅上的按钮（如「回复」）将无法点按，请从灵动岛打开 App。需要你回应的提醒会继续留在屏幕上。"
+                    ))
+                }
+                .toggleStyle(.switch)
+                .disabled(!notifications.isEnabled)
+            }
         }
         .formStyle(.grouped)
         .frame(width: 420)
@@ -205,11 +239,17 @@ private struct IslandSettingsView: View {
         // Coming back from System Settings, where Accessibility access may have changed.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             systemHUD.refreshAccessibilityAccess()
+            notifications.refreshAccessibilityAccess()
         }
     }
 
     /// The HUD is on but cannot intercept the keys until the user grants access.
     private var needsAccessibilityAccess: Bool {
         systemHUD.isEnabled && !systemHUD.hasAccessibilityAccess
+    }
+
+    /// Notifications are on but cannot be read until the user grants access.
+    private var needsNotificationsAccess: Bool {
+        notifications.isEnabled && !notifications.hasAccessibilityAccess
     }
 }

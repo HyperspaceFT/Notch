@@ -35,6 +35,7 @@ Built-in features:
 | 🔋 Battery | Plugging in the power adapter briefly shows a green charging battery left of the notch and the charge level right of it; unplugging shows a notice too. In the open panel, the battery icon right of the notch follows the charge level; its tab shows the time remaining and the battery health (maximum capacity, cycle count) |
 | 🔊 Volume & Brightness | The volume and brightness keys show Notch's own notice beside the notch instead of the system one: an icon on the left and a ring with the current level on the right; hold Option + Shift for finer steps. Needs Accessibility access (see the installation steps below), and can be turned off in the **Island** pane of **Settings…** |
 | 🎵 Now Playing | While the system's Now Playing has something (a YouTube or Bilibili tab in a browser, Music, Spotify, and so on), the notch extends a little to each side: right beside it on the left, the cover (the player's icon when there is none), which flips over like a record sleeve when the track changes; on the right, three thin braided strands of a wave, swinging to a beat and flowing sideways. Click the wave to pause, and it calms into a single flat line; click again to play. With the pointer on the island, it grows and the cover and the wave move out with it a little; on the wave, the wave turns into a pause or play icon. The beat is made up per song (each song has its own, and the same one every time); it is not the real audio spectrum. With Light and Color on, the cover casts a glow in its own colors and the wave takes its colors. After a pause it stays for 30 seconds before it leaves. While a track is playing or paused, the open panel has a **Now Playing** tab left of the notch (after Files, before AirPods): a large cover on the left, which brings the playing app to the front when clicked; on the right, the app's name, the title, artist, and album, a progress bar you can click or drag to jump around in the track (with the time played and left; hidden for live streams and anything else without a length), and previous, play / pause, and next buttons. Clicking the cover beside the notch opens the island straight onto this tab, and the cover and the wave fly to their places in it, then back beside the notch as it closes; opening or closing midway turns them around from where they are. By default only Music and Spotify are read, which needs Automation access (to let Notch control them); with **Read Now Playing from Any App** on in the **Island** pane of **Settings…**, the bundled third-party mediaremote-adapter reads any app in the system's Now Playing instead (browsers included). **That switch carries some risk; read the note below before turning it on** |
+| 🔔 Notifications | When another app shows a notification banner, the notch extends to each side for a few seconds: the app's icon and name on the left, the title and the first line of the text on the right; a click opens the Notifications tab of the panel. While there are notifications, a Notifications tab sits outermost right of the notch (after Notes) and lists the latest 30 in full, newest first: click one to switch to its app and remove it from the list; right-click to delete one, or clear them all at once. Notifications are kept in memory only, never written to disk, and are gone when Notch quits. macOS has no public way to read other apps' notifications, so Notch, like boring.notch, reads the banners on screen through Accessibility access. It therefore sees only banners that actually appear: notifications whose alert style is None, or that a Focus holds back, are missed, and a macOS update that changes the banner's interface may break it. You can turn it off in the **Island** pane of **Settings…**, which also has **Hide System Banners** (off by default): the system banner then moves off screen and shows only in the island, but it can flash briefly before it moves, and its buttons (such as Reply) are out of reach, so open the app from the island to act on it; alerts that stay until you click a button (such as Calendar's Snooze) are not hidden. Should Notch quit unexpectedly while it hides a banner, it moves the banner back the next time it opens; if later banners still do not appear, run `killall NotificationCenter` in Terminal to bring them back |
 
 > [!WARNING]
 > **"Read Now Playing from Any App" is a risky feature, and it is off by default.** Since macOS 15.4 only Apple-signed programs may read the system's Now Playing information. To get around that, with the switch on Notch has the system's own `/usr/bin/perl` load a prebuilt third-party library, [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD 3-Clause, taken unmodified from boring.notch and kept in `Vendor/MediaRemoteAdapter/`): code that is not Apple's then runs under an Apple identity and passes a privacy restriction macOS sets on purpose. Notch cannot check what that binary does beyond its published source, and any macOS update may block it. Although most notch apps on the market use this method, that does not stop it from being a fairly dangerous way to do it. Without it, Now Playing still shows Music and Spotify; with it on, Notch falls back to that by itself if the adapter cannot run on your Mac.
@@ -57,7 +58,7 @@ Download the latest `Notch-x.y.z.zip` from the [Releases](https://github.com/Hyp
 1. Unzip it and drag `Notch.app` into your Applications folder;
 2. Double-click it. The app is not notarized by Apple, so macOS blocks it and says it cannot verify the developer; click **Done**;
 3. Open **System Settings → Privacy & Security**, scroll to the bottom, click **Open Anyway**, and enter your password. It opens normally from then on;
-4. On first launch macOS asks for Accessibility access (used to take over the volume and brightness keys). Click **Open System Settings** and turn Notch on in the list. It also asks for Bluetooth access (used to show your AirPods' connection and battery); click **Allow**. The first time you open the notch, it asks for Location access (used to show the local weather) and Calendars access (used to show events from the Calendar app); click **Allow**. Reminders access is asked for only when you first click **Allow** on the Reminders card. The first time Notch reads Music or Spotify, macOS asks whether Notch may control them (Automation, used to read the current track and to pause and play); click **Allow**.
+4. On first launch macOS asks for Accessibility access (used to take over the volume and brightness keys and to show notifications in the island). Click **Open System Settings** and turn Notch on in the list. It also asks for Bluetooth access (used to show your AirPods' connection and battery); click **Allow**. The first time you open the notch, it asks for Location access (used to show the local weather) and Calendars access (used to show events from the Calendar app); click **Allow**. Reminders access is asked for only when you first click **Allow** on the Reminders card. The first time Notch reads Music or Spotify, macOS asks whether Notch may control them (Automation, used to read the current track and to pause and play); click **Allow**.
 
 Or remove the download quarantine flag in Terminal and open it directly:
 
@@ -65,7 +66,7 @@ Or remove the download quarantine flag in Terminal and open it directly:
 xattr -dr com.apple.quarantine /Applications/Notch.app
 ```
 
-If the volume and brightness notices fall back to the system ones after an update, select Notch in **System Settings → Privacy & Security → Accessibility**, remove it with **−**, then open Notch and allow it again. The app has no formal Apple signature, so macOS treats a new version whose signature changed as a different app.
+If the volume and brightness notices fall back to the system ones after an update, or notifications stop showing in the island, select Notch in **System Settings → Privacy & Security → Accessibility**, remove it with **−**, then open Notch and allow it again. The app has no formal Apple signature, so macOS treats a new version whose signature changed as a different app.
 
 To quit: move the pointer onto the notch, wait for it to grow, right-click, and choose **Quit**.
 
@@ -144,6 +145,7 @@ Sources/
 │   ├── Files/
 │   ├── Home/
 │   ├── Notes/
+│   ├── Notifications/
 │   ├── NowPlaying/
 │   ├── Reminders/
 │   ├── SystemHUD/
@@ -166,7 +168,7 @@ The island has three states:
 
 - **collapsed**: exactly the size of the hardware notch, so it is invisible;
 - **activity**: when a feature presents a live activity, the island extends to both sides and shows content there (such as the charging notice);
-- **expanded**: after a click, the panel opens with the features' tabs along the top (Home, Files, and AirPods while connected left of the notch, Battery and Notes right of it) and the selected feature's content below.
+- **expanded**: after a click, the panel opens with the features' tabs along the top (Home, Files, and AirPods while connected left of the notch, Battery, Notes, and Notifications while there are any right of it) and the selected feature's content below.
 
 While the pointer rests on the collapsed or activity island, it grows a little with a slight bounce (hovered), its bottom corners growing with it so they stay concentric with the original ones. A click then opens it, and a right-click shows the **Settings…** / **Quit** menu.
 
@@ -194,7 +196,8 @@ Write interface text with `localized(en:zh:)`, giving both the English and the C
 - [x] 📅 Calendar (the Calendar app and subscription links for Google, Outlook, and other calendars), with Home widening by its modules
 - [x] 📝 Notes (a tab and a Home module)
 - [x] ✅ Reminders (a Home module, reading and writing the Reminders app)
-- [x] ⚙️ Settings window (launch at login, Light and Color, the volume/brightness HUD switch, the Home layout, weather periods, the calendar, and language for now)
+- [x] 🔔 Notifications (other apps' banners in the island, optionally hiding the system banner)
+- [x] ⚙️ Settings window (launch at login, Light and Color, the volume/brightness HUD switch, the notification switches, the Home layout, weather periods, the calendar, and language for now)
 - [x] 🚀 Launch at login
 - [ ] 🔄 Automatic updates
 

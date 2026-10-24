@@ -12,6 +12,7 @@ let featureNames = [
     "Files",
     "Home",
     "Notes",
+    "Notifications",
     "NowPlaying",
     "Reminders",
     "SystemHUD",
@@ -55,6 +56,7 @@ let package = Package(
         .testTarget(name: "NotesFeatureTests", dependencies: ["NotesFeature"]),
         .testTarget(name: "RemindersFeatureTests", dependencies: ["RemindersFeature"]),
         .testTarget(name: "NowPlayingFeatureTests", dependencies: ["NowPlayingFeature"]),
+        .testTarget(name: "NotificationsFeatureTests", dependencies: ["NotificationsFeature"]),
     ] + featureTargets,
     swiftLanguageModes: [.v6]
 )
