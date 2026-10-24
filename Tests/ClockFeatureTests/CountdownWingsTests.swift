@@ -20,6 +20,14 @@ struct CountdownWingsTests {
         #expect(CountdownWings.width(remaining: 3599.5) == long)
     }
 
+    @Test func theLeftWingFitsTheRingWithTheSameClearances() {
+        // Narrower than the right wing at any time left, so the island's left edge
+        // comes in to the ring.
+        let clearances = CountdownWings.width(remaining: 300) - CountdownWings.timeWidth(remaining: 300)
+        #expect(CountdownWings.leadingWidth == CountdownWings.ringSide + clearances)
+        #expect(CountdownWings.leadingWidth < CountdownWings.width(remaining: 0))
+    }
+
     @Test func theWingsAreNarrowerThanTheStandardOnes() {
         // Only as wide as the content needs, which the shell's standard wing exceeds.
         #expect(CountdownWings.width(remaining: 3600) < 72)

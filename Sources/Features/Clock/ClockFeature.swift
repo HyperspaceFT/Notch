@@ -149,6 +149,7 @@ public final class ClockFeature: NotchFeature {
                 priority: Self.countdownWingsPriority,
                 duration: Self.wingsDuration,
                 wingWidth: CountdownWings.width(remaining: remaining),
+                leadingWingWidth: CountdownWings.leadingWidth,
                 holdsWhileExpanded: true
             ) { [model] in
                 CountdownWingLeading(model: model) { [weak self] in

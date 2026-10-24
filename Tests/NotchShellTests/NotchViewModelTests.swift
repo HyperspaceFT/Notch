@@ -67,6 +67,39 @@ struct NotchViewModelTests {
         #expect(model.bodySize.width == 190 + NotchTheme.activityWingWidth * 2)
     }
 
+    @Test func unequalWingsMoveTheIslandSoTheNotchStaysBetweenThem() {
+        let leading: CGFloat = 36
+        let trailing: CGFloat = 52
+        model.present(NotchActivity(id: "timer", featureID: "test", wingWidth: trailing, leadingWingWidth: leading) {
+            EmptyView()
+        } trailing: {
+            EmptyView()
+        })
+        #expect(model.bodySize.width == 190 + leading + trailing)
+        #expect(model.islandOffset == 8)
+        // The body (inside the ears) starts the left wing's width left of the notch
+        // (640...830) and ends the right wing's width right of it.
+        let body = model.islandScreenFrame.insetBy(dx: model.topCornerRadius, dy: 0)
+        #expect(body.minX == 640 - leading)
+        #expect(body.maxX == 830 + trailing)
+
+        // Hovered, the island grows evenly around where it is.
+        model.setHovered(true)
+        #expect(model.islandOffset == 8)
+        model.setHovered(false)
+
+        // Open, it is centered again.
+        model.setExpanded(true)
+        #expect(model.islandOffset == 0)
+        #expect(model.islandScreenFrame.midX == 735)
+        model.setExpanded(false)
+
+        // Equal wings on top center it too.
+        model.present(activity("equal", priority: .high))
+        #expect(model.islandOffset == 0)
+        #expect(model.islandScreenFrame.midX == 735)
+    }
+
     @Test func activityThenExpandThenCollapse() {
         model.present(activity("a"))
         #expect(model.state == .activity)

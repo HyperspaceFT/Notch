@@ -100,7 +100,8 @@ struct NotchRootView: View {
                 ActivityWingsView(
                     activity: activity,
                     notchSize: model.geometry.notchRect.size,
-                    earInset: model.topCornerRadius
+                    earInset: model.topCornerRadius,
+                    islandOffset: model.islandOffset
                 )
                 .environment(\.notchIsHovered, model.isHovered)
                 .environment(\.notchActivityMorph, morph)
@@ -161,6 +162,9 @@ struct NotchRootView: View {
                 NSApp.terminate(nil)
             }
         }
+        // Off the notch's center while the current activity's wings are unequal,
+        // so the notch stays between them; the animations below carry the move.
+        .offset(x: model.islandOffset)
         // Inner animations win when several values change at once, so expanding
         // the hovered island (which also clears the hover) uses `expandAnimation`.
         .animation(animation(for: model.state), value: model.state)
@@ -316,24 +320,30 @@ private struct ActivityWingsView: View {
     let activity: NotchActivity
     let notchSize: CGSize
     let earInset: CGFloat
+    /// The island's own offset from the notch's center (`NotchViewModel.islandOffset`).
+    let islandOffset: CGFloat
 
     var body: some View {
-        let wingWidth = activity.wingWidth ?? NotchTheme.activityWingWidth
+        let wings = NotchViewModel.wingWidths(of: activity)
         HStack(spacing: 0) {
             activity.leading
-                .frame(width: wingWidth, alignment: .center)
+                .frame(width: wings.leading, alignment: .center)
             // Nothing is visible behind the camera housing. Never hit, either:
             // wings kept over the open panel sit where its tab buttons are.
             Color.clear
                 .frame(width: notchSize.width)
                 .allowsHitTesting(false)
             activity.trailing
-                .frame(width: wingWidth, alignment: .center)
+                .frame(width: wings.trailing, alignment: .center)
         }
         .frame(height: notchSize.height)
         .foregroundStyle(NotchTheme.primaryText)
         .font(.system(size: 13, weight: .semibold))
         .padding(.horizontal, earInset)
+        // Unequal wings, centered on the island, put the gap off the notch by half
+        // their difference; the island's own offset makes up for that while it is
+        // theirs, and this the rest (over the open panel, which is centered).
+        .offset(x: (wings.trailing - wings.leading) / 2 - islandOffset)
     }
 }
 

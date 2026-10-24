@@ -23,19 +23,25 @@ private let wingCornerClearance: CGFloat = 12
 /// Space between a wing's content and the notch.
 private let wingNotchClearance: CGFloat = 6
 
-/// The countdown wings' widths: only as wide as the time on the right needs (the
-/// ring on the left needs less), as it reads when the wings are presented.
+/// The countdown wings' widths: the right one only as wide as the time needs, as
+/// it reads when the wings are presented, and the left one as the ring.
 enum CountdownWings {
+    /// The left wing's ring.
+    static let ringSide: CGFloat = 18
     /// Room for "59:59" at the wing's 12-point semibold digits.
     static let shortTimeWidth: CGFloat = 34
     /// Room for "0:00:00".
     static let longTimeWidth: CGFloat = 46
 
-    /// Each wing's width for a timer with `remaining` seconds left: the time's
-    /// room (`timeWidth`) and both clearances.
+    /// The right wing's width for a timer with `remaining` seconds left: the
+    /// time's room (`timeWidth`) and both clearances.
     static func width(remaining: TimeInterval) -> CGFloat {
         wingCornerClearance + timeWidth(remaining: remaining) + wingNotchClearance
     }
+
+    /// The left wing's width: the ring and both clearances, so the island's left
+    /// edge comes in to the ring.
+    static let leadingWidth = wingCornerClearance + ringSide + wingNotchClearance
 
     /// Room for the time with `remaining` seconds left: for "m:ss" under an hour,
     /// and for "h:mm:ss" from one, as `CountdownTimer.display` shows it (rounded
@@ -138,7 +144,7 @@ struct CountdownWingLeading: View {
                 if case .counting(let timer) = model.phase {
                     CountdownTimeline(timer: timer) { now in
                         CountdownRing(progress: timer.progress(at: now), lineWidth: 3, style: timerStyle())
-                            .frame(width: 18, height: 18)
+                            .frame(width: CountdownWings.ringSide, height: CountdownWings.ringSide)
                             .opacity(timer.isPaused ? 0.45 : 1)
                     }
                 }

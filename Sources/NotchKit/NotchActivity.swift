@@ -35,6 +35,11 @@ public struct NotchActivity: Identifiable {
     /// (`NotchTheme.activityWingWidth`). Narrower content asks for less, so the
     /// island grows only as far as it needs.
     public var wingWidth: CGFloat?
+    /// Width of the left wing when its content needs less (or more) room than the
+    /// right's; `nil` (the default) makes it as wide as the right wing. With
+    /// unequal wings the island sits off the notch's center, so the notch stays
+    /// between them.
+    public var leadingWingWidth: CGFloat?
     /// Keeps the wings on the island while it is expanded and this activity is
     /// current, so views in them can fly into their places in the feature's tab
     /// and back (`notchMorphHero` in NotchUI). While expanded the wings must show
@@ -63,6 +68,7 @@ public struct NotchActivity: Identifiable {
         priority: Priority = .normal,
         duration: TimeInterval? = nil,
         wingWidth: CGFloat? = nil,
+        leadingWingWidth: CGFloat? = nil,
         morphsIntoTab: Bool = false,
         holdsWhileExpanded: Bool = false,
         @ViewBuilder leading: () -> Leading,
@@ -73,6 +79,7 @@ public struct NotchActivity: Identifiable {
         self.priority = priority
         self.duration = duration
         self.wingWidth = wingWidth
+        self.leadingWingWidth = leadingWingWidth
         self.morphsIntoTab = morphsIntoTab
         self.holdsWhileExpanded = holdsWhileExpanded
         self.leading = AnyView(leading())
@@ -94,6 +101,7 @@ public struct NotchActivity: Identifiable {
         self.priority = priority
         self.duration = duration
         self.wingWidth = nil
+        self.leadingWingWidth = nil
         self.morphsIntoTab = false
         self.holdsWhileExpanded = holdsWhileExpanded
         self.leading = AnyView(EmptyView())

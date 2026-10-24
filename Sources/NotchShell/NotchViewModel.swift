@@ -240,8 +240,9 @@ final class NotchViewModel {
             let thickness = NotchTheme.activityRimThickness
             size = CGSize(width: notch.width + thickness * 2, height: notch.height + thickness)
         case .activity:
-            let wingWidth = currentActivity?.wingWidth ?? NotchTheme.activityWingWidth
-            size = CGSize(width: notch.width + wingWidth * 2, height: notch.height)
+            let wings = currentActivity.map(Self.wingWidths)
+                ?? (leading: NotchTheme.activityWingWidth, trailing: NotchTheme.activityWingWidth)
+            size = CGSize(width: notch.width + wings.leading + wings.trailing, height: notch.height)
         case .expanded:
             return CGSize(width: expandedBodyWidth, height: NotchTheme.expandedSize.height)
         }
@@ -288,9 +289,25 @@ final class NotchViewModel {
         )
     }
 
+    /// The widths of `activity`'s wings, left and right (`NotchActivity.wingWidth`
+    /// and `leadingWingWidth`).
+    static func wingWidths(of activity: NotchActivity) -> (leading: CGFloat, trailing: CGFloat) {
+        let trailing = activity.wingWidth ?? NotchTheme.activityWingWidth
+        return (activity.leadingWingWidth ?? trailing, trailing)
+    }
+
+    /// How far the island's center sits right of the notch's: half of how much
+    /// wider the current activity's right wing is than its left, so the notch stays
+    /// between them. 0 in every other state.
+    var islandOffset: CGFloat {
+        guard state == .activity, let activity = currentActivity, activity.rim == nil else { return 0 }
+        let wings = Self.wingWidths(of: activity)
+        return (wings.trailing - wings.leading) / 2
+    }
+
     /// Island frame in global screen coordinates (for hover hit-testing).
     var islandScreenFrame: CGRect {
-        geometry.topCenteredRect(size: islandSize)
+        geometry.topCenteredRect(size: islandSize).offsetBy(dx: islandOffset, dy: 0)
     }
 
     // MARK: Mutations
