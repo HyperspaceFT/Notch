@@ -445,3 +445,19 @@ struct PlaybackTimeTests {
         #expect(labels.remaining == "-1:40")
     }
 }
+
+@MainActor
+struct NowPlayingModelTests {
+    @Test func openingTheDetailAsksTheFeature() {
+        let model = NowPlayingModel(scripting: PlayerScripting())
+        var requests = 0
+        model.onOpenDetail = { requests += 1 }
+        model.openDetail()
+        #expect(requests == 1)
+
+        // Without a feature listening, nothing happens.
+        model.onOpenDetail = nil
+        model.openDetail()
+        #expect(requests == 1)
+    }
+}

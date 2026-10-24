@@ -31,6 +31,8 @@ final class NowPlayingModel {
     /// Hands a command for the app that plays the shown track to the feature, with
     /// the snapshot as already changed on screen; set by the feature.
     @ObservationIgnored var onCommand: (@MainActor (PlaybackCommand, PlaybackSnapshot) -> Void)?
+    /// Opens the expanded panel on the Now Playing tab; set by the feature.
+    @ObservationIgnored var onOpenDetail: (@MainActor () -> Void)?
 
     @ObservationIgnored private let scripting: PlayerScripting
     @ObservationIgnored private var artworkTask: Task<Void, Never>?
@@ -112,6 +114,11 @@ final class NowPlayingModel {
         self.snapshot = snapshot
         isPlaying = snapshot.isPlaying
         onCommand?(command, snapshot)
+    }
+
+    /// Shows the track in full, in the tab; the wing's cover asks for it.
+    func openDetail() {
+        onOpenDetail?()
     }
 
     /// Brings the app that plays the shown track to the front; nothing when it

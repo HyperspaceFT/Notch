@@ -8,6 +8,9 @@ struct NotchRootView: View {
     let model: NotchViewModel
     /// Opens the settings window; the app owns it.
     let openSettings: () -> Void
+    /// Shared by an activity's wings and the tabs, for views that fly between
+    /// them (`notchMorphHero`).
+    @Namespace private var activityMorph
 
     var body: some View {
         let shape = NotchShape(
@@ -15,30 +18,29 @@ struct NotchRootView: View {
             bottomCornerRadii: model.bottomCornerRadii
         )
         let isExpanded = model.state == .expanded
-
-        ZStack(alignment: .top) {
-            switch model.state {
-            case .collapsed, .expanded:
-                // The expanded panel is the overlay below, which outlives the state.
-                Color.clear
-            case .activity:
-                if let activity = model.currentActivity {
-                    ActivityWingsView(
-                        activity: activity,
-                        notchSize: model.geometry.notchRect.size,
-                        earInset: model.topCornerRadius
-                    )
-                    .environment(\.notchIsHovered, model.isHovered)
-                    // A new activity replaces the old one with a blur instead of a cut.
-                    .id("\(activity.featureID).\(activity.id)")
-                    .transition(.blurReplace)
-                }
-            }
+        let wingsActivity: NotchActivity? = switch model.state {
+        case .collapsed: nil
+        case .activity: model.currentActivity
+        // Kept over the open panel only for the heroes that fly into its tab,
+        // even while another activity is current (it draws nothing there).
+        case .expanded: model.morphingActivity
         }
+        let morph = NotchActivityMorph(
+            namespace: activityMorph,
+            state: NotchMorphState(
+                isExpanded: isExpanded,
+                wingFeatureID: wingsActivity.flatMap { $0.morphsIntoTab ? $0.featureID : nil },
+                shownTabID: model.selectedTab?.id
+            )
+        )
+
+        // The expanded panel is the overlay below, which outlives the state; the
+        // activity's wings are the overlay above it.
+        Color.clear
         .frame(width: model.islandSize.width, height: model.islandSize.height, alignment: .top)
         .overlay(alignment: .top) {
             if model.isExpandedContentMounted {
-                ExpandedIslandView(model: model)
+                ExpandedIslandView(model: model, activityMorph: morph)
                     // Laid out at the expanded size even while the outline is
                     // smaller, so nothing reflows as the island opens or closes.
                     // Its width follows the selected tab, which opening and
@@ -57,6 +59,23 @@ struct NotchRootView: View {
                             model.expandedContentDidAppear()
                         }
                     }
+            }
+        }
+        // Over the expanded panel and outside its drop, so heroes kept while it
+        // opens fly above it without rising, blurring, or fading with it; still
+        // inside the outline's clip.
+        .overlay(alignment: .top) {
+            if let activity = wingsActivity {
+                ActivityWingsView(
+                    activity: activity,
+                    notchSize: model.geometry.notchRect.size,
+                    earInset: model.topCornerRadius
+                )
+                .environment(\.notchIsHovered, model.isHovered)
+                .environment(\.notchActivityMorph, morph)
+                // A new activity replaces the old one with a blur instead of a cut.
+                .id("\(activity.featureID).\(activity.id)")
+                .transition(.blurReplace)
             }
         }
         .background {
@@ -222,9 +241,11 @@ private struct ActivityWingsView: View {
         HStack(spacing: 0) {
             activity.leading
                 .frame(width: wingWidth, alignment: .center)
-            // Nothing is visible behind the camera housing.
+            // Nothing is visible behind the camera housing. Never hit, either:
+            // wings kept over the open panel sit where its tab buttons are.
             Color.clear
                 .frame(width: notchSize.width)
+                .allowsHitTesting(false)
             activity.trailing
                 .frame(width: wingWidth, alignment: .center)
         }
@@ -239,6 +260,9 @@ private struct ActivityWingsView: View {
 /// view below. Quitting lives in the island's right-click menu.
 private struct ExpandedIslandView: View {
     let model: NotchViewModel
+    /// Set on every tab's content, so a tab can leave its places to the heroes
+    /// that fly in from an activity's wings.
+    let activityMorph: NotchActivityMorph
     /// Shared by the tab buttons and the selection highlight that slides between them.
     @Namespace private var tabSelection
     /// Shared by the views in different tabs that grow into one another (`notchTabMorph`).
@@ -330,6 +354,7 @@ private struct ExpandedIslandView: View {
                             \.notchTabMorph,
                             NotchTabMorph(namespace: tabMorph, tabID: tab.id, shownTabID: tabs[selectedIndex].id)
                         )
+                        .environment(\.notchActivityMorph, activityMorph)
                         .offset(x: CGFloat((index - selectedIndex).signum()) * NotchTheme.tabSwitchOffset)
                         .opacity(isSelected ? 1 : 0)
                         .blur(radius: isSelected ? 0 : 6)

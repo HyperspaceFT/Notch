@@ -133,12 +133,22 @@ final class NotchViewModel {
 
     /// The activity that wins: highest priority, then most recently presented.
     var currentActivity: NotchActivity? {
-        entries.max { lhs, rhs in
-            if lhs.activity.priority != rhs.activity.priority {
-                return lhs.activity.priority < rhs.activity.priority
-            }
-            return lhs.sequence < rhs.sequence
-        }?.activity
+        entries.max(by: Self.ranksBelow)?.activity
+    }
+
+    /// The winning activity among those whose wings fly into their tab
+    /// (`NotchActivity.morphsIntoTab`). While expanded the shell keeps its wings
+    /// whatever is current: activities draw nothing over the open panel, so one
+    /// arriving there (a volume change) must not take the heroes away.
+    var morphingActivity: NotchActivity? {
+        entries.filter(\.activity.morphsIntoTab).max(by: Self.ranksBelow)?.activity
+    }
+
+    private static func ranksBelow(_ lhs: ActivityEntry, _ rhs: ActivityEntry) -> Bool {
+        if lhs.activity.priority != rhs.activity.priority {
+            return lhs.activity.priority < rhs.activity.priority
+        }
+        return lhs.sequence < rhs.sequence
     }
 
     /// Ids of all queued activities in display order (winner first). For tests and debugging.

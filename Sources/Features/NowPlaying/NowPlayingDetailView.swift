@@ -7,6 +7,7 @@ import SwiftUI
 struct NowPlayingDetailView: View {
     let model: NowPlayingModel
     @Environment(\.notchTabMorph) private var morph
+    @Environment(\.notchActivityMorph) private var activityMorph
 
     /// The panel keeps every tab's view in place and shows one; the clocks of
     /// this one stop while another is shown.
@@ -15,10 +16,17 @@ struct NowPlayingDetailView: View {
         return morph.tabID == morph.shownTabID
     }
 
+    /// The wing's cover and wave stand in for this tab's own, which then only
+    /// hold their places (`notchMorphSlot`).
+    private var areHeroesStandingIn: Bool {
+        activityMorph?.state.heroesStandIn(forTab: morph?.tabID) ?? false
+    }
+
     var body: some View {
         GeometryReader { proxy in
             HStack(spacing: 16) {
                 NowPlayingCover(model: model, side: proxy.size.height)
+                    .notchMorphSlot(NowPlayingMorph.cover, role: .tab)
                 VStack(alignment: .leading, spacing: 0) {
                     appLine
                     Spacer(minLength: 6)
@@ -47,9 +55,10 @@ struct NowPlayingDetailView: View {
                 .foregroundStyle(NotchTheme.secondaryText)
                 .lineLimit(1)
             Spacer(minLength: 8)
-            WaveStrands(model: model, isActive: isShown)
+            WaveStrands(model: model, isActive: isShown && !areHeroesStandingIn)
                 .frame(width: 22, height: 12)
                 .animation(.spring(duration: 0.6, bounce: 0.25), value: model.isPlaying)
+                .notchMorphSlot(NowPlayingMorph.wave, role: .tab)
                 .accessibilityHidden(true)
         }
     }
@@ -93,73 +102,30 @@ struct NowPlayingDetailView: View {
     }
 }
 
-/// The cover, large: it glows in its own colors while playing, sinks back while
-/// paused, and flips over when the track changes, like the wing's. A click
-/// brings the playing app to the front.
+/// The cover, large, drawn while the wing's does not stand in for it: it glows
+/// in its own colors while playing, sinks back while paused, and flips over when
+/// the track changes, like the wing's. A click brings the playing app to the front.
 private struct NowPlayingCover: View {
     let model: NowPlayingModel
     let side: CGFloat
-
-    private static let cornerRadius: CGFloat = 12
 
     var body: some View {
         Button {
             model.showPlayingApp()
         } label: {
-            ZStack {
-                // One view per cover, as in the wing, so the flip runs between them.
-                cover
-                    .id(model.coverKey)
-                    .transition(.flip)
-            }
-            .animation(.smooth(duration: 0.24), value: model.coverKey)
-            .frame(width: side, height: side)
-            .contentShape(.rect)
+            NowPlayingArtwork(model: model, side: side)
+                .frame(width: side, height: side)
+                .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(accessibilityLabel)
+        .accessibilityLabel(model.coverAccessibilityLabel)
     }
+}
 
-    private var cover: some View {
-        let isPlaying = model.isPlaying
-        let shape = RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-        return ZStack {
-            if NotchAppearance.shared.isLightAndColorEnabled, let cover = model.cover {
-                Image(nsImage: cover)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: side, height: side)
-                    .clipShape(shape)
-                    .scaleEffect(1.04)
-                    .blur(radius: 16)
-                    .opacity(isPlaying ? 0.55 : 0)
-                    .allowsHitTesting(false)
-            }
-            Group {
-                if let cover = model.cover {
-                    Image(nsImage: cover)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else {
-                    ZStack {
-                        Color.white.opacity(0.12)
-                        Image(systemName: "music.note")
-                            .font(.system(size: side * 0.36, weight: .semibold))
-                            .foregroundStyle(NotchTheme.primaryText)
-                    }
-                }
-            }
-            .frame(width: side, height: side)
-            .clipShape(shape)
-            .scaleEffect(isPlaying ? 1 : 0.92)
-            .saturation(isPlaying ? 1 : 0.4)
-            .opacity(isPlaying ? 1 : 0.75)
-        }
-        .animation(.smooth(duration: 0.35), value: isPlaying)
-    }
-
-    private var accessibilityLabel: String {
-        guard let name = model.appName else { return localized(en: "Cover", zh: "封面") }
+extension NowPlayingModel {
+    /// The large cover's label, for the tab's own and the wing's flown in.
+    var coverAccessibilityLabel: String {
+        guard let name = appName else { return localized(en: "Cover", zh: "封面") }
         return localized(en: "Cover, opens \(name)", zh: "封面，打开\(name)")
     }
 }

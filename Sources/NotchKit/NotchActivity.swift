@@ -2,7 +2,8 @@ import Foundation
 import SwiftUI
 
 /// A short-lived or persistent status shown while the island is collapsed,
-/// rendered as two "wings" to the left and right of the hardware notch.
+/// rendered as two "wings" to the left and right of the hardware notch (and
+/// kept over the open panel for views that fly into the tab, see `morphsIntoTab`).
 ///
 /// Only the highest-priority activity is visible at a time; among equal
 /// priorities the most recently presented one wins.
@@ -33,6 +34,13 @@ public struct NotchActivity: Identifiable {
     /// (`NotchTheme.activityWingWidth`). Narrower content asks for less, so the
     /// island grows only as far as it needs.
     public var wingWidth: CGFloat?
+    /// Keeps the wings on the island while it is expanded and this activity is
+    /// current, so views in them can fly into their places in the feature's tab
+    /// and back (`notchMorphHero` in NotchUI). While expanded the wings must show
+    /// nothing but their heroes: the shell draws them over the open panel, where
+    /// anything else would cover the tab buttons beside the notch. `false` (the
+    /// default) removes the wings while expanded.
+    public var morphsIntoTab: Bool
     /// Content left of the hardware notch.
     public var leading: AnyView
     /// Content right of the hardware notch.
@@ -44,6 +52,7 @@ public struct NotchActivity: Identifiable {
         priority: Priority = .normal,
         duration: TimeInterval? = nil,
         wingWidth: CGFloat? = nil,
+        morphsIntoTab: Bool = false,
         @ViewBuilder leading: () -> Leading,
         @ViewBuilder trailing: () -> Trailing
     ) {
@@ -52,6 +61,7 @@ public struct NotchActivity: Identifiable {
         self.priority = priority
         self.duration = duration
         self.wingWidth = wingWidth
+        self.morphsIntoTab = morphsIntoTab
         self.leading = AnyView(leading())
         self.trailing = AnyView(trailing())
     }

@@ -416,4 +416,67 @@ struct NotchViewModelTests {
         model.setExpanded(false)
         #expect(model.bodySize == CGSize(width: 190 + NotchTheme.activityWingWidth * 2, height: 32))
     }
+
+    @Test func activitiesDoNotMorphIntoTheirTabUnlessAsked() {
+        #expect(!activity("a").morphsIntoTab)
+        let morphing = NotchActivity(id: "b", featureID: "test", morphsIntoTab: true) {
+            EmptyView()
+        } trailing: {
+            EmptyView()
+        }
+        #expect(morphing.morphsIntoTab)
+    }
+
+    @Test func heroesSitInTheWingsUntilTheIslandOpens() {
+        let state = NotchMorphState(isExpanded: false, wingFeatureID: "music", shownTabID: "music")
+        #expect(state.isSource(.wing, tabID: nil))
+        #expect(!state.isSource(.tab, tabID: "music"))
+        #expect(state.showsHeroes)
+        // The tab, still mounted while it rises, leaves its places empty meanwhile.
+        #expect(state.heroesStandIn(forTab: "music"))
+        #expect(!state.heroesStandIn(forTab: "home"))
+    }
+
+    @Test func heroesFlyIntoTheirFeaturesShownTab() {
+        let state = NotchMorphState(isExpanded: true, wingFeatureID: "music", shownTabID: "music")
+        #expect(!state.isSource(.wing, tabID: nil))
+        #expect(state.isSource(.tab, tabID: "music"))
+        #expect(!state.isSource(.tab, tabID: "home"))
+        #expect(state.showsHeroes)
+    }
+
+    @Test func heroesHideWhileAnotherTabIsShown() {
+        let state = NotchMorphState(isExpanded: true, wingFeatureID: "music", shownTabID: "home")
+        #expect(!state.isSource(.wing, tabID: nil))
+        // The hidden tab still leads its heroes, so they slide and fade with it.
+        #expect(state.isSource(.tab, tabID: "music"))
+        #expect(!state.isSource(.tab, tabID: "home"))
+        #expect(!state.showsHeroes)
+    }
+
+    @Test func morphingActivityOutlastsAHigherPriorityOne() {
+        let music = NotchActivity(id: "track", featureID: "music", morphsIntoTab: true) {
+            EmptyView()
+        } trailing: {
+            EmptyView()
+        }
+        model.present(music)
+        model.present(activity("volume", feature: "hud", priority: .high))
+        #expect(model.currentActivity?.featureID == "hud")
+        #expect(model.morphingActivity?.featureID == "music")
+
+        model.dismiss(activityID: "track", featureID: "music")
+        #expect(model.morphingActivity == nil)
+    }
+
+    @Test func withoutHeroesTheTabDrawsItsOwnViews() {
+        // E.g. a higher-priority activity is current, or the feature's has left.
+        let state = NotchMorphState(isExpanded: true, wingFeatureID: nil, shownTabID: "music")
+        #expect(!state.isSource(.tab, tabID: "music"))
+        #expect(!state.heroesStandIn(forTab: "music"))
+        #expect(!state.showsHeroes)
+        // A tab outside the panel's tabs never stands in.
+        #expect(!NotchMorphState(isExpanded: true, wingFeatureID: "music", shownTabID: nil).isSource(.tab, tabID: nil))
+        #expect(!NotchMorphState(isExpanded: true, wingFeatureID: "music", shownTabID: nil).heroesStandIn(forTab: nil))
+    }
 }

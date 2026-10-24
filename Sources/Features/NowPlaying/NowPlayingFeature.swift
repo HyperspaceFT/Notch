@@ -49,6 +49,9 @@ public final class NowPlayingFeature: NotchFeature {
         model.onCommand = { [weak self] command, shown in
             self?.perform(command, shown: shown)
         }
+        model.onOpenDetail = { [weak self] in
+            self?.context?.requestExpand()
+        }
         followSettings(generation: generation)
     }
 
@@ -66,6 +69,7 @@ public final class NowPlayingFeature: NotchFeature {
         snapshots = [:]
         presence = PresenceTracker()
         model.onCommand = nil
+        model.onOpenDetail = nil
         model.reset()
         context = nil
     }
@@ -173,7 +177,13 @@ public final class NowPlayingFeature: NotchFeature {
             // Presented once per appearance: the wings observe the model, so later
             // track, cover, and play-state changes update them in place. Presenting
             // again would replace the views and restart their transitions.
-            context?.present(NotchActivity(id: Self.activityID, priority: .normal, wingWidth: nowPlayingWingWidth) { [model] in
+            // The cover and the wave fly into the tab and back (`notchMorphHero`).
+            context?.present(NotchActivity(
+                id: Self.activityID,
+                priority: .normal,
+                wingWidth: nowPlayingWingWidth,
+                morphsIntoTab: true
+            ) { [model] in
                 NowPlayingSleeve(model: model)
             } trailing: { [model] in
                 NowPlayingPulse(model: model)

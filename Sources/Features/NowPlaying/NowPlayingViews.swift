@@ -7,6 +7,13 @@ import SwiftUI
 /// edge, which also keeps them clear of the rounded bottom corners.
 let nowPlayingWingWidth: CGFloat = 38
 
+/// Ids of the views that fly between the wings and the tab (`notchMorphSlot`,
+/// `notchMorphHero`).
+enum NowPlayingMorph {
+    static let cover = "now-playing.cover"
+    static let wave = "now-playing.wave"
+}
+
 /// While the pointer rests on the island, it grows (`NotchTheme.hoverGrowth`) and
 /// the cover and the wave move out with it, by half the growth, so each stays
 /// centered in its grown wing. `outward` is -1 on the left, 1 on the right.
@@ -15,34 +22,108 @@ private func hoverShift(isHovered: Bool, outward: CGFloat) -> CGSize {
     return CGSize(width: NotchTheme.hoverGrowth.width / 2 * outward, height: NotchTheme.hoverGrowth.height / 2)
 }
 
+private extension View {
+    /// Moves this view, centered in its wing, by `hoverShift`. Padding rather
+    /// than `offset`: the morph slot inside must move in layout for its hero to
+    /// follow it.
+    func hoverShifted(isHovered: Bool, outward: CGFloat) -> some View {
+        let shift = hoverShift(isHovered: isHovered, outward: outward)
+        return padding(.leading, max(shift.width, 0) * 2)
+            .padding(.trailing, max(-shift.width, 0) * 2)
+            .padding(.top, shift.height * 2)
+    }
+}
+
 /// Left wing: the cover, like a record sleeve. It glows in its own colors while
-/// playing, sinks back while paused, and flips over when the track changes.
+/// playing, sinks back while paused, and flips over when the track changes. A
+/// click opens the tab, and the cover flies to its place there and back again
+/// (`NowPlayingCoverHero`); the wing only holds its place.
 struct NowPlayingSleeve: View {
     let model: NowPlayingModel
     @Environment(\.notchIsHovered) private var isIslandHovered
 
     private static let maximumSide: CGFloat = 24
-    private static let cornerRadius: CGFloat = 6
 
     var body: some View {
         GeometryReader { proxy in
             let side = max(min(Self.maximumSide, proxy.size.height - 10), 0)
-            ZStack {
-                // One view per cover: a new track inserts a new one and
-                // removes the old, and the transition flips between them.
-                sleeve(side: side)
-                    .id(model.coverKey)
-                    .transition(.flip)
-            }
-            .animation(.smooth(duration: 0.24), value: model.coverKey)
-            .offset(hoverShift(isHovered: isIslandHovered, outward: -1))
-            .frame(width: proxy.size.width, height: proxy.size.height)
+            Color.clear
+                .frame(width: side, height: side)
+                .notchMorphSlot(NowPlayingMorph.cover, role: .wing)
+                .overlay {
+                    NowPlayingCoverHero(model: model)
+                        .notchMorphHero(NowPlayingMorph.cover)
+                }
+                .hoverShifted(isHovered: isIslandHovered, outward: -1)
+                .frame(width: proxy.size.width, height: proxy.size.height)
         }
     }
+}
 
-    private func sleeve(side: CGFloat) -> some View {
+/// The cover that flies between the wing and the tab, at whatever size its
+/// place has. A click opens the tab while the island is closed, and brings the
+/// playing app to the front once it is open, as the tab's own cover does.
+private struct NowPlayingCoverHero: View {
+    let model: NowPlayingModel
+    @Environment(\.notchActivityMorph) private var morph
+
+    var body: some View {
+        let isExpanded = morph?.state.isExpanded ?? false
+        Button {
+            if isExpanded {
+                model.showPlayingApp()
+            } else {
+                model.openDetail()
+            }
+        } label: {
+            GeometryReader { proxy in
+                NowPlayingArtwork(model: model, side: min(proxy.size.width, proxy.size.height))
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(isExpanded ? model.coverAccessibilityLabel : trackLabel)
+    }
+
+    private var trackLabel: String {
+        model.snapshot.map { [$0.title, $0.artist].compactMap { $0 }.joined(separator: " – ") } ?? ""
+    }
+}
+
+/// The cover, square at `side`: it glows in its own colors while playing, sinks
+/// back while paused, and flips over when the track changes. Its corners, glow,
+/// and pause pose scale from the wing's small cover to the tab's large one, so
+/// the cover keeps its look at every size it passes through in flight.
+struct NowPlayingArtwork: View {
+    let model: NowPlayingModel
+    let side: CGFloat
+
+    /// The wing's cover.
+    private static let smallSide: CGFloat = 22
+    /// About the tab's cover; larger sizes look like it.
+    private static let largeSide: CGFloat = 130
+
+    var body: some View {
+        ZStack {
+            // One view per cover: a new track inserts a new one and
+            // removes the old, and the transition flips between them.
+            cover
+                .id(model.coverKey)
+                .transition(.flip)
+        }
+        .animation(.smooth(duration: 0.24), value: model.coverKey)
+    }
+
+    /// `small` at the wing's size, `large` at the tab's, and in between.
+    private func scaled(_ small: CGFloat, _ large: CGFloat) -> CGFloat {
+        let progress = min(max((side - Self.smallSide) / (Self.largeSide - Self.smallSide), 0), 1)
+        return small + (large - small) * progress
+    }
+
+    private var cover: some View {
         let isPlaying = model.isPlaying
-        let shape = RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: scaled(6, 12), style: .continuous)
         return ZStack {
             if NotchAppearance.shared.isLightAndColorEnabled, let cover = model.cover {
                 Image(nsImage: cover)
@@ -50,9 +131,9 @@ struct NowPlayingSleeve: View {
                     .aspectRatio(contentMode: .fill)
                     .frame(width: side, height: side)
                     .clipShape(shape)
-                    .scaleEffect(1.25)
-                    .blur(radius: 6)
-                    .opacity(isPlaying ? 0.5 : 0)
+                    .scaleEffect(scaled(1.25, 1.04))
+                    .blur(radius: scaled(6, 16))
+                    .opacity(isPlaying ? scaled(0.5, 0.55) : 0)
                     .allowsHitTesting(false)
             }
             Group {
@@ -64,19 +145,18 @@ struct NowPlayingSleeve: View {
                     ZStack {
                         Color.white.opacity(0.12)
                         Image(systemName: "music.note")
-                            .font(.system(size: side * 0.5, weight: .semibold))
+                            .font(.system(size: side * scaled(0.5, 0.36), weight: .semibold))
                             .foregroundStyle(NotchTheme.primaryText)
                     }
                 }
             }
             .frame(width: side, height: side)
             .clipShape(shape)
-            .scaleEffect(isPlaying ? 1 : 0.88)
+            .scaleEffect(isPlaying ? 1 : scaled(0.88, 0.92))
             .saturation(isPlaying ? 1 : 0.4)
-            .opacity(isPlaying ? 1 : 0.7)
+            .opacity(isPlaying ? 1 : scaled(0.7, 0.75))
         }
         .animation(.smooth(duration: 0.35), value: isPlaying)
-        .accessibilityLabel(model.snapshot.map { [$0.title, $0.artist].compactMap { $0 }.joined(separator: " – ") } ?? "")
     }
 }
 
@@ -104,35 +184,73 @@ extension AnyTransition {
 /// Right wing: three thin strands of a wave, braided around one line and swinging
 /// to the track's own made-up beat (see `PulseRhythm`), in the cover's colors.
 /// Pausing calms them into a single flat line; hovering turns them into a play or
-/// pause button, which they are.
+/// pause button, which they are. The wave flies into the tab with the cover
+/// (`NowPlayingWaveHero`); the wing only holds its place.
 struct NowPlayingPulse: View {
     let model: NowPlayingModel
     @Environment(\.notchIsHovered) private var isIslandHovered
 
     var body: some View {
+        Color.clear
+            .frame(width: WaveIcon.width, height: WaveIcon.height)
+            .notchMorphSlot(NowPlayingMorph.wave, role: .wing)
+            .overlay {
+                NowPlayingWaveHero(model: model)
+                    .notchMorphHero(NowPlayingMorph.wave)
+            }
+            .hoverShifted(isHovered: isIslandHovered, outward: 1)
+    }
+}
+
+/// The wave that flies between the wing and the tab: a play or pause button while
+/// the island is closed, only the strands once it is open (the tab has its own
+/// play button).
+private struct NowPlayingWaveHero: View {
+    let model: NowPlayingModel
+    @Environment(\.notchActivityMorph) private var morph
+
+    var body: some View {
+        let isExpanded = morph?.state.isExpanded ?? false
         Button {
             model.togglePlayPause()
         } label: {
-            WaveIcon(model: model)
+            WaveIcon(model: model, isButton: !isExpanded, isActive: morph?.state.showsHeroes ?? true)
         }
         .buttonStyle(PulseButtonStyle())
-        .offset(hoverShift(isHovered: isIslandHovered, outward: 1))
         .onHover { model.isPulseHovered = $0 }
+        .allowsHitTesting(!isExpanded)
+        .accessibilityHidden(isExpanded)
         .accessibilityLabel(model.isPlaying ? localized(en: "Pause", zh: "暂停") : localized(en: "Play", zh: "播放"))
+        // Opening the island takes the pointer off the wave without an exit
+        // event reaching it, which would leave the glyph up on the way back.
+        .onChange(of: isExpanded) {
+            if isExpanded {
+                model.isPulseHovered = false
+            }
+        }
+        // Nor does one reach it when the wings leave under the pointer (another
+        // activity takes their place).
+        .onDisappear {
+            model.isPulseHovered = false
+        }
     }
 }
 
 private struct WaveIcon: View {
     let model: NowPlayingModel
+    /// Whether the wave is a button, which hovering turns into its glyph.
+    let isButton: Bool
+    let isActive: Bool
 
+    /// The wing's wave.
     static let width: CGFloat = 22
     static let height: CGFloat = 16
 
     var body: some View {
         let isPlaying = model.isPlaying
-        let isHovered = model.isPulseHovered
+        let isHovered = model.isPulseHovered && isButton
         ZStack {
-            WaveStrands(model: model)
+            WaveStrands(model: model, isActive: isActive)
                 .blur(radius: isHovered ? 4 : 0)
                 .opacity(isHovered ? 0 : 1)
 
@@ -143,7 +261,8 @@ private struct WaveIcon: View {
                 .scaleEffect(isHovered ? 1 : 0.6)
                 .opacity(isHovered ? 1 : 0)
         }
-        .frame(width: Self.width, height: Self.height)
+        // Whatever frame the wave flies through.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         // The whole wave region takes the click, not only the strands themselves.
         .contentShape(Rectangle())
         .animation(.spring(duration: 0.6, bounce: 0.25), value: isPlaying)
