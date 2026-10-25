@@ -91,4 +91,54 @@ struct MeetingLinkTests {
         let text = feedText(vevent("UID:3", "DTSTART:20261022T090000Z", "SUMMARY:Lunch", "LOCATION:Cafe"))
         #expect(try #require(ICalendar.parse(text, defaultTimeZone: .gmt).events.first).meetingURL == nil)
     }
+
+    @Test(.timeLimit(.minutes(1))) func aMegabyteOfNothingButSchemesIsScannedInLinearTime() {
+        let text = String(repeating: "https://", count: 131_072)
+        #expect(link(notes: text) == nil)
+    }
+
+    @Test(.timeLimit(.minutes(1))) func aMegabyteOfSchemesEndingInALinkStillFindsIt() {
+        let text = String(repeating: "https://", count: 131_072) + "https://zoom.us/j/1"
+        #expect(link(notes: text) == "https://zoom.us/j/1")
+    }
+
+    @Test(.timeLimit(.minutes(1))) func aMegabyteOfRunsJustWithinTheMaximumIsScanned() {
+        // Every "https://" in a run starts a candidate that is within the maximum.
+        let run = String(repeating: "https://", count: MeetingLink.maximumLinkLength / 8) + " "
+        let text = String(repeating: run, count: 1_048_576 / run.count)
+        #expect(link(notes: text) == nil)
+    }
+
+    @Test func aMeetingLinkInsideAWrapperLinkIsFound() {
+        #expect(link(notes: "https://example.com/r?u=https://zoom.us/j/1") == "https://zoom.us/j/1")
+        #expect(link(notes: "https://wrap.example/?u=https://meet.google.com/abc-defg-hij&x=1")
+            == "https://meet.google.com/abc-defg-hij&x=1")
+    }
+
+    @Test func aLinkOfTheMaximumLengthIsFoundAndALongerOneIsNot() {
+        let prefix = "https://zoom.us/j/"
+        let atMaximum = prefix + String(repeating: "1", count: MeetingLink.maximumLinkLength - prefix.count)
+        #expect(link(notes: "Join: \(atMaximum) now") == atMaximum)
+        #expect(link(notes: "Join: \(atMaximum)1 now") == nil)
+        #expect(link(notes: prefix + String(repeating: "1", count: 10_000)) == nil)
+    }
+
+    @Test func aMeetingLinkAfterAnOverlongOneIsFound() {
+        let overlong = "https://example.com/" + String(repeating: "a", count: 5_000)
+        #expect(link(notes: "\(overlong) https://zoom.us/j/1") == "https://zoom.us/j/1")
+    }
+
+    @Test func noMoreThanTheMaximumNumberOfCandidatesIsRead() {
+        func notes(withLinksBefore count: Int) -> String {
+            (0..<count).map { "https://example.com/\($0) " }.joined() + "https://zoom.us/j/1"
+        }
+        #expect(link(notes: notes(withLinksBefore: MeetingLink.maximumCandidates - 1)) == "https://zoom.us/j/1")
+        #expect(link(notes: notes(withLinksBefore: MeetingLink.maximumCandidates)) == nil)
+    }
+
+    @Test func aMeetingLinkEndingAnOverlongRunIsFound() {
+        // The run is longer than the maximum, but the link at its end is not.
+        let run = String(repeating: "a", count: 5_000) + "?u=https://zoom.us/j/1"
+        #expect(link(notes: "https://example.com/" + run) == "https://zoom.us/j/1")
+    }
 }
