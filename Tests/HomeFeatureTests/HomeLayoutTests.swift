@@ -623,3 +623,105 @@ struct HomeLayoutSettingsTests {
         #expect(emptied.modulesNotShown.map(\.id) == ["time", "weather"])
     }
 }
+
+/// A module whose width follows its own state passes the difference to its
+/// neighbours. Shares here are fractions of `row`, so the expected values are
+/// plain sums: with neighbours on both sides each gives or takes half, with one
+/// it gives or takes all, each within its bounds.
+struct HomeLayoutFollowFixedWidthsTests {
+    /// A resizable neighbour that may take 0.1 to 0.8 of the row.
+    private let neighbour = HomeModuleSizing.resizable(minimum: .fraction(0.1), maximum: .fraction(0.8))
+
+    private func layout(_ items: [(String, Double)]) -> HomeLayout {
+        HomeLayout(items: items.map { HomeLayout.Item(moduleID: $0.0, width: $0.1) })
+    }
+
+    private func shares(_ layout: HomeLayout) -> [Double] {
+        layout.items.map(\.width)
+    }
+
+    private func expectShares(_ layout: HomeLayout, _ expected: [Double]) {
+        #expect(layout.items.count == expected.count)
+        for (actual, value) in zip(shares(layout), expected) {
+            #expect(isClose(actual, value), "\(shares(layout)) ≠ \(expected)")
+        }
+    }
+
+    @Test func oneNeighbourTakesTheWholeDifference() {
+        var growing = layout([("usage", 0.2), ("b", 0.5)])
+        growing.followFixedWidths(sizings: ["usage": .fixed(.fraction(0.3)), "b": neighbour], rows: fixedRows)
+        expectShares(growing, [0.3, 0.4])
+
+        var narrowing = layout([("a", 0.5), ("usage", 0.2)])
+        narrowing.followFixedWidths(sizings: ["usage": .fixed(.fraction(0.1)), "a": neighbour], rows: fixedRows)
+        expectShares(narrowing, [0.6, 0.1])
+    }
+
+    @Test func twoNeighboursShareTheDifferenceEqually() {
+        let modules = ["a": neighbour, "b": neighbour]
+        var growing = layout([("a", 0.3), ("usage", 0.2), ("b", 0.3)])
+        growing.followFixedWidths(sizings: modules.merging(["usage": .fixed(.fraction(0.3))]) { $1 }, rows: fixedRows)
+        expectShares(growing, [0.25, 0.3, 0.25])
+
+        var narrowing = layout([("a", 0.3), ("usage", 0.2), ("b", 0.3)])
+        narrowing.followFixedWidths(sizings: modules.merging(["usage": .fixed(.fraction(0.1))]) { $1 }, rows: fixedRows)
+        expectShares(narrowing, [0.35, 0.1, 0.35])
+    }
+
+    @Test func aNeighbourAtItsMinimumPassesTheRestToTheOther() {
+        // 0.2 more: each is asked for 0.1; a can give only 0.02, so b gives 0.18.
+        var layout = layout([("a", 0.12), ("usage", 0.2), ("b", 0.5)])
+        layout.followFixedWidths(sizings: ["a": neighbour, "b": neighbour, "usage": .fixed(.fraction(0.4))], rows: fixedRows)
+        expectShares(layout, [0.1, 0.4, 0.32])
+    }
+
+    @Test func withBothNeighboursAtTheirMinimumTheFreeSpaceThenTheFartherModuleGive() {
+        // 0.4 more; the neighbours have nothing to give, the row has 0.3 free,
+        // and x, two places away, gives the last 0.1.
+        var layout = layout([("x", 0.3), ("a", 0.1), ("usage", 0.2), ("b", 0.1)])
+        layout.followFixedWidths(
+            sizings: ["x": neighbour, "a": neighbour, "b": neighbour, "usage": .fixed(.fraction(0.6))],
+            rows: fixedRows
+        )
+        expectShares(layout, [0.2, 0.1, 0.6, 0.1])
+    }
+
+    @Test func freeSpaceAloneCoversWhatTheNeighboursCannotGive() {
+        var layout = layout([("x", 0.3), ("a", 0.1), ("usage", 0.2)])
+        layout.followFixedWidths(sizings: ["x": neighbour, "a": neighbour, "usage": .fixed(.fraction(0.4))], rows: fixedRows)
+        expectShares(layout, [0.3, 0.1, 0.4])
+    }
+
+    @Test func narrowingBesideNeighboursAtTheirMaximumLeavesFreeSpace() {
+        var layout = layout([("a", 0.8), ("usage", 0.2)])
+        layout.followFixedWidths(sizings: ["a": neighbour, "usage": .fixed(.fraction(0.1))], rows: fixedRows)
+        expectShares(layout, [0.8, 0.1])
+        #expect(isClose(layout.totalWidth, 0.9))
+    }
+
+    @Test func aFixedNeighbourPassesEverythingToTheOtherSide() {
+        var layout = layout([("badge", 0.2), ("usage", 0.2), ("b", 0.5)])
+        layout.followFixedWidths(
+            sizings: ["badge": .fixed(.fraction(0.2)), "usage": .fixed(.fraction(0.3)), "b": neighbour],
+            rows: fixedRows
+        )
+        expectShares(layout, [0.2, 0.3, 0.4])
+    }
+
+    @Test func unchangedSharesLeaveTheLayoutAlone() {
+        let original = layout([("a", 0.3), ("usage", 0.2), ("b", 0.3)])
+        var layout = original
+        layout.followFixedWidths(sizings: ["a": neighbour, "b": neighbour, "usage": .fixed(.fraction(0.2))], rows: fixedRows)
+        #expect(layout == original)
+        // Resizable modules away from their bounds start nothing either.
+        var resizable = self.layout([("a", 0.25), ("b", 0.45)])
+        resizable.followFixedWidths(sizings: ["a": neighbour, "b": neighbour], rows: fixedRows)
+        expectShares(resizable, [0.25, 0.45])
+    }
+
+    @Test func aLoneModuleJustTakesItsWidth() {
+        var layout = layout([("usage", 0.2)])
+        layout.followFixedWidths(sizings: ["usage": .fixed(.fraction(0.4))], rows: fixedRows)
+        expectShares(layout, [0.4])
+    }
+}

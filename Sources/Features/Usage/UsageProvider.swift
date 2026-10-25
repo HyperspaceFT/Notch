@@ -56,6 +56,15 @@ public enum UsageProvider: String, CaseIterable, Sendable {
         }
     }
 
+    /// How many limit windows the provider usually reports (Claude and Codex a
+    /// session and a weekly one, Grok one weekly pool), for the Home module's width.
+    var expectedWindowCount: Int {
+        switch self {
+        case .claude, .codex: 2
+        case .grok: 1
+        }
+    }
+
     /// The provider's color, for its bars; Claude's and Codex's match their
     /// logos (`UsageProviderLogo`).
     public var accentColor: Color {

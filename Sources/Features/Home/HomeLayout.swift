@@ -149,6 +149,69 @@ struct HomeLayout: Equatable, Sendable {
         return max(left, 0)
     }
 
+    /// Gives each fixed module whose share differs from its width now (its width
+    /// follows its own state, see `NotchHomeModule.sizing`) that width, in layout
+    /// order, and passes the difference on, measured against the row for the
+    /// layout's count:
+    ///
+    /// - Growing, it takes the difference from its neighbours: half from each
+    ///   with one on both sides, all from one on one side, each down to its
+    ///   minimum, and what one cannot give is asked of the other. What is still
+    ///   missing comes from the row's free space, then from the other modules,
+    ///   nearest first (the leading one on a tie), each down to its minimum;
+    ///   anything left over stays, and `resolvedWidths` compresses the row.
+    /// - Narrowing, it gives the freed share to its neighbours the same way, each
+    ///   up to its maximum; what they cannot take stays free, and the island
+    ///   narrows with its modules.
+    ///
+    /// A fixed neighbour neither gives nor takes, so everything passes to the
+    /// other side. Resizable modules' shares never start anything.
+    mutating func followFixedWidths(sizings: [String: HomeModuleSizing], rows: (Int) -> HomeRowMetrics) {
+        let row = rows(items.count)
+        let bounds = items.map { item in sizings[item.moduleID].map { Self.bounds(of: $0, in: row) } }
+        func isFixed(_ index: Int) -> Bool {
+            guard let range = bounds[index] else { return true }
+            return range.upperBound - range.lowerBound <= Self.tolerance
+        }
+        for index in items.indices where isFixed(index) {
+            guard let target = bounds[index]?.lowerBound else { continue }
+            let delta = target - items[index].width
+            guard abs(delta) > Self.tolerance else { continue }
+            items[index].width = target
+            let neighbours = [index - 1, index + 1].filter { items.indices.contains($0) && !isFixed($0) }
+            // How much each neighbour can give (growing) or take (narrowing).
+            func room(_ neighbour: Int) -> Double {
+                guard let range = bounds[neighbour] else { return 0 }
+                let width = items[neighbour].width
+                return max(delta > 0 ? width - range.lowerBound : range.upperBound - width, 0)
+            }
+            var left = abs(delta)
+            let share = left / Double(max(neighbours.count, 1))
+            // First each its share; then whichever still has room takes on what
+            // the other could not (the one that fell short has none left).
+            for pass in 0..<2 {
+                for neighbour in neighbours {
+                    let moved = min(pass == 0 ? share : left, room(neighbour))
+                    items[neighbour].width += delta > 0 ? -moved : moved
+                    left -= moved
+                }
+                guard left > Self.tolerance else { break }
+            }
+            guard delta > 0, left > Self.tolerance else { continue }
+            // The free space covers what the neighbours could not give; past it,
+            // the others give the rest, nearest first.
+            let excess = totalWidth - 1
+            guard excess > Self.tolerance else { continue }
+            let others = items.indices
+                .filter { $0 != index && !neighbours.contains($0) && !isFixed($0) }
+                .sorted { lhs, rhs in
+                    let (l, r) = (abs(lhs - index), abs(rhs - index))
+                    return l != r ? l < r : lhs < rhs
+                }
+            shrink(by: min(excess, left), order: others, sizings: sizings, row: row)
+        }
+    }
+
     /// Brings a saved layout in line with the modules and the row for its count:
     /// drops unknown and repeated modules and any past the maximum count, keeping
     /// the others' widths in points, moves each width into its bounds, and narrows

@@ -26,25 +26,108 @@ final class UsageModuleHover {
     }
 }
 
-/// The Usage Home module: one group per displayed provider, spread across the
-/// card, each its logo over a vertical bar per window (the short window left,
-/// the weekly one right) with the window's icon below and, when the columns
-/// are wide enough, the percent above. Hovering a bar shows its details in a
-/// bubble over the card. A click opens the Usage tab.
+/// How the Usage Home module's groups fill its fixed width: one column width
+/// for every window, the logos' size, and the gap between groups.
+struct UsageModuleLayout: Equatable, Sendable {
+    var columnWidth: CGFloat
+    var logoSize: CGFloat
+    var groupGap: CGFloat
+
+    static let columnWidths: ClosedRange<CGFloat> = 4...12
+    static let logoSizes: ClosedRange<CGFloat> = 9...12
+    static let columnGap: CGFloat = 3
+    static let groupGap: CGFloat = 6
+    /// The narrowest the group gap may get, only when nothing fits otherwise.
+    static let minimumGroupGap: CGFloat = 3
+    /// From this column width on the percent shows above the bar.
+    static let numberWidth: CGFloat = 11
+    /// From this column width on the window's icon shows below the bar.
+    static let iconWidth: CGFloat = 9
+
+    var showsNumbers: Bool { columnWidth >= Self.numberWidth }
+    var showsIcons: Bool { columnWidth >= Self.iconWidth }
+
+    /// The groups' width at this layout, each at least as wide as its logo.
+    static func width(columnCounts: [Int], columnWidth: CGFloat, logoSize: CGFloat, groupGap: CGFloat) -> CGFloat {
+        let groups = columnCounts.reduce(CGFloat(0)) { total, count in
+            let count = max(count, 1)
+            return total + max(logoSize, CGFloat(count) * columnWidth + CGFloat(count - 1) * columnGap)
+        }
+        return groups + CGFloat(max(columnCounts.count - 1, 0)) * groupGap
+    }
+
+    /// The widest columns that fit `contentWidth`, with the 6-pt group gap and
+    /// logos from 12 down to 9 pt first; only when nothing fits at the
+    /// narrowest columns does the group gap shrink toward 3 pt. `columnCounts`
+    /// holds each provider's window count, 1 for one shown as a state symbol.
+    static func make(contentWidth: CGFloat, columnCounts: [Int]) -> UsageModuleLayout {
+        let step: CGFloat = 0.25
+        var gap = groupGap
+        while gap >= minimumGroupGap {
+            var logo = logoSizes.upperBound
+            while logo >= logoSizes.lowerBound {
+                var column = columnWidths.upperBound
+                while column >= columnWidths.lowerBound {
+                    if width(columnCounts: columnCounts, columnWidth: column, logoSize: logo, groupGap: gap) <= contentWidth + 0.001 {
+                        return UsageModuleLayout(columnWidth: column, logoSize: logo, groupGap: gap)
+                    }
+                    column -= step
+                }
+                logo -= step
+            }
+            gap -= step
+        }
+        return UsageModuleLayout(
+            columnWidth: columnWidths.lowerBound,
+            logoSize: logoSizes.lowerBound,
+            groupGap: minimumGroupGap
+        )
+    }
+}
+
+/// The Usage Home module, as wide as the providers the user shows need
+/// (`width(for:)`, fixed, so it cannot be dragged): one group per displayed
+/// provider, spread across the card, each its logo over a vertical bar per
+/// window (the short window left, the weekly one right), with the percent above
+/// each bar and the window's icon below. A Debug sample with more providers
+/// than the width was made for still fits, its bars thinner and without those
+/// (`UsageModuleLayout`). Hovering a bar shows the limit's name and when it
+/// resets in a bubble over the card. A click opens the Usage tab.
 struct UsageModuleView: View {
     let model: UsageModel
     let hover: UsageModuleHover
     let size: CGSize
     let openTab: @MainActor () -> Void
 
-    static let sizing = HomeModuleSizing.resizable(minimum: .points(100), maximum: .points(240))
+    /// The narrowest the module gets, so the bubble's words do not break mid-word.
+    nonisolated static let minimumWidth: CGFloat = 68
+    /// The gap between groups the width is made for.
+    nonisolated static let widthGroupGap: CGFloat = 8
+
+    /// The module's width for `providers`: their groups at 12-pt columns and
+    /// logos, 3-pt column gaps and 8-pt group gaps, plus the card's padding, no
+    /// narrower than `minimumWidth`. It counts each provider's expected windows,
+    /// so the width does not change when the data arrives.
+    nonisolated static func width(for providers: [UsageProvider]) -> CGFloat {
+        let column = UsageModuleLayout.columnWidths.upperBound
+        let logo = UsageModuleLayout.logoSizes.upperBound
+        let groups = providers.reduce(CGFloat(0)) { total, provider in
+            let count = CGFloat(provider.expectedWindowCount)
+            return total + max(logo, count * column + (count - 1) * UsageModuleLayout.columnGap)
+        }
+        let content = groups + CGFloat(max(providers.count - 1, 0)) * widthGroupGap
+        return max(minimumWidth, content + cardPadding * 2)
+    }
+
+    /// Fixed at the width the user's own choice of providers needs. It reads
+    /// the settings, never a Debug sample, so a sample cannot change the saved
+    /// Home layout.
+    @MainActor
+    static func sizing(settings: UsageSettings) -> HomeModuleSizing {
+        .fixed(.points(width(for: settings.shownProviders)))
+    }
     /// The card's padding on each side (`NotchCard`).
-    static let cardPadding: CGFloat = 12
-    static let groupGap: CGFloat = 8
-    static let columnGap: CGFloat = 3
-    static let barWidths: ClosedRange<CGFloat> = 7...12
-    /// From this column width on the percent shows above the bar.
-    static let numberWidth: CGFloat = 12
+    nonisolated static let cardPadding: CGFloat = 12
 
     var body: some View {
         Button(action: openTab) {
@@ -57,7 +140,7 @@ struct UsageModuleView: View {
                 }
                 .overlay(alignment: .top) {
                     bubble(now: context.date)
-                        .padding(6)
+                        .padding(4)
                         .allowsHitTesting(false)
                         .animation(.smooth(duration: 0.15), value: hover.target)
                 }
@@ -85,54 +168,47 @@ struct UsageModuleView: View {
                     .minimumScaleFactor(0.8)
             }
         } else {
-            let columnWidth = columnWidth(for: providers)
+            let layout = UsageModuleLayout.make(
+                contentWidth: size.width - Self.cardPadding * 2,
+                columnCounts: providers.map { max(model.status(of: $0).report?.windows.count ?? 1, 1) }
+            )
             HStack(alignment: .top, spacing: 0) {
                 Spacer(minLength: 0)
                 ForEach(providers.indices, id: \.self) { index in
                     if index > 0 {
-                        Spacer(minLength: Self.groupGap)
+                        Spacer(minLength: layout.groupGap)
                     }
-                    ProviderGroup(model: model, hover: hover, provider: providers[index], columnWidth: columnWidth)
+                    ProviderGroup(model: model, hover: hover, provider: providers[index], layout: layout)
                 }
                 Spacer(minLength: 0)
             }
         }
     }
 
-    /// One width for every column: the widest within `barWidths` at which the
-    /// groups (each at least as wide as its logo) and their gaps fit the card.
-    private func columnWidth(for providers: [UsageProvider]) -> CGFloat {
-        let counts = providers.map { model.status(of: $0).report?.windows.count ?? 0 }
-        let available = size.width - Self.cardPadding * 2 - CGFloat(providers.count - 1) * Self.groupGap
-        func needed(_ width: CGFloat) -> CGFloat {
-            counts.reduce(0) { total, count in
-                total + max(ProviderGroup.logoSize, CGFloat(count) * width + CGFloat(max(count - 1, 0)) * Self.columnGap)
-            }
-        }
-        var width = Self.barWidths.upperBound
-        while width > Self.barWidths.lowerBound, needed(width) > available {
-            width -= 0.25
-        }
-        return max(width, Self.barWidths.lowerBound)
-    }
-
     // MARK: Hover bubble
 
+    /// The limit's name and when it resets, or the provider and its state:
+    /// never truncated, wrapping onto more lines as the card's width needs.
     @ViewBuilder
     private func bubble(now: Date) -> some View {
         if let target = hover.target, model.displayedProviders.contains(target.provider) {
             let status = model.status(of: target.provider)
-            VStack(alignment: .leading, spacing: 3) {
-                if let index = target.window, let window = status.report?.windows[safe: index] {
-                    windowLines(window, provider: target.provider, now: now)
-                } else {
-                    stateLines(status.state, provider: target.provider)
+            let (title, detail) = bubbleLines(target, status: status, now: now)
+            VStack(spacing: 2) {
+                Text(title)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(NotchTheme.primaryText)
+                if let detail {
+                    Text(detail)
+                        .font(.system(size: 10))
+                        .foregroundStyle(NotchTheme.secondaryText)
+                        .monospacedDigit()
                 }
             }
-            .lineLimit(1)
-            .truncationMode(.tail)
-            .padding(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(6)
+            .frame(maxWidth: .infinity)
             .background {
                 let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
                 shape.fill(.black.opacity(0.85))
@@ -142,53 +218,15 @@ struct UsageModuleView: View {
         }
     }
 
-    private func titleLine(_ provider: UsageProvider, _ text: String) -> some View {
-        HStack(spacing: 4) {
-            UsageProviderLogo(provider: provider, size: 10)
-            Text(text)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(NotchTheme.primaryText)
+    private func bubbleLines(_ target: UsageHoverTarget, status: UsageStatus, now: Date) -> (String, String?) {
+        if let index = target.window, let window = status.report?.windows[safe: index] {
+            return (UsageFormat.limitName(window.duration), window.resetsAt.map { UsageFormat.resetText($0, now: now) })
         }
-    }
-
-    @ViewBuilder
-    private func windowLines(_ window: UsageWindow, provider: UsageProvider, now: Date) -> some View {
-        titleLine(provider, "\(provider.displayName) · \(UsageFormat.windowLabel(window.duration))")
-        let percent = Text("\(Int(window.percent.rounded()))%")
-            .foregroundStyle(UsageLevel(percent: window.percent).color ?? NotchTheme.primaryText)
-        Group {
-            if let resetsAt = window.resetsAt {
-                Text("\(percent) · \(UsageFormat.resetText(resetsAt, now: now))")
-            } else {
-                percent
-            }
+        let state = switch status.state {
+        case .loading, .ok: localized(en: "Loading…", zh: "正在读取…")
+        default: UsageFormat.stateTitle(status.state) ?? ""
         }
-        .font(.system(size: 10))
-        .foregroundStyle(NotchTheme.secondaryText)
-        .monospacedDigit()
-        if !window.scoped.isEmpty {
-            UsageScopedText.text(window.scoped, provider: provider)
-                .font(.system(size: 10))
-        }
-    }
-
-    @ViewBuilder
-    private func stateLines(_ state: UsageStatus.State, provider: UsageProvider) -> some View {
-        titleLine(provider, provider.displayName)
-        let (title, hint): (String, String?) = switch state {
-        case .loading, .ok: (localized(en: "Loading…", zh: "正在读取…"), nil)
-        case .signedOut: (UsageFormat.stateTitle(state) ?? "", UsageFormat.signInHint())
-        case .needsVerification: (UsageFormat.stateTitle(state) ?? "", UsageFormat.verificationHint())
-        case .failed: (UsageFormat.stateTitle(state) ?? "", nil)
-        }
-        Text(title)
-            .font(.system(size: 10, weight: .medium))
-            .foregroundStyle(NotchTheme.primaryText)
-        if let hint {
-            Text(hint)
-                .font(.system(size: 10))
-                .foregroundStyle(NotchTheme.secondaryText)
-        }
+        return (target.provider.displayName, state)
     }
 }
 
@@ -197,21 +235,19 @@ private struct ProviderGroup: View {
     let model: UsageModel
     let hover: UsageModuleHover
     let provider: UsageProvider
-    let columnWidth: CGFloat
-
-    static let logoSize: CGFloat = 12
+    let layout: UsageModuleLayout
 
     var body: some View {
         let status = model.status(of: provider)
         VStack(spacing: 4) {
-            UsageProviderLogo(provider: provider, size: Self.logoSize)
+            UsageProviderLogo(provider: provider, size: layout.logoSize)
             if let report = status.report, !report.windows.isEmpty {
-                HStack(alignment: .bottom, spacing: UsageModuleView.columnGap) {
+                HStack(alignment: .bottom, spacing: UsageModuleLayout.columnGap) {
                     ForEach(report.windows.indices, id: \.self) { index in
                         WindowColumn(
                             window: report.windows[index],
                             provider: provider,
-                            width: columnWidth,
+                            layout: layout,
                             target: UsageHoverTarget(provider: provider, window: index),
                             hover: hover
                         )
@@ -219,7 +255,7 @@ private struct ProviderGroup: View {
                 }
             } else {
                 stateSymbol(status.state)
-                    .frame(width: Self.logoSize)
+                    .frame(width: layout.logoSize)
                     .frame(maxHeight: .infinity)
                     .contentShape(.rect)
                     .onHover { inside in
@@ -250,19 +286,20 @@ private struct ProviderGroup: View {
     }
 }
 
-/// One window: the percent (when there is room), a bar filled from the bottom,
-/// and the window's icon.
+/// One window: the percent and the window's icon when there is room
+/// (`UsageModuleLayout`), and a bar filled from the bottom.
 private struct WindowColumn: View {
     let window: UsageWindow
     let provider: UsageProvider
-    let width: CGFloat
+    let layout: UsageModuleLayout
     let target: UsageHoverTarget
     let hover: UsageModuleHover
 
     var body: some View {
         let isHovered = hover.target == target
+        let width = layout.columnWidth
         VStack(spacing: 3) {
-            if width >= UsageModuleView.numberWidth {
+            if layout.showsNumbers {
                 Text("\(Int(window.percent.rounded()))")
                     .font(.system(size: 9, weight: .semibold, design: .rounded))
                     .monospacedDigit()
@@ -274,11 +311,13 @@ private struct WindowColumn: View {
             VerticalUsageBar(percent: window.percent, provider: provider)
                 .frame(width: width)
                 .frame(maxHeight: .infinity)
-            UsageWindowIcon(
-                duration: window.duration,
-                size: 10,
-                color: isHovered ? NotchTheme.primaryText : NotchTheme.secondaryText
-            )
+            if layout.showsIcons {
+                UsageWindowIcon(
+                    duration: window.duration,
+                    size: min(10, width),
+                    color: isHovered ? NotchTheme.primaryText : NotchTheme.secondaryText
+                )
+            }
         }
         .contentShape(.rect)
         .onHover { inside in

@@ -18,13 +18,21 @@ public struct NotchHomeModule: Identifiable {
     /// An optional line under the name in the settings window, such as where the
     /// module's data comes from. Read while the window draws.
     public let detail: (@MainActor () -> String)?
-    /// How wide the module may be.
-    public let sizing: HomeModuleSizing
+    /// How wide the module may be. Home reads it whenever it lays the row out,
+    /// so it may follow observable state: a module whose width follows its own
+    /// state (such as how many items it shows) returns `.fixed`, and when that
+    /// width changes Home gives the difference to its neighbours, or takes it
+    /// from them (see `HomeLayout.followFixedWidths`).
+    @MainActor public var sizing: HomeModuleSizing {
+        sizingProvider()
+    }
+    private let sizingProvider: @MainActor () -> HomeModuleSizing
     /// The module at the size Home gives it: its width along the row by the row's
     /// height. It draws its own background, usually a `NotchCard`, and may switch
     /// to a different arrangement as the width grows.
     public let content: @MainActor (CGSize) -> AnyView
 
+    /// A module whose sizing never changes.
     public init(
         id: String,
         title: @escaping @MainActor () -> String,
@@ -33,11 +41,24 @@ public struct NotchHomeModule: Identifiable {
         sizing: HomeModuleSizing,
         content: @escaping @MainActor (CGSize) -> AnyView
     ) {
+        self.init(id: id, title: title, symbol: symbol, detail: detail, sizing: { sizing }, content: content)
+    }
+
+    /// A module whose sizing follows observable state: `sizing` is read each
+    /// time Home lays the row out.
+    public init(
+        id: String,
+        title: @escaping @MainActor () -> String,
+        symbol: String,
+        detail: (@MainActor () -> String)? = nil,
+        sizing: @escaping @MainActor () -> HomeModuleSizing,
+        content: @escaping @MainActor (CGSize) -> AnyView
+    ) {
         self.id = id
         self.title = title
         self.symbol = symbol
         self.detail = detail
-        self.sizing = sizing
+        self.sizingProvider = sizing
         self.content = content
     }
 }

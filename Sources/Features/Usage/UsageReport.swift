@@ -151,6 +151,18 @@ enum UsageFormat {
         return text(language, en: "\(minutes) min", zh: "\(minutes) 分钟")
     }
 
+    /// The limit's name, for the Home module's hover bubble: "Session Limit"
+    /// for a window shorter than a day, "Weekly Limit", "3-Day Limit" for other
+    /// whole days, "Limit" without a (whole-day) length.
+    static func limitName(_ duration: TimeInterval?, language: AppLanguage = Localization.shared.language) -> String {
+        guard let seconds = duration, seconds > 0 else { return text(language, en: "Limit", zh: "限额") }
+        if seconds < 86400 { return text(language, en: "Session Limit", zh: "会话限额") }
+        guard seconds.truncatingRemainder(dividingBy: 86400) == 0 else { return text(language, en: "Limit", zh: "限额") }
+        let days = Int(seconds / 86400)
+        if days == 7 { return text(language, en: "Weekly Limit", zh: "每周限额") }
+        return text(language, en: "\(days)-Day Limit", zh: "\(days) 天限额")
+    }
+
     /// "5h", "7d", "90m" for the narrow Home module; `nil` without a length.
     static func compactWindowLabel(_ duration: TimeInterval?) -> String? {
         guard let seconds = duration, seconds > 0 else { return nil }

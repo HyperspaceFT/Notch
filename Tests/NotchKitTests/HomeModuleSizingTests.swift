@@ -1,4 +1,6 @@
 import CoreGraphics
+import Observation
+import SwiftUI
 import Testing
 @testable import NotchKit
 
@@ -41,4 +43,25 @@ struct HomeModuleSizingTests {
         #expect(fixed.minimumWidth(in: row) == 134)
         #expect(fixed.maximumWidth(in: row) == 134)
     }
+
+    @MainActor
+    @Test func aModulesSizingFollowsItsClosure() {
+        let state = SizingState()
+        let module = NotchHomeModule(id: "x", title: { "X" }, symbol: "star", sizing: { .fixed(.points(state.width)) }) { _ in
+            AnyView(EmptyView())
+        }
+        #expect(module.sizing == .fixed(.points(68)))
+        state.width = 86
+        #expect(module.sizing == .fixed(.points(86)))
+        let constant = NotchHomeModule(id: "y", title: { "Y" }, symbol: "star", sizing: .resizable(minimum: .points(100))) { _ in
+            AnyView(EmptyView())
+        }
+        #expect(constant.sizing == .resizable(minimum: .points(100)))
+    }
+}
+
+@MainActor
+@Observable
+private final class SizingState {
+    var width: CGFloat = 68
 }

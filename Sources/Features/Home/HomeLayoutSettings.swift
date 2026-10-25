@@ -125,10 +125,42 @@ public final class HomeLayoutSettings {
         assert(Set(modules.map(\.id)).count == modules.count, "Duplicate NotchHomeModule id")
         self.modules = modules
         if isCustomized {
+            // A layout saved while a module had another width (or was still
+            // resizable) hands the difference to that module's neighbours.
+            layout.followFixedWidths(sizings: sizings, rows: Self.referenceRow(forModuleCount:))
             layout.normalize(sizings: sizings, rows: Self.referenceRow(forModuleCount:))
         } else {
             layout = .standard(moduleIDs: modules.map(\.id), sizings: sizings, rows: Self.referenceRow(forModuleCount:))
         }
+        followSizings()
+    }
+
+    /// Lays the row out again whenever a module's sizing changes (a module whose
+    /// width follows its own state), again after every change: a customized
+    /// layout passes the difference to the neighbours (`HomeLayout.followFixedWidths`)
+    /// and is saved if that changed it; one that still follows the standard
+    /// layout is rebuilt from it and not saved. A Resize drag in progress is not
+    /// special-cased: each of its steps starts from the layout the drag began
+    /// with (see `resize(_:)`), so a change during the drag is overwritten by
+    /// its next step; sizings change from the Settings window's other panes,
+    /// not during a drag in the Home pane.
+    private func followSizings() {
+        _ = withObservationTracking {
+            sizings
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.sizingsChanged()
+            }
+        }
+    }
+
+    private func sizingsChanged() {
+        if isCustomized {
+            edit { $0.followFixedWidths(sizings: sizings, rows: Self.referenceRow(forModuleCount:)) }
+        } else {
+            layout = .standard(moduleIDs: modules.map(\.id), sizings: sizings, rows: Self.referenceRow(forModuleCount:))
+        }
+        followSizings()
     }
 
     // MARK: Reading

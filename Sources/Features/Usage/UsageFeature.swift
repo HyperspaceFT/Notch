@@ -6,8 +6,10 @@ import SwiftUI
 /// read from the internal endpoints those websites' usage pages call, with the
 /// sign-ins made in Notch's own sign-in window (Settings → Usage). A tab right
 /// of the notch shows a card per provider, while at least one is shown; its
-/// icon is a gauge of the highest percent. A small Home module shows the same
-/// as a vertical bar per window, with details on hover, and opens the tab. The endpoints are undocumented and may
+/// icon is a gauge of the highest percent. A narrow Home module, as wide as
+/// the providers shown need and not resizable, shows the same as a vertical
+/// bar per window, with each limit's name and reset time on hover, and opens
+/// the tab. The endpoints are undocumented and may
 /// change at any time; a failed read only shows as such.
 @MainActor
 public final class UsageFeature: NotchFeature {
@@ -56,7 +58,7 @@ public final class UsageFeature: NotchFeature {
                         zh: "Claude、Codex 和 Grok 的用量，用「设置 → 用量」中的登录从网站读取。"
                     )
                 },
-                sizing: UsageModuleView.sizing,
+                sizing: { [model] in UsageModuleView.sizing(settings: model.settings) },
                 content: { [model, weak self] size in
                     AnyView(UsageModuleView(model: model, hover: hover, size: size) { [weak self] in
                         self?.showTab()
