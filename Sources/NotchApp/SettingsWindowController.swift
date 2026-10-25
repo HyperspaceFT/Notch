@@ -201,6 +201,8 @@ private struct GeneralSettingsView: View {
                     en: "Adds a Debug pane to Settings that shows each part of the island at once, with sample data where needed, for checking how it looks.",
                     zh: "在设置中加入「调试」面板，可立即显示岛的各个界面（必要时使用示例数据），用于检查界面。"
                 ))
+                Text("\(Image(systemName: "exclamationmark.triangle.fill")) \(localized(en: "If you don't know what you're doing, leave this off.", zh: "如果你不知道自己在做什么，请不要打开。"))")
+                    .foregroundStyle(.orange)
             }
             .toggleStyle(.switch)
         }
