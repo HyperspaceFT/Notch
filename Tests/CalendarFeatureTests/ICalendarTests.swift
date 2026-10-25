@@ -152,6 +152,24 @@ struct ICalendarLexingTests {
     }
 }
 
+/// Hostile nesting must neither overflow the stack nor hide what follows it.
+struct ICalendarNestingTests {
+    @Test func deepUnclosedNestingParsesWithoutCrashing() {
+        let text = feedText(Array(repeating: "BEGIN:X", count: 100_000))
+        #expect(ICalendar.parse(text, defaultTimeZone: berlin).events.isEmpty)
+    }
+
+    @Test func eventAfterDeepClosedNestingIsStillRead() {
+        let text = feedText(
+            Array(repeating: "BEGIN:X", count: 50_000) + Array(repeating: "END:X", count: 50_000)
+                + vevent("UID:after", "DTSTART:20261022T090000Z", "SUMMARY:After")
+        )
+        let feed = ICalendar.parse(text, defaultTimeZone: berlin)
+        #expect(feed.events.map(\.uid) == ["after"])
+        #expect(feed.events.first?.summary == "After")
+    }
+}
+
 struct ICalendarDateTests {
     @Test func utcTime() throws {
         let event = try onlyEvent(vevent("UID:1", "DTSTART:20261022T090000Z", "DTEND:20261022T100000Z"))

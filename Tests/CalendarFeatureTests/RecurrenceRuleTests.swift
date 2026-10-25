@@ -369,6 +369,62 @@ struct FeedOccurrenceTests {
     }
 }
 
+/// Feeds built to make expansion expensive must still finish promptly.
+struct FeedWorkBoundTests {
+    private let window = DateInterval(start: instant(2026, 10, 1, in: newYork), end: instant(2026, 11, 1, in: newYork))
+
+    @Test(.timeLimit(.minutes(1)))
+    func mastersSharingAUIDAddTheirOverridesOnce() {
+        let masterStart = instant(2026, 9, 1, 9, in: newYork)
+        let master = ICalendarEvent(
+            uid: "shared", summary: "Master", location: nil,
+            start: masterStart, end: masterStart.addingTimeInterval(3600), isAllDay: false, timeZone: newYork)
+        // One override a minute from 30 September 23:00, so the first hour's fall before the window.
+        let firstOverride = instant(2026, 9, 30, 23, in: newYork)
+        let overrides = (0..<10_000).map { index in
+            let start = firstOverride.addingTimeInterval(TimeInterval(index * 60))
+            var event = master
+            event.summary = "Override \(index)"
+            event.start = start
+            event.end = start
+            event.recurrenceID = instant(2025, 1, 1, in: newYork).addingTimeInterval(TimeInterval(index * 86_400))
+            return event
+        }
+        let feed = ICalendarFeed(name: nil, events: Array(repeating: master, count: 10_000) + overrides)
+        let result = feed.occurrences(overlapping: window)
+        #expect(result.map(\.title) == (60..<10_000).map { "Override \($0)" })
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func mastersThatNeverMatchRunOutOfBudgetAndStillReturn() {
+        // February 30th never exists, so each rule visits periods until it is stopped.
+        let hopeless = (0..<200).flatMap { index in
+            vevent("UID:never-\(index)", "SUMMARY:Never", "DTSTART;TZID=America/New_York:20261015T090000",
+                   "RRULE:FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30;COUNT=5")
+        }
+        let last = vevent("UID:last", "SUMMARY:Last", "DTSTART;TZID=America/New_York:20261020T090000")
+        let feed = ICalendar.parse(feedText(hopeless + last), defaultTimeZone: newYork)
+        #expect(feed.events.count == 201)
+        let result = feed.occurrences(overlapping: window)
+        // DTSTART always counts, so the masters reached before the budget ran out each show once.
+        #expect(!result.isEmpty)
+        #expect(result.count < 201)
+        #expect(result.allSatisfy { $0.title == "Never" && $0.start == instant(2026, 10, 15, 9, in: newYork) })
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aWeekdayListedOverAndOverCostsNoMoreThanOnce() {
+        // Every week since 1990 is visited (COUNT), each against the BYDAY list.
+        let byDay = Array(repeating: "MO", count: 100_000).joined(separator: ",")
+        let text = feedText(vevent(
+            "UID:mondays", "SUMMARY:Monday", "DTSTART;TZID=America/New_York:19900101T090000",
+            "RRULE:FREQ=WEEKLY;COUNT=1000000;BYDAY=\(byDay)"
+        ))
+        let result = ICalendar.parse(text, defaultTimeZone: newYork).occurrences(overlapping: window)
+        #expect(result.map(\.start) == [5, 12, 19, 26].map { instant(2026, 10, $0, 9, in: newYork) })
+    }
+}
+
 /// Feed values that would overflow Int arithmetic must not trap.
 struct RecurrenceRuleHostileValueTests {
     private func starts(_ rule: String) -> [Date]? {
@@ -401,5 +457,15 @@ struct RecurrenceRuleHostileValueTests {
         #expect(starts(rule)?.isEmpty == false)
         #expect(starts("FREQ=DAILY;COUNT=9223372036854775807;BYMONTH=9223372036854775807;BYDAY=9223372036854775807MO") != nil)
         #expect(RecurrenceRule("FREQ=MONTHLY;BYDAY=-9223372036854775808MO", timeZone: newYork)?.byDay.isEmpty == true)
+    }
+
+    @Test func repeatedListEntriesAreKeptOnce() {
+        let recurrence = RecurrenceRule(
+            "FREQ=MONTHLY;BYDAY=MO,MO,-1FR,MO;BYMONTHDAY=1,1,15;BYMONTH=1,1;BYSETPOS=1,1", timeZone: newYork)
+        #expect(recurrence?.byDay == [.init(ordinal: nil, weekday: 2), .init(ordinal: -1, weekday: 6)])
+        #expect(recurrence?.byMonthDay == [1, 15])
+        #expect(recurrence?.byMonth == [1])
+        #expect(recurrence?.bySetPos == [1])
+        #expect(starts("FREQ=WEEKLY;BYDAY=MO,MO,TU,MO") == starts("FREQ=WEEKLY;BYDAY=MO,TU"))
     }
 }

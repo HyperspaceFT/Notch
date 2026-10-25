@@ -69,26 +69,55 @@ struct ICalendarFeed: Sendable, Equatable {
     /// Every readable VEVENT in file order, masters and overrides alike.
     var events: [ICalendarEvent]
 
+    /// The most work one call of `occurrences(overlapping:)` does: a unit per
+    /// master, per override applied to it, and per recurrence period visited.
+    /// Real feeds stay far below it; a hostile one is cut short instead of
+    /// keeping the fetch busy for minutes.
+    static let workBudget = 500_000
+
     /// The occurrences that overlap `interval`, sorted by start then title.
     /// Recurring events are expanded; EXDATEs, cancellations and RECURRENCE-ID
     /// overrides are applied. A zero-length occurrence counts when its start
     /// lies in [interval.start, interval.end).
+    ///
+    /// Once `workBudget` is spent the occurrences found so far are returned;
+    /// a cancelled task gets an empty result.
     func occurrences(overlapping interval: DateInterval) -> [ICalendarOccurrence] {
         var overridesByUID: [String: [ICalendarEvent]] = [:]
         for event in events where event.recurrenceID != nil {
             overridesByUID[event.uid, default: []].append(event)
         }
+        func standalone(_ overrides: [ICalendarEvent]) -> [ICalendarOccurrence] {
+            overrides.filter { !$0.isCancelled }.map(\.occurrence).filter { $0.overlaps(interval) }
+        }
         var masterUIDs = Set<String>()
+        // UIDs with a master that is not cancelled, whose overrides are in `result`.
+        var liveUIDs = Set<String>()
         var result: [ICalendarOccurrence] = []
+        var budget = Self.workBudget
+        var isExhausted = false
         for master in events where master.recurrenceID == nil {
+            guard !Task.isCancelled else { return [] }
+            guard budget > 0 else {
+                isExhausted = true
+                break
+            }
+            budget -= 1
             masterUIDs.insert(master.uid)
             // A cancelled master cancels the whole series, overrides included.
             guard !master.isCancelled else { continue }
-            result += master.expanded(around: interval, overrides: overridesByUID[master.uid] ?? [])
+            let overrides = overridesByUID[master.uid] ?? []
+            budget -= overrides.count
+            result += master.expanded(around: interval, overrides: overrides, budget: &budget)
+            // Two masters can share a UID; their overrides count once.
+            if liveUIDs.insert(master.uid).inserted { result += standalone(overrides) }
         }
         // An override whose master the feed does not carry stands on its own.
-        for (uid, overrides) in overridesByUID where !masterUIDs.contains(uid) {
-            result += overrides.filter { !$0.isCancelled }.map(\.occurrence)
+        // After running out of budget the masters not reached are unknown.
+        if !isExhausted {
+            for (uid, overrides) in overridesByUID where !masterUIDs.contains(uid) {
+                result += standalone(overrides)
+            }
         }
         // A feed can list the same event twice, or two masters can share a UID.
         var seen = Set<ICalendarOccurrence>()
@@ -141,10 +170,14 @@ struct ICalendarEvent: Sendable, Equatable {
         )
     }
 
-    /// The occurrences of this master that may touch `interval`, with
-    /// `overrides` (events with the same UID and a RECURRENCE-ID) applied.
-    /// Not yet filtered to `interval`.
-    fileprivate func expanded(around interval: DateInterval, overrides: [ICalendarEvent]) -> [ICalendarOccurrence] {
+    /// The occurrences of this master that overlap `interval`, without those
+    /// that `overrides` (events with the same UID and a RECURRENCE-ID) replace;
+    /// the overrides' own occurrences are left to the caller. Each recurrence
+    /// period visited takes one unit from `budget`, and the expansion stops
+    /// early when it runs out.
+    fileprivate func expanded(
+        around interval: DateInterval, overrides: [ICalendarEvent], budget: inout Int
+    ) -> [ICalendarOccurrence] {
         let calendar = ICalendarDate.calendar(in: timeZone)
         let span = end.timeIntervalSince(start)
         // All-day occurrences last whole calendar days, which DST can make
@@ -157,14 +190,15 @@ struct ICalendarEvent: Sendable, Equatable {
                 // Generate from far enough back that an occurrence still running
                 // when the interval starts is included.
                 let notBefore = interval.start.addingTimeInterval(-span - 2 * 86_400)
-                starts = recurrence.starts(from: start, calendar: calendar, notBefore: notBefore, through: interval.end)
+                starts = recurrence.starts(
+                    from: start, calendar: calendar, notBefore: notBefore, through: interval.end, budget: &budget)
             }
             starts = Array(Set(starts + recurrenceDates)).sorted()
         }
 
         func key(_ date: Date) -> Date { isAllDay ? calendar.startOfDay(for: date) : date }
         let replaced = Set(exceptionDates.map(key) + overrides.compactMap { $0.recurrenceID.map(key) })
-        var result = starts.filter { !replaced.contains(key($0)) }.map { occurrenceStart in
+        return starts.filter { !replaced.contains(key($0)) }.map { occurrenceStart in
             var occurrence = self.occurrence
             occurrence.start = occurrenceStart
             occurrence.end = isAllDay
@@ -172,8 +206,7 @@ struct ICalendarEvent: Sendable, Equatable {
                 : occurrenceStart.addingTimeInterval(span)
             return occurrence
         }
-        result += overrides.filter { !$0.isCancelled }.map(\.occurrence)
-        return result
+        .filter { $0.overlaps(interval) }
     }
 }
 
@@ -534,11 +567,25 @@ struct ICalendarComponent: Sendable {
     var properties: [ICalendarContentLine] = []
     var children: [ICalendarComponent] = []
 
+    /// The deepest a block may nest below the root. Real feeds nest three or
+    /// four levels (VCALENDAR > VEVENT > VALARM); the bound keeps a hostile
+    /// feed from building a tree deep enough to overflow the stack when it is
+    /// walked or released.
+    static let maximumDepth = 16
+
     /// Nests `lines` by BEGIN and END. An END closes the innermost open block
     /// of its name (and any left open inside it); a stray END is ignored and
     /// blocks still open at the end of the file are closed there.
+    ///
+    /// A BEGIN deeper than `maximumDepth` opens an ignored block: everything
+    /// up to its matching END, nested blocks included, is dropped, and an END
+    /// of an enclosing block ends it as well.
     static func tree(from lines: [ICalendarContentLine]) -> ICalendarComponent {
         var stack = [ICalendarComponent(name: "")]
+        // The names of the open ignored blocks, innermost last, with how often
+        // each occurs so an END finds its match without searching the list.
+        var ignored: [String] = []
+        var ignoredCounts: [String: Int] = [:]
         func close(downTo depth: Int) {
             while stack.count > depth {
                 let component = stack.removeLast()
@@ -548,14 +595,27 @@ struct ICalendarComponent: Sendable {
         for line in lines {
             switch line.name {
             case "BEGIN":
-                stack.append(ICalendarComponent(name: line.value.trimmingCharacters(in: .whitespaces).uppercased()))
+                let name = line.value.trimmingCharacters(in: .whitespaces).uppercased()
+                if ignored.isEmpty, stack.count <= Self.maximumDepth {
+                    stack.append(ICalendarComponent(name: name))
+                } else {
+                    ignored.append(name)
+                    ignoredCounts[name, default: 0] += 1
+                }
             case "END":
                 let name = line.value.trimmingCharacters(in: .whitespaces).uppercased()
-                if let depth = stack.lastIndex(where: { $0.name == name }), depth > 0 {
+                if ignoredCounts[name, default: 0] > 0 {
+                    while let innermost = ignored.popLast() {
+                        ignoredCounts[innermost, default: 0] -= 1
+                        if innermost == name { break }
+                    }
+                } else if let depth = stack.lastIndex(where: { $0.name == name }), depth > 0 {
+                    ignored.removeAll()
+                    ignoredCounts.removeAll()
                     close(downTo: depth)
                 }
             default:
-                stack[stack.count - 1].properties.append(line)
+                if ignored.isEmpty { stack[stack.count - 1].properties.append(line) }
             }
         }
         close(downTo: 1)

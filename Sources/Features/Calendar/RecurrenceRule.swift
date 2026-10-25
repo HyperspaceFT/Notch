@@ -11,7 +11,7 @@ struct RecurrenceRule: Sendable, Equatable {
     }
 
     /// A BYDAY entry such as "TU", "2TU" or "-1FR".
-    struct WeekdayNumber: Sendable, Equatable {
+    struct WeekdayNumber: Sendable, Hashable {
         /// The nth such weekday in the month or year; negative counts from the
         /// end. Nil means every one.
         var ordinal: Int?
@@ -20,7 +20,8 @@ struct RecurrenceRule: Sendable, Equatable {
     }
 
     /// Stops runaway rules: no more periods than this are visited and no more
-    /// starts than this are returned.
+    /// starts than this are returned by one expansion. A feed with many
+    /// events is bounded as a whole by `ICalendarFeed.workBudget`.
     static let expansionLimit = 10_000
 
     /// A larger INTERVAL makes the rule unsupported: no real feed asks for one,
@@ -65,10 +66,10 @@ struct RecurrenceRule: Sendable, Equatable {
         }
         if let count = parts["COUNT"].flatMap(Int.init), count > 0 { self.count = count }
         if let until = parts["UNTIL"] { self.until = Self.untilDate(until, timeZone: timeZone) }
-        byDay = (parts["BYDAY"] ?? "").split(separator: ",").compactMap { Self.weekdayNumber(String($0)) }
-        byMonthDay = integers("BYMONTHDAY", in: -31...31)
-        byMonth = integers("BYMONTH", in: 1...12)
-        bySetPos = integers("BYSETPOS", in: -366...366)
+        byDay = Self.distinct((parts["BYDAY"] ?? "").split(separator: ",").compactMap { Self.weekdayNumber(String($0)) })
+        byMonthDay = Self.distinct(integers("BYMONTHDAY", in: -31...31))
+        byMonth = Self.distinct(integers("BYMONTH", in: 1...12))
+        bySetPos = Self.distinct(integers("BYSETPOS", in: -366...366))
         if let weekStart = parts["WKST"].flatMap({ Self.weekday($0) }) { self.weekStart = weekStart }
     }
 
@@ -82,6 +83,17 @@ struct RecurrenceRule: Sendable, Equatable {
     /// begun years ago stays cheap. With COUNT every period from DTSTART is
     /// visited, since the count runs from there.
     func starts(from start: Date, calendar: Foundation.Calendar, notBefore: Date? = nil, through limit: Date) -> [Date] {
+        var budget = Self.expansionLimit
+        return starts(from: start, calendar: calendar, notBefore: notBefore, through: limit, budget: &budget)
+    }
+
+    /// `starts(from:calendar:notBefore:through:)`, taking one unit from
+    /// `budget` for each period visited and stopping when it runs out, so
+    /// several expansions can share one bound.
+    func starts(
+        from start: Date, calendar: Foundation.Calendar, notBefore: Date? = nil, through limit: Date,
+        budget: inout Int
+    ) -> [Date] {
         guard start <= limit else { return [] }
         let calendar = ICalendarDate.calendar(in: calendar.timeZone)
         let parts = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: start)
@@ -101,7 +113,9 @@ struct RecurrenceRule: Sendable, Equatable {
             period = periodsToSkip(before: notBefore, origin: origin, calendar: calendar)
         }
         var visited = 0
-        expansion: while visited < Self.expansionLimit {
+        expansion: while visited < Self.expansionLimit, budget > 0 {
+            visited += 1
+            budget -= 1
             for candidate in candidateDays(period: period, origin: origin) where candidate > origin.dayNumber {
                 let date = CivilDay.fields(of: candidate)
                 guard let occurrence = calendar.date(from: DateComponents(
@@ -114,7 +128,6 @@ struct RecurrenceRule: Sendable, Equatable {
                 if let count, result.count >= count { break expansion }
                 if result.count >= Self.expansionLimit { break expansion }
             }
-            visited += 1
             period += 1
         }
         return result
@@ -251,6 +264,15 @@ struct RecurrenceRule: Sendable, Equatable {
     }
 
     // MARK: - Parsing
+
+    /// `values` without repeats, in first-seen order. Every period of the
+    /// expansion walks the BY* lists and none depends on repeats, so a feed
+    /// repeating an entry a million times would otherwise make each period
+    /// that slow.
+    private static func distinct<Value: Hashable>(_ values: [Value]) -> [Value] {
+        var seen = Set<Value>()
+        return values.filter { seen.insert($0).inserted }
+    }
 
     private static func weekday(_ code: String) -> Int? {
         ["SU": 1, "MO": 2, "TU": 3, "WE": 4, "TH": 5, "FR": 6, "SA": 7][code.uppercased()]
