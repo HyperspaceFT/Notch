@@ -1,6 +1,7 @@
 import Foundation
 import NotchKit
 import Observation
+import Synchronization
 
 /// The latest download of each subscribed feed (`CalendarSettings.subscriptions`)
 /// and how it went. Downloads only when asked (`refreshIfNeeded`, `refreshNow`):
@@ -37,15 +38,6 @@ public final class SubscriptionFeeds {
 
     @ObservationIgnored private let settings: CalendarSettings
     @ObservationIgnored private var tasks: [UUID: Task<Void, Never>] = [:]
-
-    /// In memory only, so a secret calendar never reaches the disk cache.
-    private static let session: URLSession = {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.urlCache = nil
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-        configuration.timeoutIntervalForRequest = CalendarRefreshPolicy.timeout
-        return URLSession(configuration: configuration)
-    }()
 
     init(settings: CalendarSettings) {
         self.settings = settings
@@ -163,9 +155,8 @@ public final class SubscriptionFeeds {
     private func download(_ id: UUID, from url: URL, now: Date) {
         statuses[id, default: Status()].isUpdating = true
         let coverage = CalendarRefreshPolicy.coverage(now: now, calendar: .current)
-        let session = Self.session
         tasks[id] = Task(priority: .utility) { [weak self] in
-            let result = await Self.fetch(url, covering: coverage, session: session)
+            let result = await Self.fetch(url, covering: coverage)
             // `stop()` or a removal cancels the task; its state is gone by then.
             guard !Task.isCancelled else { return }
             self?.finish(id, with: result)
@@ -196,25 +187,19 @@ public final class SubscriptionFeeds {
     /// log or report the address: its path is the calendar's password.
     @concurrent private static func fetch(
         _ url: URL,
-        covering coverage: DateInterval,
-        session: URLSession
+        covering coverage: DateInterval
     ) async -> Result<FeedSnapshot, FeedFailure> {
+        let request = URLRequest(
+            url: url,
+            cachePolicy: .reloadIgnoringLocalCacheData,
+            timeoutInterval: CalendarRefreshPolicy.timeout
+        )
         let data: Data
-        do {
-            let request = URLRequest(
-                url: url,
-                cachePolicy: .reloadIgnoringLocalCacheData,
-                timeoutInterval: CalendarRefreshPolicy.timeout
-            )
-            let (body, response) = try await session.data(for: request)
-            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                return .failure(.httpStatus(http.statusCode))
-            }
+        switch await FeedDownload.run(request) {
+        case .success(let body):
             data = body
-        } catch let error as URLError {
-            return .failure(FeedFailure(error))
-        } catch {
-            return .failure(.other)
+        case .failure(let failure):
+            return .failure(failure)
         }
         // Google answers a bad link with an HTML page.
         guard data.range(of: Data("BEGIN:VCALENDAR".utf8)) != nil else {
@@ -235,6 +220,146 @@ struct FeedSnapshot: Sendable {
     var occurrences: [ICalendarOccurrence]
 }
 
+/// How much of a feed's body a download may take in: it fails at once for an
+/// announced length over the maximum and as soon as the bytes read exceed it.
+struct FeedBodyLimit: Equatable, Sendable {
+    let maximum: Int
+    private(set) var received = 0
+
+    init(maximum: Int = CalendarRefreshPolicy.maximumBodySize) {
+        self.maximum = maximum
+    }
+
+    /// Whether a body announced as `expectedLength` bytes may be read; a
+    /// negative length (unknown) always may, `accept` then counts the bytes.
+    func allows(expectedLength: Int64) -> Bool {
+        expectedLength <= Int64(maximum)
+    }
+
+    /// Counts `count` more bytes; false once the body exceeds the maximum.
+    mutating func accept(_ count: Int) -> Bool {
+        received += count
+        return received <= maximum
+    }
+}
+
+/// One feed download that takes the body in as the server sends it and stops
+/// at `FeedBodyLimit`. A delegate rather than `URLSession.bytes(for:)`, whose
+/// per-byte iteration takes minutes on a body of the maximum size. It owns
+/// its session, in memory only, so a secret calendar never reaches the disk
+/// cache. Nothing here may log or report the address.
+private final class FeedDownload: NSObject, URLSessionDataDelegate, Sendable {
+    private struct State {
+        var limit = FeedBodyLimit()
+        var body = Data()
+        /// Why the download was cancelled, when this class cancelled it.
+        var failure: FeedFailure?
+        /// Whichever of the completion and the caller's continuation arrives
+        /// first waits here for the other.
+        var continuation: CheckedContinuation<Result<Data, FeedFailure>, Never>?
+        var result: Result<Data, FeedFailure>?
+    }
+
+    private let state = Mutex(State())
+
+    /// The body of a good (2xx) response, or why there is none. Cancelling the
+    /// calling task cancels the transfer.
+    static func run(_ request: URLRequest) async -> Result<Data, FeedFailure> {
+        guard !Task.isCancelled else { return .failure(.other) }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.timeoutIntervalForRequest = CalendarRefreshPolicy.timeout
+        configuration.timeoutIntervalForResource = CalendarRefreshPolicy.totalTimeout
+        let download = FeedDownload()
+        let session = URLSession(configuration: configuration, delegate: download, delegateQueue: nil)
+        // The session holds its delegate until it is invalidated.
+        defer { session.finishTasksAndInvalidate() }
+        let task = session.dataTask(with: request)
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                // A task cancelled before this point cancels the suspended data
+                // task first, and its completion can arrive before the
+                // continuation exists; the handoff therefore goes both ways.
+                let stored = download.state.withLock { state -> Result<Data, FeedFailure>? in
+                    if let result = state.result { return result }
+                    state.continuation = continuation
+                    return nil
+                }
+                if let stored {
+                    continuation.resume(returning: stored)
+                } else {
+                    task.resume()
+                }
+            }
+        } onCancel: {
+            // The delegate still gets `didCompleteWithError`, which resumes the continuation.
+            task.cancel()
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        dataTask: URLSessionDataTask,
+        didReceive response: URLResponse
+    ) async -> URLSession.ResponseDisposition {
+        let failure: FeedFailure?
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            failure = .httpStatus(http.statusCode)
+        } else {
+            failure = state.withLock { state in
+                guard state.limit.allows(expectedLength: response.expectedContentLength) else { return .tooLarge }
+                // An unknown length reserves nothing; the maximum bounds a false one.
+                if response.expectedContentLength > 0 {
+                    state.body.reserveCapacity(Int(response.expectedContentLength))
+                }
+                return nil
+            }
+        }
+        guard let failure else { return .allow }
+        state.withLock { $0.failure = failure }
+        return .cancel
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        let isWithinLimit = state.withLock { state in
+            // Bytes that arrive after the cancellation are dropped.
+            guard state.failure == nil else { return false }
+            guard state.limit.accept(data.count) else {
+                state.failure = .tooLarge
+                state.body = Data()
+                return false
+            }
+            state.body.append(data)
+            return true
+        }
+        if !isWithinLimit {
+            dataTask.cancel()
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        let (continuation, result) = state.withLock { state -> (CheckedContinuation<Result<Data, FeedFailure>, Never>?, Result<Data, FeedFailure>) in
+            let result: Result<Data, FeedFailure>
+            if let failure = state.failure {
+                result = .failure(failure)
+            } else if let error {
+                result = .failure((error as? URLError).map { FeedFailure($0) } ?? .other)
+            } else {
+                result = .success(state.body)
+            }
+            state.body = Data()
+            guard let continuation = state.continuation else {
+                state.result = result
+                return (nil, result)
+            }
+            state.continuation = nil
+            return (continuation, result)
+        }
+        continuation?.resume(returning: result)
+    }
+}
+
 /// Why a download failed.
 enum FeedFailure: Error, Equatable, Sendable {
     case httpStatus(Int)
@@ -242,6 +367,7 @@ enum FeedFailure: Error, Equatable, Sendable {
     case timedOut
     case hostNotFound
     case notACalendar
+    case tooLarge
     case other
 
     init(_ error: URLError) {
@@ -270,6 +396,8 @@ enum FeedFailure: Error, Equatable, Sendable {
             localized(en: "server not found", zh: "找不到服务器")
         case .notACalendar:
             localized(en: "not a calendar file", zh: "不是日历文件")
+        case .tooLarge:
+            localized(en: "calendar file too large", zh: "日历文件过大")
         case .other:
             localized(en: "download failed", zh: "下载失败")
         }
@@ -282,8 +410,13 @@ enum CalendarRefreshPolicy {
     static let maximumAge: TimeInterval = 15 * 60
     /// How long to wait after a failed download before the next one.
     static let retryDelay: TimeInterval = 2 * 60
-    /// How long a download may take.
+    /// How long a download may wait for the server's next bytes.
     static let timeout: TimeInterval = 30
+    /// How long a whole download may take, however steadily the bytes arrive.
+    static let totalTimeout: TimeInterval = 120
+    /// The most bytes a download may hold, as decoded; large real feeds are a
+    /// few megabytes.
+    static let maximumBodySize = 20 * 1024 * 1024
 
     /// Whether to download at `now`: never while a download is in flight, not
     /// within `retryDelay` of a failure newer than the last success, and
