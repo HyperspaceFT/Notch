@@ -11,7 +11,8 @@ import SwiftUI
 public final class BatteryFeature: NotchFeature {
     public let id = "battery"
     public var title: String { localized(en: "Battery", zh: "电池") }
-    /// Follows the charge level, so the header button doubles as a battery gauge.
+    /// Follows the charge level in quarters. The header button draws the battery
+    /// to scale instead (`makeTabIcon`), so it doubles as a battery gauge.
     public var symbol: String { model.status?.symbolName ?? "battery.75percent" }
     public let tabPlacement = NotchTabPlacement.trailing
 
@@ -59,6 +60,10 @@ public final class BatteryFeature: NotchFeature {
 
     public func makeExpandedView() -> AnyView? {
         AnyView(BatteryExpandedView(model: model))
+    }
+
+    public func makeTabIcon() -> AnyView? {
+        AnyView(BatteryTabIcon(model: model))
     }
 
     /// Plug and unplug as the adapter activity shows them, and a low charge on
@@ -258,7 +263,7 @@ private struct BatteryActivityLeading: View {
     let bounce: ActivityBounce
 
     var body: some View {
-        Image(systemName: status.isOnACPower ? "battery.100percent.bolt" : "battery.75percent")
+        BatteryIcon(percent: status.percent, showsBolt: status.isOnACPower)
             .foregroundStyle(status.isOnACPower ? NotchTheme.chargingColor : NotchTheme.primaryText)
             .bounceIn(bounce)
     }
@@ -281,7 +286,7 @@ private struct LowBatteryActivityLeading: View {
     let bounce: ActivityBounce
 
     var body: some View {
-        Image(systemName: status.symbolName)
+        BatteryIcon(percent: status.percent, showsBolt: false)
             .foregroundStyle(.red)
             .bounceIn(bounce)
     }
@@ -345,6 +350,25 @@ private struct WingHoverShift: ViewModifier {
 private extension View {
     func wingHoverShifted(outward: CGFloat) -> some View {
         modifier(WingHoverShift(outward: outward))
+    }
+}
+
+/// The header button: the battery to scale, with a bolt while on power, in the
+/// tab buttons' colors; the symbol on a Mac without a battery.
+private struct BatteryTabIcon: View {
+    let model: BatteryModel
+    @Environment(\.notchTabIsSelected) private var isSelected
+
+    var body: some View {
+        let color = isSelected ? NotchTheme.primaryText : NotchTheme.secondaryText
+        if let status = model.status {
+            BatteryIcon(percent: status.percent, showsBolt: status.isOnACPower)
+                .foregroundStyle(color)
+        } else {
+            Image(systemName: "battery.75percent")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(color)
+        }
     }
 }
 
