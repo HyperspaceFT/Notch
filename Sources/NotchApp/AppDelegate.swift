@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let settings = SettingsWindowController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        EditMenu.install()
         shell.onOpenSettings = { [settings] in settings.show() }
         let features = FeatureCatalog.makeFeatures()
         settings.debugSources = DebugSources(islandItems: { [shell] in shell.debugItems }, features: features)
