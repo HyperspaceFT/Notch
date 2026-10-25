@@ -60,6 +60,7 @@ let package = Package(
         .testTarget(name: "NotificationsFeatureTests", dependencies: ["NotificationsFeature"]),
         .testTarget(name: "FilesFeatureTests", dependencies: ["FilesFeature"]),
         .testTarget(name: "ClockFeatureTests", dependencies: ["ClockFeature"]),
+        .testTarget(name: "BatteryFeatureTests", dependencies: ["BatteryFeature"]),
     ] + featureTargets,
     swiftLanguageModes: [.v6]
 )

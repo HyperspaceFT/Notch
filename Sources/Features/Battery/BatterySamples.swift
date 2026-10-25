@@ -32,4 +32,16 @@ extension PowerStatus {
         minutesToEmpty: 38,
         minutesToFull: nil
     )
+
+    /// On battery at `percent`, as the low battery alert shows it.
+    static func sampleLowAlert(percent: Int) -> PowerStatus {
+        PowerStatus(
+            percent: percent,
+            isOnACPower: false,
+            isCharging: false,
+            isCharged: false,
+            minutesToEmpty: percent * 3,
+            minutesToFull: nil
+        )
+    }
 }

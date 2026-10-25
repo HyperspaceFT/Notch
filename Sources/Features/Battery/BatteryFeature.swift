@@ -3,9 +3,10 @@ import NotchUI
 import Observation
 import SwiftUI
 
-/// Shows a short activity when the power adapter is plugged in or removed, and a
-/// battery button right of the notch in the expanded panel whose tab shows the
-/// remaining time and the battery health.
+/// Shows a short activity when the power adapter is plugged in or removed, and
+/// when the charge on battery falls to 20, 10, or 5 percent, and a battery button
+/// right of the notch in the expanded panel whose tab shows the remaining time
+/// and the battery health.
 @MainActor
 public final class BatteryFeature: NotchFeature {
     public let id = "battery"
@@ -19,6 +20,9 @@ public final class BatteryFeature: NotchFeature {
     /// Width of each wing of the activity: room for "100%" on the right, about as
     /// far from the notch as from the island's edge.
     static let activityWingWidth: CGFloat = 52
+    static let lowBatteryActivityID = "low-battery"
+    /// How long the low battery alert stays visible on the collapsed island.
+    static let lowBatteryDuration: TimeInterval = 5
 
     private let model = BatteryModel()
     private var monitor: PowerSourceMonitor?
@@ -26,6 +30,8 @@ public final class BatteryFeature: NotchFeature {
     /// The last status macOS reported. `model.status` can hold a Debug pane sample
     /// instead, which a real change must not be compared with.
     private var lastReadStatus: PowerStatus?
+    /// Fed only real readings, never a Debug pane sample.
+    private var lowBatteryAlerts = LowBatteryAlerts(status: nil)
 
     public init() {}
 
@@ -33,6 +39,7 @@ public final class BatteryFeature: NotchFeature {
         self.context = context
         model.status = PowerStatus.read()
         lastReadStatus = model.status
+        lowBatteryAlerts = LowBatteryAlerts(status: lastReadStatus)
         if model.status != nil {
             model.refreshHealth()
         }
@@ -57,7 +64,8 @@ public final class BatteryFeature: NotchFeature {
     /// Plug and unplug as the adapter activity shows them, and a low charge on
     /// battery. The tab shows the same sample status until the next real power
     /// source change replaces it, or "Use Real Status" puts the last reading back;
-    /// nothing is read from or sent to the system.
+    /// nothing is read from or sent to the system. The low battery alerts only
+    /// show, leaving the tab and the levels already alerted alone.
     public var debugItems: [NotchMenuItem] {
         func show(_ status: PowerStatus) -> @MainActor () -> Void {
             { [weak self] in
@@ -69,6 +77,15 @@ public final class BatteryFeature: NotchFeature {
             .button(localized(en: "Plug In (Charging)", zh: "接上电源（充电中）"), symbol: "battery.100percent.bolt", action: show(.samplePluggedIn)),
             .button(localized(en: "Unplug", zh: "拔下电源"), symbol: "battery.75percent", action: show(.sampleUnplugged)),
             .button(localized(en: "Low Battery", zh: "电量低"), symbol: "battery.25percent", action: show(.sampleLow)),
+            .submenu(
+                localized(en: "Low Battery Alert", zh: "低电量提醒"),
+                symbol: "battery.0percent",
+                items: LowBatteryAlerts.levels.map { level in
+                    .button("\(level)%") { [weak self] in
+                        self?.presentLowBattery(.sampleLowAlert(percent: level))
+                    }
+                }
+            ),
             .divider,
             .button(localized(en: "Use Real Status", zh: "使用真实状态"), symbol: "arrow.uturn.backward") { [weak self] in
                 // The last reading, with no activity: a Mac without a battery would
@@ -83,11 +100,18 @@ public final class BatteryFeature: NotchFeature {
         let current = PowerStatus.read()
         lastReadStatus = current
         model.status = current
+        let lowLevel = lowBatteryAlerts.update(with: current)
 
         // Only the adapter being connected or removed is worth an activity;
-        // routine percentage updates just refresh the expanded card.
-        guard let previous, let current, previous.isOnACPower != current.isOnACPower else { return }
-        presentPowerAdapter(current)
+        // routine percentage updates just refresh the expanded card, unless the
+        // charge falls to a low level (`LowBatteryAlerts`).
+        if let previous, let current, previous.isOnACPower != current.isOnACPower {
+            presentPowerAdapter(current)
+        }
+        // Last, so it shows over an adapter notice that came with the same reading.
+        if lowLevel != nil, let current {
+            presentLowBattery(current)
+        }
     }
 
     private func presentPowerAdapter(_ current: PowerStatus) {
@@ -102,6 +126,25 @@ public final class BatteryFeature: NotchFeature {
                 .wingHoverShifted(outward: -1)
         } trailing: {
             BatteryActivityTrailing(status: current, bounce: bounce)
+                .wingHoverShifted(outward: 1)
+        })
+    }
+
+    /// A red battery and the charge left. It holds while the island is open, so
+    /// one that comes while the panel is up shows once the island collapses.
+    private func presentLowBattery(_ status: PowerStatus) {
+        let bounce = ActivityBounce()
+        context?.present(NotchActivity(
+            id: Self.lowBatteryActivityID,
+            priority: .high,
+            duration: Self.lowBatteryDuration,
+            wingWidth: Self.activityWingWidth,
+            holdsWhileExpanded: true
+        ) {
+            LowBatteryActivityLeading(status: status, bounce: bounce)
+                .wingHoverShifted(outward: -1)
+        } trailing: {
+            LowBatteryActivityTrailing(status: status, bounce: bounce)
                 .wingHoverShifted(outward: 1)
         })
     }
@@ -229,6 +272,29 @@ private struct BatteryActivityTrailing: View {
         Text("\(status.percent)%")
             .monospacedDigit()
             .foregroundStyle(status.isOnACPower ? NotchTheme.chargingColor : NotchTheme.primaryText)
+            .bounceIn(bounce)
+    }
+}
+
+private struct LowBatteryActivityLeading: View {
+    let status: PowerStatus
+    let bounce: ActivityBounce
+
+    var body: some View {
+        Image(systemName: status.symbolName)
+            .foregroundStyle(.red)
+            .bounceIn(bounce)
+    }
+}
+
+private struct LowBatteryActivityTrailing: View {
+    let status: PowerStatus
+    let bounce: ActivityBounce
+
+    var body: some View {
+        Text("\(status.percent)%")
+            .monospacedDigit()
+            .foregroundStyle(.red)
             .bounceIn(bounce)
     }
 }
