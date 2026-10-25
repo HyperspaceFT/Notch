@@ -55,7 +55,7 @@
 - **macOS 26 或更新版本**（界面用到了 macOS 26 的 Liquid Glass 效果）
 - **带刘海的 MacBook**（Apple Silicon）。没有刘海的屏幕上会显示一个模拟刘海。
 
-## 安装（给朋友用）
+## 安装
 
 到 [Releases](https://github.com/HyperspaceFT/Notch/releases) 页面下载最新的 `Notch-x.y.z.zip`，然后：
 
