@@ -32,8 +32,7 @@ struct UsageSettingsView: View {
                     Text(localized(en: "Show \(provider.displayName)", zh: "显示 \(provider.displayName)"))
                     Text(statusText(provider))
                 } icon: {
-                    Image(systemName: provider.glyph)
-                        .foregroundStyle(provider.accentColor)
+                    UsageProviderLogo(provider: provider, size: 16, style: .system)
                 }
             }
             .toggleStyle(.switch)

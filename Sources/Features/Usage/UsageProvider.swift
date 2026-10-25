@@ -56,20 +56,12 @@ public enum UsageProvider: String, CaseIterable, Sendable {
         }
     }
 
-    /// An SF Symbol Notch draws for the provider; deliberately not its logo.
-    public var glyph: String {
-        switch self {
-        case .claude: "asterisk"
-        case .codex: "terminal"
-        case .grok: "x.squareroot"
-        }
-    }
-
-    /// The provider's color, for its glyph and its bars.
+    /// The provider's color, for its bars; Claude's and Codex's match their
+    /// logos (`UsageProviderLogo`).
     public var accentColor: Color {
         switch self {
         case .claude: Color(red: 0xD9 / 255, green: 0x77 / 255, blue: 0x57 / 255)
-        case .codex: Color(red: 0x10 / 255, green: 0xA3 / 255, blue: 0x7F / 255)
+        case .codex: Color(red: 0x7A / 255, green: 0x9D / 255, blue: 0xFF / 255)
         case .grok: Color(red: 0x9F / 255, green: 0xB3 / 255, blue: 0xC8 / 255)
         }
     }

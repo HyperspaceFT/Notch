@@ -58,15 +58,54 @@ struct UsagePercent: View {
     }
 }
 
-/// The provider's glyph in its color.
-struct UsageGlyph: View {
+/// The provider's logo (`UsageLogos`), `size` points square, in its colors.
+public struct UsageProviderLogo: View {
+    /// Where the logo shows, which decides its colors.
+    public enum Style: Sendable {
+        /// On the island's black: Claude orange and Codex's gradient with light
+        /// and color, primary text without; Grok always primary text.
+        case island
+        /// In a system window: Claude orange, the others the primary label color.
+        case system
+    }
+
     let provider: UsageProvider
     let size: CGFloat
+    let style: Style
 
-    var body: some View {
-        Image(systemName: provider.glyph)
-            .font(.system(size: size, weight: .bold))
-            .foregroundStyle(NotchTheme.accent(provider.accentColor))
+    public init(provider: UsageProvider, size: CGFloat, style: Style = .island) {
+        self.provider = provider
+        self.size = size
+        self.style = style
+    }
+
+    public var body: some View {
+        SVGShape(path: UsageLogos.path(for: provider))
+            .fill(fill, style: FillStyle(eoFill: UsageLogos.usesEvenOdd(provider)))
+            .frame(width: size, height: size)
+    }
+
+    private static let claudeOrange = Color(red: 0xD9 / 255, green: 0x77 / 255, blue: 0x57 / 255)
+    /// Lobe's codex-color gradient stops.
+    private static let codexGradient = LinearGradient(
+        stops: [
+            .init(color: Color(red: 0xB1 / 255, green: 0xA7 / 255, blue: 0xFF / 255), location: 0),
+            .init(color: Color(red: 0x7A / 255, green: 0x9D / 255, blue: 0xFF / 255), location: 0.5),
+            .init(color: Color(red: 0x39 / 255, green: 0x41 / 255, blue: 0xFF / 255), location: 1),
+        ],
+        startPoint: .top,
+        endPoint: .bottom
+    )
+
+    private var fill: AnyShapeStyle {
+        switch (style, provider) {
+        case (.system, .claude): AnyShapeStyle(Self.claudeOrange)
+        case (.system, _): AnyShapeStyle(.primary)
+        case (.island, .claude): NotchTheme.accent(Self.claudeOrange)
+        case (.island, .codex):
+            NotchAppearance.shared.isLightAndColorEnabled ? AnyShapeStyle(Self.codexGradient) : AnyShapeStyle(NotchTheme.primaryText)
+        case (.island, .grok): AnyShapeStyle(NotchTheme.primaryText)
+        }
     }
 }
 
@@ -103,6 +142,22 @@ extension UsageModel {
             .flatMap { status(of: $0).report?.windows ?? [] }
             .map(\.percent)
             .max()
+    }
+}
+
+/// A window's parts as one line of text.
+@MainActor
+enum UsageScopedText {
+    /// "Fable 74%", the percents in their levels' colors.
+    static func text(_ scoped: [UsageScope], provider: UsageProvider) -> Text {
+        scoped.enumerated().reduce(Text("")) { text, entry in
+            let (index, scope) = entry
+            let label = UsageFormat.scopeLabel(scope, provider: provider)
+            let percent = Text("\(Int(scope.percent.rounded()))%")
+                .foregroundStyle(UsageLevel(percent: scope.percent).color ?? NotchTheme.primaryText)
+            return Text("\(text)\(index == 0 ? "" : "  ")\(label) \(percent)")
+                .foregroundStyle(NotchTheme.secondaryText)
+        }
     }
 }
 

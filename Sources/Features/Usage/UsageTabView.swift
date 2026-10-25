@@ -59,7 +59,7 @@ private struct UsageProviderCard: View {
 
     private func header(_ status: UsageStatus) -> some View {
         HStack(spacing: 5) {
-            UsageGlyph(provider: provider, size: 11)
+            UsageProviderLogo(provider: provider, size: 12)
             Button {
                 openUsagePage(provider)
             } label: {
@@ -166,7 +166,8 @@ private struct UsageWindowView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
+            HStack(alignment: .center, spacing: 4) {
+                UsageWindowIcon(duration: window.duration, size: 11, color: NotchTheme.secondaryText)
                 Text(UsageFormat.windowLabel(window.duration))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(NotchTheme.secondaryText)
@@ -195,16 +196,8 @@ private struct UsageWindowView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// "Fable 74%", the percents in their levels' colors.
     private var scopedText: Text {
-        window.scoped.enumerated().reduce(Text("")) { text, entry in
-            let (index, scope) = entry
-            let label = UsageFormat.scopeLabel(scope, provider: provider)
-            let percent = Text("\(Int(scope.percent.rounded()))%")
-                .foregroundStyle(UsageLevel(percent: scope.percent).color ?? NotchTheme.primaryText)
-            return Text("\(text)\(index == 0 ? "" : "  ")\(label) \(percent)")
-                .foregroundStyle(NotchTheme.secondaryText)
-        }
+        UsageScopedText.text(window.scoped, provider: provider)
     }
 
     /// Each part's use, with its own reset time when it differs from the window's.

@@ -7,7 +7,7 @@ import SwiftUI
 /// sign-ins made in Notch's own sign-in window (Settings → Usage). A tab right
 /// of the notch shows a card per provider, while at least one is shown; its
 /// icon is a gauge of the highest percent. A small Home module shows the same
-/// as thin bars and opens the tab. The endpoints are undocumented and may
+/// as a vertical bar per window, with details on hover, and opens the tab. The endpoints are undocumented and may
 /// change at any time; a failed read only shows as such.
 @MainActor
 public final class UsageFeature: NotchFeature {
@@ -43,7 +43,9 @@ public final class UsageFeature: NotchFeature {
     }
 
     public func makeHomeModules() -> [NotchHomeModule] {
-        [
+        // Outside `content`, which runs again for every size Home gives the module.
+        let hover = UsageModuleHover()
+        return [
             NotchHomeModule(
                 id: "usage",
                 title: { localized(en: "Usage Limits", zh: "用量限额") },
@@ -56,7 +58,7 @@ public final class UsageFeature: NotchFeature {
                 },
                 sizing: UsageModuleView.sizing,
                 content: { [model, weak self] size in
-                    AnyView(UsageModuleView(model: model, size: size) { [weak self] in
+                    AnyView(UsageModuleView(model: model, hover: hover, size: size) { [weak self] in
                         self?.showTab()
                     })
                 }
