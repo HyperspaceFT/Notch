@@ -1,5 +1,7 @@
+import AppKit
 import NotchKit
 import NotchUI
+import Observation
 import SwiftUI
 
 /// The calendar module at the size Home gives it: the coming days' events,
@@ -11,6 +13,7 @@ struct CalendarModuleView: View {
     let settings: CalendarSettings
     let local: LocalCalendars
     let feeds: SubscriptionFeeds
+    let state: AgendaCardState
     let size: CGSize
 
     /// How often the module checks whether a feed needs downloading.
@@ -79,6 +82,7 @@ struct CalendarModuleView: View {
             AgendaList(
                 days: days,
                 now: now,
+                state: state,
                 isWide: size.width >= Self.wideThreshold,
                 // Room for the switch, which the first day's title would run under.
                 firstTitleTrailingInset: CalendarSourceSwitch.width + 6
@@ -277,6 +281,7 @@ private struct StatusLine: View {
 private struct AgendaList: View {
     let days: [AgendaDay]
     let now: Date
+    let state: AgendaCardState
     let isWide: Bool
     /// Trailing room the first day's title leaves free.
     let firstTitleTrailingInset: CGFloat
@@ -300,7 +305,9 @@ private struct AgendaList: View {
                             EntryRow(
                                 entry: entry,
                                 time: CalendarFormat.timeText(entry, now: now, language: language, calendar: .current),
-                                isWide: isWide
+                                language: language,
+                                isWide: isWide,
+                                state: state
                             )
                         }
                     }
@@ -322,19 +329,37 @@ private struct AgendaList: View {
     }
 }
 
-/// One event: a bar in its calendar's color, the title, and the time.
+/// One event: a bar in its calendar's color, the title, and the time. A click
+/// expands it to the full title and location, the calendar, any meeting link,
+/// and a button that copies them; another click collapses it.
 private struct EntryRow: View {
     let entry: AgendaEntry
     let time: String
+    let language: AppLanguage
     let isWide: Bool
+    let state: AgendaCardState
 
     /// Wide enough for "Now · until 10:30" and "进行中 · 至 10:30".
     private static let timeColumnWidth: CGFloat = 108
 
+    private var isExpanded: Bool { state.expandedID == entry.id }
+
     var body: some View {
         let event = entry.event
         Group {
-            if isWide {
+            if isWide && isExpanded {
+                HStack(alignment: .top, spacing: 8) {
+                    bar(event.color.color)
+                    timeText
+                        .frame(width: Self.timeColumnWidth, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 3) {
+                        titleText
+                        details
+                    }
+                    Spacer(minLength: 0)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            } else if isWide {
                 HStack(spacing: 8) {
                     bar(event.color.color)
                         .frame(height: 14)
@@ -344,7 +369,7 @@ private struct EntryRow: View {
                         titleText
                             .layoutPriority(1)
                         if let location = event.location {
-                            Text(location)
+                            Text(CalendarFormat.capped(location))
                                 .font(.system(size: 11))
                                 .foregroundStyle(NotchTheme.secondaryText)
                                 .lineLimit(1)
@@ -358,10 +383,22 @@ private struct EntryRow: View {
                     VStack(alignment: .leading, spacing: 1) {
                         titleText
                         timeText
+                        if isExpanded {
+                            details
+                                .padding(.top, 2)
+                        }
                     }
                     Spacer(minLength: 0)
                 }
                 .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        // The gaps between the texts take the click too. The copy button's own
+        // click goes to it, not here.
+        .contentShape(.rect)
+        .onTapGesture {
+            withAnimation(.snappy(duration: 0.25)) {
+                state.toggle(entry.id)
             }
         }
     }
@@ -373,11 +410,11 @@ private struct EntryRow: View {
     }
 
     private var titleText: some View {
-        let title = entry.event.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        return Text(title.isEmpty ? localized(en: "No Title", zh: "无标题") : title)
+        Text(CalendarFormat.title(entry.event, language: language))
             .font(.system(size: 12, weight: .medium))
             .foregroundStyle(NotchTheme.primaryText)
-            .lineLimit(1)
+            .lineLimit(isExpanded ? nil : 1)
+            .fixedSize(horizontal: false, vertical: isExpanded)
     }
 
     private var timeText: some View {
@@ -387,6 +424,120 @@ private struct EntryRow: View {
             .monospacedDigit()
             .lineLimit(1)
             .minimumScaleFactor(0.8)
+    }
+
+    /// What the collapsed row leaves out, one line each, then the copy button.
+    /// The dates only for an event that spans days, whose time on this day
+    /// ("Until 02:00") hides when it began or ends.
+    @ViewBuilder
+    private var details: some View {
+        let event = entry.event
+        if entry.startsBeforeDay || entry.endsAfterDay {
+            DetailLine(symbol: "clock", text: CalendarFormat.spanText(event, language: language, calendar: .current))
+        }
+        if let location = event.location {
+            DetailLine(symbol: "mappin.and.ellipse", text: CalendarFormat.capped(location))
+        }
+        let calendarTitle = CalendarFormat.capped(event.calendarTitle)
+        if !calendarTitle.isEmpty {
+            DetailLine(symbol: "calendar", text: calendarTitle)
+        }
+        if let url = event.meetingURL {
+            // Long links keep both ends; the copy holds the whole link.
+            DetailLine(symbol: "video", text: url.absoluteString, wraps: false)
+        }
+        CopyButton(
+            text: CalendarFormat.copyText(event, language: language, calendar: .current),
+            isCopied: state.copiedID == entry.id
+        ) {
+            state.copied(entry.id)
+        }
+        .padding(.top, 2)
+    }
+}
+
+/// A symbol and secondary text, wrapped unless `wraps` is false.
+private struct DetailLine: View {
+    let symbol: String
+    let text: String
+    var wraps = true
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Image(systemName: symbol)
+                .font(.system(size: 9.5))
+                .frame(width: 12)
+            Text(text)
+                .font(.system(size: 10.5))
+                .monospacedDigit()
+                .lineLimit(wraps ? nil : 1)
+                .truncationMode(.middle)
+                .fixedSize(horizontal: false, vertical: wraps)
+        }
+        .foregroundStyle(NotchTheme.secondaryText)
+    }
+}
+
+/// Puts `text` on the clipboard, then reads "Copied" with a checkmark while
+/// `isCopied`.
+private struct CopyButton: View {
+    let text: String
+    let isCopied: Bool
+    let didCopy: () -> Void
+
+    var body: some View {
+        Button {
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(text, forType: .string)
+            didCopy()
+        } label: {
+            Label(
+                isCopied ? localized(en: "Copied", zh: "已拷贝") : localized(en: "Copy", zh: "拷贝"),
+                systemImage: isCopied ? "checkmark" : "doc.on.doc"
+            )
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(isCopied ? NotchTheme.primaryText : NotchTheme.secondaryText)
+            .padding(.horizontal, 8)
+            .frame(height: 20)
+            .background(Capsule().fill(Color.white.opacity(isCopied ? 0.16 : 0.1)))
+            .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .animation(.snappy(duration: 0.2), value: isCopied)
+    }
+}
+
+/// The agenda's own view state, owned by the module rather than the view
+/// (`@State` needs a macro plugin the Command Line Tools do not ship).
+@MainActor
+@Observable
+final class AgendaCardState {
+    /// How long a copy button reads "Copied".
+    static let copyFeedbackDuration: Duration = .seconds(1.5)
+
+    /// The entry a click expanded to its full text; one at a time.
+    private(set) var expandedID: String?
+    /// The entry whose text was copied within `copyFeedbackDuration`.
+    private(set) var copiedID: String?
+
+    @ObservationIgnored private var copyFeedback: Task<Void, Never>?
+
+    /// Expands the entry, collapsing any other, or collapses it if expanded.
+    func toggle(_ id: String) {
+        expandedID = expandedID == id ? nil : id
+    }
+
+    /// Shows "Copied" on the entry's button for `duration`; a later copy
+    /// starts the time over.
+    func copied(_ id: String, for duration: Duration = copyFeedbackDuration) {
+        copiedID = id
+        copyFeedback?.cancel()
+        copyFeedback = Task { [weak self] in
+            try? await Task.sleep(for: duration)
+            guard !Task.isCancelled else { return }
+            self?.copiedID = nil
+        }
     }
 }
 
@@ -403,6 +554,11 @@ enum CalendarFormat {
            calendar.isDate(day, inSameDayAs: tomorrow) {
             return text(en: "Tomorrow", zh: "明天", language)
         }
+        return date(day, language: language, calendar: calendar)
+    }
+
+    /// A short weekday and date such as "Sat, Oct 24" or "10月24日 周六".
+    static func date(_ day: Date, language: AppLanguage, calendar: Foundation.Calendar) -> String {
         let style = Date.FormatStyle(
             locale: Locale(identifier: language.rawValue),
             calendar: calendar,
@@ -412,6 +568,65 @@ enum CalendarFormat {
         .day()
         .weekday(.abbreviated)
         return day.formatted(style)
+    }
+
+    /// The longest title, location or calendar name the agenda shows or copies.
+    /// Feeds cap neither, and the text is laid out on the main thread.
+    static let maxTextLength = 1_000
+
+    /// `text` without surrounding whitespace, cut to `maxTextLength` characters
+    /// and an ellipsis when longer. Reads no further into `text` than that.
+    static func capped(_ text: String) -> String {
+        let head = text.drop(while: \.isWhitespace).prefix(maxTextLength + 1)
+        if head.count > maxTextLength {
+            return head.prefix(maxTextLength).trimmingCharacters(in: .whitespacesAndNewlines) + "…"
+        }
+        return head.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// The event's title, `capped`, or "No Title" when it has none.
+    static func title(_ event: AgendaEvent, language: AppLanguage) -> String {
+        let title = capped(event.title)
+        return title.isEmpty ? text(en: "No Title", zh: "无标题", language) : title
+    }
+
+    /// When `event` happens, on dates rather than relative to today:
+    /// "Sat, Oct 24 · 13:00–14:30", "Sat, Oct 24 · All day",
+    /// "Sat, Oct 24 – Mon, Oct 26" for all-day events over several days, and
+    /// "Sat, Oct 24 22:00 – Sun, Oct 25 02:00" for a timed one past midnight.
+    static func spanText(_ event: AgendaEvent, language: AppLanguage, calendar: Foundation.Calendar) -> String {
+        let startDay = date(event.start, language: language, calendar: calendar)
+        if event.isAllDay {
+            // The end is exclusive: the midnight after the last day (feeds) or
+            // 23:59:59 of it (EventKit), so a second earlier falls on that day.
+            let lastDay = max(event.start, event.end.addingTimeInterval(-1))
+            if calendar.isDate(lastDay, inSameDayAs: event.start) {
+                return "\(startDay) · \(text(en: "All day", zh: "全天", language))"
+            }
+            return "\(startDay) – \(date(lastDay, language: language, calendar: calendar))"
+        }
+        let start = clock(event.start, calendar: calendar)
+        guard event.end > event.start else { return "\(startDay) · \(start)" }
+        let end = clock(event.end, calendar: calendar)
+        if calendar.isDate(event.end, inSameDayAs: event.start) {
+            return "\(startDay) · \(start)–\(end)"
+        }
+        return "\(startDay) \(start) – \(date(event.end, language: language, calendar: calendar)) \(end)"
+    }
+
+    /// What an expanded event's copy button puts on the clipboard, one line
+    /// each: the title, `spanText`, and the location, calendar and meeting link
+    /// it has.
+    static func copyText(_ event: AgendaEvent, language: AppLanguage, calendar: Foundation.Calendar) -> String {
+        [
+            title(event, language: language),
+            spanText(event, language: language, calendar: calendar),
+            event.location.map(capped) ?? "",
+            capped(event.calendarTitle),
+            event.meetingURL?.absoluteString ?? "",
+        ]
+        .filter { !$0.isEmpty }
+        .joined(separator: "\n")
     }
 
     /// When `entry` happens on its day: "09:00–10:30", "All day", "Until 02:00"

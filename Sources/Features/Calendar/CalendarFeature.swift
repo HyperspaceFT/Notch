@@ -62,7 +62,9 @@ public final class CalendarFeature: NotchFeature {
     }
 
     public func makeHomeModules() -> [NotchHomeModule] {
-        [
+        // Outside `content`, which runs again for every size Home gives the module.
+        let state = AgendaCardState()
+        return [
             NotchHomeModule(
                 id: "calendar",
                 title: { localized(en: "Calendar", zh: "日历") },
@@ -79,6 +81,7 @@ public final class CalendarFeature: NotchFeature {
                         settings: .shared,
                         local: .shared,
                         feeds: .shared,
+                        state: state,
                         size: size
                     ))
                 }

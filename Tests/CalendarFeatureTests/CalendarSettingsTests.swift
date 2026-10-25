@@ -359,6 +359,104 @@ struct CalendarFormatTests {
         #expect(CalendarFormat.dayTitle(oct(22), now: now, language: .simplifiedChinese, calendar: calendar) == "今天")
         #expect(CalendarFormat.dayTitle(oct(23), now: now, language: .simplifiedChinese, calendar: calendar) == "明天")
     }
+
+    private func event(
+        _ start: Date, _ end: Date, allDay: Bool = false, title: String = "Review",
+        location: String? = nil, calendarTitle: String = "Work", meetingURL: URL? = nil
+    ) -> AgendaEvent {
+        AgendaEvent(
+            id: "e", title: title, location: location, start: start, end: end, isAllDay: allDay,
+            color: CalendarColor(red: 0, green: 0, blue: 0), calendarTitle: calendarTitle, meetingURL: meetingURL
+        )
+    }
+
+    private func date(_ day: Date, _ language: AppLanguage = .english) -> String {
+        CalendarFormat.date(day, language: language, calendar: calendar)
+    }
+
+    private func span(_ event: AgendaEvent, _ language: AppLanguage = .english) -> String {
+        CalendarFormat.spanText(event, language: language, calendar: calendar)
+    }
+
+    @Test func cappedTrimsAndCutsAbsurdLengths() {
+        #expect(CalendarFormat.capped("  Standup \n") == "Standup")
+        #expect(CalendarFormat.capped(" \n\t ") == "")
+        let limit = CalendarFormat.maxTextLength
+        let exact = String(repeating: "a", count: limit)
+        #expect(CalendarFormat.capped(exact) == exact)
+        let long = String(repeating: "b", count: 2_000_000)
+        #expect(CalendarFormat.capped(long) == String(repeating: "b", count: limit) + "…")
+        // Leading whitespace does not count toward the limit.
+        #expect(CalendarFormat.capped(String(repeating: " ", count: limit) + "x") == "x")
+    }
+
+    @Test func titleFallsBackWhenEmpty() {
+        #expect(CalendarFormat.title(event(oct(22, 13), oct(22, 14), title: " Plan "), language: .english) == "Plan")
+        #expect(CalendarFormat.title(event(oct(22, 13), oct(22, 14), title: "  "), language: .english) == "No Title")
+        #expect(CalendarFormat.title(event(oct(22, 13), oct(22, 14), title: ""), language: .simplifiedChinese) == "无标题")
+    }
+
+    @Test func spanOnOneDay() {
+        #expect(span(event(oct(24, 13), oct(24, 14, 30))) == "\(date(oct(24))) · 13:00–14:30")
+        #expect(span(event(oct(24, 9), oct(24, 9))) == "\(date(oct(24))) · 09:00")
+        // A feed's all-day event ends at the next midnight, EventKit's at 23:59:59.
+        #expect(span(event(oct(24), oct(25), allDay: true)) == "\(date(oct(24))) · All day")
+        #expect(span(event(oct(24), oct(24, 23, 59), allDay: true)) == "\(date(oct(24))) · All day")
+        #expect(span(event(oct(24), oct(25), allDay: true), .simplifiedChinese)
+            == "\(date(oct(24), .simplifiedChinese)) · 全天")
+    }
+
+    @Test func spanOverSeveralDays() {
+        #expect(span(event(oct(24), oct(27), allDay: true)) == "\(date(oct(24))) – \(date(oct(26)))")
+        #expect(span(event(oct(24, 22), oct(25, 2))) == "\(date(oct(24))) 22:00 – \(date(oct(25))) 02:00")
+    }
+
+    @Test func copyTextListsWhatTheEventHas() {
+        let link = URL(string: "https://meet.google.com/abc-defg-hij")!
+        let full = event(
+            oct(24, 13), oct(24, 14), title: " Design review ", location: "Room 4\nLevel 2",
+            meetingURL: link
+        )
+        #expect(CalendarFormat.copyText(full, language: .english, calendar: calendar) == """
+            Design review
+            \(date(oct(24))) · 13:00–14:00
+            Room 4
+            Level 2
+            Work
+            https://meet.google.com/abc-defg-hij
+            """)
+        let bare = event(oct(24, 13), oct(24, 14), title: "", calendarTitle: "")
+        #expect(CalendarFormat.copyText(bare, language: .english, calendar: calendar)
+            == "No Title\n\(date(oct(24))) · 13:00–14:00")
+    }
+}
+
+@MainActor
+struct AgendaCardStateTests {
+    @Test func oneEntryExpandsAtATime() {
+        let state = AgendaCardState()
+        #expect(state.expandedID == nil)
+        state.toggle("a")
+        #expect(state.expandedID == "a")
+        state.toggle("b")
+        #expect(state.expandedID == "b")
+        state.toggle("b")
+        #expect(state.expandedID == nil)
+    }
+
+    @Test func copiedReadsForAMoment() async throws {
+        let state = AgendaCardState()
+        state.copied("a", for: .milliseconds(50))
+        #expect(state.copiedID == "a")
+        // Another copy takes over and starts the time over.
+        state.copied("b", for: .milliseconds(50))
+        #expect(state.copiedID == "b")
+        let deadline = ContinuousClock.now + .seconds(5)
+        while state.copiedID != nil, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(state.copiedID == nil)
+    }
 }
 
 @MainActor
