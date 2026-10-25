@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Notch's app icon. scripts/make-icon.sh turns it into Resources/AppIcon.icns.
+     It follows Apple's macOS icon grid: on the 1024 canvas, the body is the 824-point
+     continuous-corner square at (100, 100), with nothing drawn outside it; macOS 26
+     masks the body and adds its own edge light and shadow, so none are drawn here. -->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <path id="body" d="M924 512L924 640.59C924 722.19 924 763 910.11 806.92C892.66 854.88 854.88 892.66 806.92 910.11C763 924 722.19 924 640.59 924L383.41 924C301.81 924 261 924 217.08 910.11C169.12 892.66 131.34 854.88 113.89 806.92C100 763 100 722.19 100 640.59L100 383.41C100 301.81 100 261 113.89 217.08C131.34 169.12 169.12 131.34 217.08 113.89C261 100 301.81 100 383.41 100L640.59 100C722.19 100 763 100 806.92 113.89C854.88 131.34 892.66 169.12 910.11 217.08C924 261 924 301.81 924 383.41Z"/>
+    <clipPath id="clip"><use xlink:href="#body"/></clipPath>
+    <linearGradient id="wallpaper" x1="100" y1="100" x2="924" y2="924" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#86D8FF"/>
+      <stop offset="0.55" stop-color="#5B6DFF"/>
+      <stop offset="1" stop-color="#A65DFF"/>
+    </linearGradient>
+    <radialGradient id="light" cx="300" cy="300" r="560" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="cover" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFC15B"/>
+      <stop offset="1" stop-color="#FF5A7A"/>
+    </linearGradient>
+  </defs>
+  <!-- The screen. -->
+  <use xlink:href="#body" fill="url(#wallpaper)"/>
+  <use xlink:href="#body" fill="url(#light)"/>
+  <!-- The notch, opened into the island: it hangs from the top edge (drawn past it and
+       clipped to the body) with concave shoulders, like the hardware notch. -->
+  <path d="M256 80L256 100C271.46 100 284 112.54 284 128L284 180C284 215.35 312.65 244 348 244L676 244C711.35 244 740 215.35 740 180L740 128C740 112.54 752.54 100 768 100L768 80Z" fill="#0A0A0C" clip-path="url(#clip)"/>
+  <!-- Now Playing's cover on the left and its three braided strands on the right. -->
+  <rect x="318" y="131" width="82" height="82" rx="20" fill="url(#cover)"/>
+  <g fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M588 172L590.5 171.1L592.9 170L595.4 168.6L597.8 167.3L600.3 166.1L602.8 165.2L605.2 164.7L607.7 164.6L610.1 165.1L612.6 166.1L615 167.8L617.5 169.9L620 172.6L622.4 175.5L624.9 178.8L627.3 182.1L629.8 185.4L632.2 188.4L634.7 191.1L637.2 193.3L639.6 194.8L642.1 195.7L644.5 195.8L647 195.2L649.5 193.8L651.9 191.8L654.4 189.1L656.8 186L659.3 182.6L661.8 179L664.2 175.4L666.7 172L669.1 168.9L671.6 166.2L674 164L676.5 162.4L679 161.4L681.4 161L683.9 161.2L686.3 161.9L688.8 163L691.2 164.4L693.7 166L696.2 167.6L698.6 169.1L701.1 170.4L703.5 171.4L706 172.0" stroke-opacity="0.35" stroke-width="6"/>
+    <path d="M588 172L590.5 172.7L592.9 173.4L595.4 173.8L597.8 173.8L600.3 173.4L602.8 172.5L605.2 171.1L607.7 169.3L610.1 167.1L612.6 164.7L615 162L617.5 159.4L620 157L622.4 154.8L624.9 153L627.3 151.8L629.8 151.2L632.2 151.3L634.7 152.2L637.2 153.7L639.6 156L642.1 158.8L644.5 162.1L647 165.8L649.5 169.7L651.9 173.6L654.4 177.3L656.8 180.8L659.3 183.9L661.8 186.4L664.2 188.3L666.7 189.5L669.1 190L671.6 189.8L674 189L676.5 187.7L679 185.9L681.4 183.9L683.9 181.6L686.3 179.4L688.8 177.3L691.2 175.4L693.7 173.8L696.2 172.6L698.6 171.9L701.1 171.6L703.5 171.7L706 172.0" stroke-opacity="0.6" stroke-width="6"/>
+    <path d="M588 172L590.5 172.1L592.9 172.7L595.4 173.6L597.8 174.9L600.3 176.5L602.8 178.3L605.2 180.2L607.7 182.1L610.1 183.8L612.6 185.2L615 186.2L617.5 186.6L620 186.5L622.4 185.7L624.9 184.2L627.3 182.1L629.8 179.4L632.2 176.3L634.7 172.7L637.2 169L639.6 165.2L642.1 161.5L644.5 158.1L647 155L649.5 152.5L651.9 150.7L654.4 149.6L656.8 149.2L659.3 149.5L661.8 150.6L664.2 152.3L666.7 154.5L669.1 157.1L671.6 160L674 163L676.5 165.9L679 168.7L681.4 171.1L683.9 173.2L686.3 174.7L688.8 175.7L691.2 176.2L693.7 176.2L696.2 175.8L698.6 175L701.1 174L703.5 172.9L706 172.0" stroke-opacity="1" stroke-width="8"/>
+  </g>
+</svg>

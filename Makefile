@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help build debug run test dist clean cert
+.PHONY: help build debug run test dist clean cert icon
 
 help: ## List available targets
 	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-6s %s\n", $$1, $$2}'
@@ -24,3 +24,6 @@ clean: ## Remove .build and build
 
 cert: ## Create the local signing certificate that keeps Accessibility access across builds
 	@scripts/create-signing-cert.sh
+
+icon: ## Regenerate Resources/AppIcon.icns from Resources/AppIcon.svg
+	@scripts/make-icon.sh

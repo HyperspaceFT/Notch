@@ -37,6 +37,8 @@ cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 plutil -replace CFBundleShortVersionString -string "$VERSION" "$APP/Contents/Info.plist"
 plutil -replace CFBundleVersion -string "$BUILD_NUMBER" "$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
+# Generated from Resources/AppIcon.svg by scripts/make-icon.sh.
+cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 
 # The MediaRemote adapter the Now Playing feature runs through /usr/bin/perl to read what
 # any app (a browser tab included) plays. Keep its original signature: it is not re-signed.

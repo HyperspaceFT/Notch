@@ -103,6 +103,7 @@ Common commands:
 | `make dist` | Zip it into `build/dist/Notch-<version>.zip` for sharing |
 | `make clean` | Delete all build output |
 | `make cert` | Create a local signing certificate so Accessibility access survives rebuilds |
+| `make icon` | Regenerate the app icon `Resources/AppIcon.icns` after editing `Resources/AppIcon.svg` |
 
 For debugging you can pin the island in one state, and `-NotchDebugSnapshot` also exports the interface as an image (no Screen Recording permission needed, but the image has no Liquid Glass):
 
@@ -159,6 +160,7 @@ Sources/
 └── NotchApp/        # Executable entry point and settings window; FeatureCatalog.swift lists the enabled features
 Tests/               # Unit tests
 Resources/Info.plist # App info template
+Resources/AppIcon.*  # App icon: AppIcon.svg is the source, make icon generates AppIcon.icns
 scripts/             # Build, run, and packaging scripts
 Vendor/              # Prebuilt third-party component shipped in the app (mediaremote-adapter, BSD 3-Clause)
 VERSION              # Version number

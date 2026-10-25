@@ -103,6 +103,7 @@ make run
 | `make dist` | 打包成 `build/dist/Notch-<版本号>.zip`，方便发给别人 |
 | `make clean` | 删除所有构建产物 |
 | `make cert` | 创建本地签名证书，让重新构建后「辅助功能」权限不失效 |
+| `make icon` | 改完 `Resources/AppIcon.svg` 后重新生成 App 图标 `Resources/AppIcon.icns` |
 
 调试时可以强制刘海停在某个状态，方便看效果；加上 `-NotchDebugSnapshot` 还能把界面导出成图片（不需要屏幕录制权限，但导出的图里没有 Liquid Glass 效果）：
 
@@ -159,6 +160,7 @@ Sources/
 └── NotchApp/        # 可执行入口、设置窗口；FeatureCatalog.swift 是启用功能的唯一清单
 Tests/               # 单元测试
 Resources/Info.plist # App 信息模板
+Resources/AppIcon.*  # App 图标：AppIcon.svg 是源文件，AppIcon.icns 由 make icon 生成
 scripts/             # 构建、运行、打包脚本
 Vendor/              # 随 App 附带的第三方预编译组件（mediaremote-adapter，BSD 3-Clause）
 VERSION              # 版本号
