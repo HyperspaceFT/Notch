@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- scripts/build-app.sh signs the app with the Hardened Runtime and these
+     entitlements. The runtime blocks each resource below unless its key is
+     listed; Accessibility and Bluetooth, which Notch also asks for, need none.
+     Nothing here loosens the runtime itself (no library-validation or DYLD
+     exceptions). -->
+<plist version="1.0">
+<dict>
+    <!-- Now Playing reads and controls Music and Spotify through Apple events. -->
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+    <!-- Calendar events and reminders through EventKit. -->
+    <key>com.apple.security.personal-information.calendars</key>
+    <true/>
+    <!-- The weather's approximate location. -->
+    <key>com.apple.security.personal-information.location</key>
+    <true/>
+</dict>
+</plist>

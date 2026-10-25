@@ -46,16 +46,30 @@ ditto --noextattr --noqtn "$ADAPTER/MediaRemoteAdapter.framework" "$APP/Contents
 cp "$ADAPTER/mediaremote-adapter.pl" "$APP/Contents/Resources/mediaremote-adapter.pl"
 cp "$ADAPTER/LICENSE" "$APP/Contents/Resources/MediaRemoteAdapter-LICENSE"
 
+# The Hardened Runtime stops other code from being injected into Notch (through
+# DYLD_INSERT_LIBRARIES, for one) and acting with the access granted to it:
+# Accessibility, Automation, Calendars, Location. Resources/Notch.entitlements
+# lists the resources the runtime must still allow. Debug builds may also be
+# attached to by a debugger and by tools such as `leaks` and `heap`.
+ENTITLEMENTS="$ROOT/Resources/Notch.entitlements"
+if [[ "$CONFIG" == debug ]]; then
+    ENTITLEMENTS="$ROOT/build/Notch-debug.entitlements"
+    cp "$ROOT/Resources/Notch.entitlements" "$ENTITLEMENTS"
+    # PlistBuddy, not plutil: plutil reads the dots in the key as a key path.
+    /usr/libexec/PlistBuddy -c "Add :com.apple.security.get-task-allow bool true" "$ENTITLEMENTS" >/dev/null
+fi
+SIGN_OPTIONS=(--force --options runtime --entitlements "$ENTITLEMENTS")
+
 # An ad-hoc signature changes with every build, and macOS then treats the app as
 # new and drops its Accessibility access; a certificate's signature stays the same.
 # Listed without -v: the self-signed certificate is untrusted, which signing allows.
 SIGN_IDENTITY="${SIGN_IDENTITY:-Notch Local Signing}"
 if security find-identity -p codesigning 2>/dev/null | grep -qF "\"$SIGN_IDENTITY\""; then
     echo "==> Signing ($SIGN_IDENTITY)"
-    codesign --force --sign "$SIGN_IDENTITY" "$APP"
+    codesign "${SIGN_OPTIONS[@]}" --sign "$SIGN_IDENTITY" "$APP"
 else
     echo "==> Signing (ad-hoc; run 'make cert' to keep Accessibility access across builds)"
-    codesign --force --sign - "$APP"
+    codesign "${SIGN_OPTIONS[@]}" --sign - "$APP"
 fi
 codesign --verify --verbose "$APP"
 
