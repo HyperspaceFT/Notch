@@ -61,16 +61,6 @@ private func wingHoverOffset(isHovered: Bool, outward: CGFloat) -> CGSize {
     return CGSize(width: NotchTheme.hoverGrowth.width / 2 * outward, height: NotchTheme.hoverGrowth.height / 2)
 }
 
-/// A preset's name: "5 min" or "5 分钟", and "1 hr" or "1 小时" for an hour.
-@MainActor
-func presetTitle(minutes: Int) -> String {
-    if minutes % 60 == 0 {
-        let hours = minutes / 60
-        return localized(en: "\(hours) hr", zh: "\(hours) 小时")
-    }
-    return localized(en: "\(minutes) min", zh: "\(minutes) 分钟")
-}
-
 /// "Ends 2:37 PM" or "14:37 结束" for a running timer, "Paused" or "已暂停" for a
 /// paused one.
 @MainActor

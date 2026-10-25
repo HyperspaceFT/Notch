@@ -9,8 +9,6 @@ struct CountdownTimer: Equatable, Sendable {
         case paused(remaining: TimeInterval)
     }
 
-    /// Minutes the presets offer, in the right-click menu.
-    static let presetMinutes = [1, 3, 5, 10, 15, 25, 30, 60]
     /// Minutes the tab's picker goes from and to, in steps of one (`MinuteRuler`).
     /// It starts at 0, the ruler's natural end, though a 0-minute timer cannot start.
     static let setterMinutes = 0...120

@@ -4,13 +4,13 @@ import NotchUI
 import SwiftUI
 
 /// The clock and a countdown timer. The timer has a tab right of the notch, where
-/// a ruler picks the minutes while idle; the clock is a Home module whose card
-/// opens that tab, and the island's right-click menu starts and controls the
-/// timer. While a timer counts down or rings, its tab reports itself active, so
-/// the header's folded right-side button shows its ring or bell. Its ring and
-/// time show as wings beside the notch for a few seconds of the collapsed island
-/// after starting, then as a band of light around the island that shrinks with
-/// the time left. When it runs out a bell rings until dismissed.
+/// a ruler picks the minutes while idle and the running timer is controlled; the
+/// clock is a Home module whose card opens that tab. While a timer counts down
+/// or rings, its tab reports itself active, so the header's folded right-side
+/// button shows its ring or bell. Its ring and time show as wings beside the
+/// notch for a few seconds of the collapsed island after starting, then as a
+/// band of light around the island that shrinks with the time left. When it runs
+/// out a bell rings until dismissed.
 @MainActor
 public final class ClockFeature: NotchFeature {
     public let id = "clock"
@@ -69,54 +69,6 @@ public final class ClockFeature: NotchFeature {
         [TimeModule.makeModule(timer: model) { [weak self] in
             self?.showTimer()
         }]
-    }
-
-    public var menuItems: [NotchMenuItem] {
-        let items: [NotchMenuItem]
-        switch model.phase {
-        case .idle:
-            items = CountdownTimer.presetMinutes.map { minutes in
-                .button(presetTitle(minutes: minutes)) { [model] in
-                    model.start(minutes: minutes)
-                }
-            } + [
-                .divider,
-                // The tab's picker.
-                .button(localized(en: "Custom…", zh: "自定义…"), symbol: "slider.horizontal.3") { [weak self] in
-                    self?.context?.requestExpand()
-                },
-            ]
-        case .counting(let timer):
-            items = [
-                timer.isPaused
-                    ? .button(localized(en: "Resume", zh: "继续"), symbol: "play.fill") { [model] in
-                        model.togglePause()
-                    }
-                    : .button(localized(en: "Pause", zh: "暂停"), symbol: "pause.fill") { [model] in
-                        model.togglePause()
-                    },
-                .button(localized(en: "Add 1 Minute", zh: "加 1 分钟"), symbol: "plus") { [model] in
-                    model.addMinute()
-                },
-                .button(localized(en: "Cancel Timer", zh: "取消计时"), symbol: "xmark") { [model] in
-                    model.cancel()
-                },
-                .divider,
-                .button(localized(en: "Show Timer…", zh: "显示计时器…"), symbol: "timer") { [weak self] in
-                    self?.context?.requestExpand()
-                },
-            ]
-        case .finished:
-            items = [
-                .button(localized(en: "Stop Alert", zh: "停止提醒"), symbol: "bell.slash") { [model] in
-                    model.stopAlert()
-                },
-                .button(localized(en: "Restart", zh: "再来一次"), symbol: "arrow.counterclockwise") { [model] in
-                    model.restart()
-                },
-            ]
-        }
-        return [.submenu(localized(en: "Timer", zh: "计时器"), symbol: "timer", items: items)]
     }
 
     /// Timers that start at once without touching the remembered duration, and

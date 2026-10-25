@@ -83,10 +83,6 @@ struct CountdownTimerTests {
         #expect(CountdownTimer.clampedSetterMinutes(121) == 120)
         #expect(CountdownTimer.clampedSetterMinutes(180) == 120)
     }
-
-    @Test func offersThePresets() {
-        #expect(CountdownTimer.presetMinutes == [1, 3, 5, 10, 15, 25, 30, 60])
-    }
 }
 
 @MainActor
