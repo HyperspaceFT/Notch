@@ -8,6 +8,7 @@ import NowPlayingFeature
 import Observation
 import SwiftUI
 import SystemHUDFeature
+import UsageFeature
 import WeatherFeature
 
 /// Tells the settings controller that its window is closing.
@@ -21,8 +22,9 @@ private final class SettingsWindowDelegate: NSObject, NSWindowDelegate {
 }
 
 /// The settings window: a standalone window with one toolbar tab per pane
-/// (General, Island, Home, Weather, and Calendar, and Debug while debug mode is on).
-/// Built on first use and kept for later openings.
+/// (General, Island, Home, Weather, Calendar, and Usage, and Debug while debug mode
+/// is on). Built on first use and kept for later openings. Also owns the Usage
+/// pane's sign-in windows.
 @MainActor
 final class SettingsWindowController {
     private var window: NSWindow?
@@ -32,6 +34,7 @@ final class SettingsWindowController {
     /// The Debug pane's tab, one of `panes` that is in the window only while debug mode is on.
     private var debugItem: NSTabViewItem?
     private let launchAtLogin = LaunchAtLogin()
+    private let usageSignIn = UsageSignInWindows()
 
     /// What the Debug pane lists; set before the window is first shown.
     var debugSources = DebugSources(islandItems: { [] }, features: [])
@@ -78,6 +81,14 @@ final class SettingsWindowController {
         }
         addPane(CalendarSettingsView(settings: .shared, local: .shared, feeds: .shared), symbol: "calendar") {
             localized(en: "Calendar", zh: "日历")
+        }
+        addPane(
+            UsageSettingsView(settings: .shared, model: .shared) { [usageSignIn] provider in
+                usageSignIn.show(provider)
+            },
+            symbol: "gauge.with.needle"
+        ) {
+            localized(en: "Usage", zh: "用量")
         }
 
         let tabs = NSTabViewController()

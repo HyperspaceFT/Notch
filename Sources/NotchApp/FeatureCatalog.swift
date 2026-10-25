@@ -10,6 +10,7 @@ import NotificationsFeature
 import NowPlayingFeature
 import RemindersFeature
 import SystemHUDFeature
+import UsageFeature
 import WeatherFeature
 
 /// The one place that lists enabled features. Order = tab order in the expanded
@@ -37,6 +38,7 @@ enum FeatureCatalog {
             WeatherFeature(),
             CalendarFeature(),
             NotesFeature(),
+            UsageFeature(),
             RemindersFeature(),
             NotificationsFeature(),
         ]
