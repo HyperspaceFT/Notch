@@ -19,36 +19,28 @@
 
 ## What it does
 
-Move the pointer onto the notch and it bounces and grows a little (with a light tap on a Force Touch trackpad). Click it and it opens into a small black panel; move away and it shrinks back into the hardware notch. Drag files toward the notch and it opens straight to the Files tab before they reach the top edge of the screen, where macOS would open Mission Control.
-
-Built-in features:
+Move the pointer onto the notch and it bounces and grows a little. Click it and it opens into a small black panel; move away and it shrinks back into the hardware notch. Drag files toward the notch and it opens straight to the Files tab.
 
 | Feature | Description |
 |---|---|
-| 🎧 AirPods | Connecting AirPods briefly shows an AirPods icon left of the notch and the battery level right of it. While they are connected, an AirPods tab appears in the open panel just left of the notch: it shows the left, right, and case battery levels and adjusts the AirPods' volume and noise-control mode (Noise Cancellation / Transparency / Adaptive, depending on the model). When the sound switches back to the Mac's own speakers (for example, when the AirPods disconnect), a Mac icon and the current volume briefly show beside the notch too; this part needs no Bluetooth access. macOS's own connection notice cannot be hidden and still appears. Needs Bluetooth access; noise control uses undocumented system interfaces and may stop working after a macOS update |
-| 🏠 Home | The home tab of the panel: a row of modules, left to right; for now there are six, the time, the weather, the calendar, notes, reminders, and usage. At its narrowest the time is a square with hours, minutes, and the date; wider, it adds seconds; a click on it opens the Timer tab (see below). At its narrowest the weather takes a third of the row, with the current weather on top and the next three hours below; wider, the current weather sits on the left and more hours appear on the right as it grows. The open island is as wide as its modules, with no black margins, up to a limit that grows with their number: 520 points for one module, 120 more each for the second and the third, and only 80 more for the fourth so the island does not get too wide, 840 at most for four; modules under 520 points in all keep the island at 520. Other tabs keep the original width, and switching tabs animates between the two. In the **Home** pane of **Settings…** you pick the modules (up to four); in the preview, drag the island's edges to scale all modules together, drag the line between two modules to trade their widths, or press and hold a module to move it. The ✕ in a module's top-right corner removes it, and a hint shows when the row is at its longest or shortest. A module whose width follows its content (the usage module) cannot be dragged; when it widens or narrows, the modules next to it give up or take the difference, half each when it has modules on both sides |
-| ⏱️ Timer | A countdown. The open panel always has a Timer tab right of the notch. With no timer running, it holds a ruler for picking the duration: the selected minutes on top, and below them a row of vertical ticks, one per minute, from 0 to 120 minutes. Every tick is orange: the selected one sits in the middle, bright and tallest, sticking out above and below, and the ticks beside it ease back to the normal length and a darker orange toward the left and right; every 10 minutes a tick stands a little taller, to help you find your way. Swipe left or right with two fingers on the trackpad to pick: the ticks follow your fingers and settle on a whole minute when you lift them (or, with momentum, when they stop). Each minute you pass gives a light tap on a Force Touch trackpad, like the pickers on iPhone (felt only while a finger is on the trackpad). You can also drag the ruler, click a tick (the ruler slides over to it), or turn a mouse wheel a minute per notch. Then click **Start** (not possible at 0 minutes). Clicking the time module on Home opens this tab. While it counts down, the tab shows the time left and pauses / resumes, adds a minute, or cancels; its button is an orange ring that shrinks with the time left, and the folded right-side button shows that ring too while no right-side tab is selected. The time module on Home shows the countdown and when it ends. With the island closed, for the first 5 seconds an orange ring sits right left of the notch and the time left right of it; then both sides draw in, the island grows a little past the notch, and an orange band of light lines its edge: it runs down the left side, along the bottom, and up the right side at the start, shortens from the left as time runs out, dims while paused, and takes precedence over Now Playing. Opening the island draws the band along the edge into its top-right end; closing it lets the band run back out along the shrinking edge. Another notice shown over it does the same. Clicking either side opens the Timer tab. When time is up, a wiggling bell and **Time's up** show beside the notch and a chime sounds (up to 5 times); a click stops it, or **Restart** runs it again. The last duration you started is remembered, and the ruler opens on it next time. There is one timer at a time, kept in memory only, so it is gone when Notch quits |
-| 🌤️ Weather | The weather module on Home: the current temperature and conditions, today's high and low, and the next few hours, in the temperature unit macOS is set to. The day splits into three periods, each showing today's weather, the next few hours, or tomorrow's weather (by default today from 5 to 10, the next hours from 10 to 19, and tomorrow from 19 until 5 the next morning); drag the 24-hour ring in the **Weather** pane of **Settings…** to change them. Needs Location access and uses only your approximate location; the data comes from [Open-Meteo](https://open-meteo.com), and requests carry only the latitude and longitude rounded to two decimals. It also fetches the local sunrise and sunset, which light the island's edge (see **Light and Color** below). Updates only while the panel is open, at most every 15 minutes |
-| 📅 Calendar | The calendar module on Home: the events of the next few days, today included (3 by default, 1 to 14), grouped by day. All-day events come first each day, an event in progress is marked **Now**, and events that have ended drop off; the card takes the color of the next event's calendar. Click an event to expand it to its full title and location, its calendar, and any meeting link (and, for an event spanning days, its dates), with a **Copy** button that puts them on the clipboard; click it again to collapse it. Events come from two sources: the macOS Calendar app, including accounts added in **System Settings → Internet Accounts** such as iCloud, Google, or Exchange, where you choose which calendars show; and subscription links, such as Google Calendar's **Secret address in iCal format** or an Outlook **Publish a calendar** ICS link, read-only. A switch in the card's top-right corner (**All / This Mac / Cloud**) shows only the Calendar app's events or only the subscription links'. All of this is set in the **Calendar** pane of **Settings…**, which has the same switch. Reading the Calendar app needs Calendars access, which you can decline if you only use links; a subscription link works like a password, so it is kept on this Mac only, downloaded calendars are not written to the disk cache, and they update while the panel is open, at most every 15 minutes. Shortly before an event the notch reminds you: pick how early in the **Calendar** pane of **Settings…** (Off, At Start, or 1, 5, 10, 15, or 30 minutes or 1 hour before; 5 minutes by default). One reminder shows at that time (**In 5 min**) and another as the event starts (**Starting now**); events due together share one. A reminder that comes due while the island is open waits until it closes and then shows in full, unless its events are over by then. Reminders cover the calendars shown in settings and the enabled links, whatever the card's **All / This Mac / Cloud** switch says, skip all-day events, and work whether or not the calendar module is on Home. Click a reminder to see the event; when it has a Zoom, Google Meet, Teams, Tencent Meeting, Feishu, DingTalk, or Webex link, **Join** opens it. The Calendar app's own alerts still appear (in the island too, with Notifications on); turn one of them off to avoid doubles. With reminders on, subscription links also update every 30 minutes while the island is closed |
-| 📝 Notes | Jot down notes and short essays. A Notes tab sits among the tabs right of the notch, after Battery: the list of notes on the left, newest first, with **Delete** in the right-click menu, and the note itself on the right, ready to write in. You can also put the notes module on Home; when it is narrow it shows only the note, with arrows above it to step through the notes and **+** to start a new one. With the module on Home, clicking the Notes tab grows the module into the tab, and going back to Home shrinks it into place. One click on the text and you can type, without leaving the app you are in; while you type, moving the pointer off the island does not close it, and a click elsewhere or Esc ends editing; once the island closes, the keyboard goes back to the app you were in. Notes save as you type, blank notes are dropped when you move on, and everything stays on this Mac (`~/Library/Application Support/io.github.hyperspaceft.notch/Notes.json`) |
-| 📊 Usage Limits | How much of your Claude, Codex (ChatGPT plan), and Grok subscription limits is used. Turn on the AIs to show in the **Usage** pane of **Settings…**, then click **Sign In…** and sign in to each site once in Notch's own sign-in window. A Usage tab then joins the tabs right of the notch (after Notes): one card per AI with its plan and, for each window such as 5 hours or Weekly, the percent used, a bar, and when it resets; Claude's per-model weekly limits (such as "Fable 74%") and Grok's per-product use follow it. Clicking an AI's name opens the usage page on its website. The tab's button is a small gauge whose needle points at the highest percent of all windows. You can also put the usage module on Home: a narrow strip whose width follows how many AIs are shown and cannot be dragged, with one group per AI, its logo on top and a vertical bar per window below, the percent above each bar, a small clock with a wedge under the 5-hour bar, and a small calendar showing "7" under the weekly one. Hovering a bar shows the limit's name (Session Limit, Weekly Limit) and when it resets in a bubble over the card; a click opens the Usage tab. Usage turns yellow at 70% and red at 90%. It is read while the panel is open, at most every 5 minutes per AI, retried after 30 seconds when signed out, waiting for verification, or failed, and also when the **Usage** pane of **Settings…** opens, an AI is turned on, a sign-in window closes, or **Retry** is clicked; what it reads stays in memory only. The sign-ins live only in Notch's own web data, never your browser's, and **Sign Out** removes them. Google sign-in is not available in the sign-in window (Google blocks embedded browsers), and other third-party sign-ins may not finish there either (pop-ups open in the same view, so flows that rely on one cannot complete); use an email code or a password. Notch reads the internal endpoints these sites' web usage pages use; they are undocumented and may stop working at any time |
-| ✅ Reminders | The reminders module on Home: the open reminders from the Reminders app. Add it to Home in the **Home** pane of **Settings…**; it has no tab of its own. Type in the top line and press Return to add a reminder to the Reminders app's default list; click the circle to check one off, and click it again within a second and a half to undo; the right-click menu deletes a reminder or opens it in the Reminders app. Reminders with a due date come first, earliest at the top, with overdue ones in red; those without one follow, newest first. Typing works as in Notes: you stay in the app you are in, and Esc ends it. Changes go straight into the Reminders app and reach your other devices through iCloud. Needs Reminders access, which is asked for only the first time you click **Allow** on the card |
-| 📂 Files | On the left, an AirDrop zone: drop files on it to send them with AirDrop. On the right, a shelf: files dropped there can be dragged out again, or copied with the right-click **Copy** item and pasted elsewhere. Command-click files on the shelf to select several, Shift-click to select a run of them, or drag with Shift held (or from empty space) to select them with a rectangle; after a click on the shelf, Command-A selects them all; dragging out, Copy, Show in Finder, and Remove then act on every selected file. With **Remove after pasting** on, files leave the shelf once they are dragged out or pasted (the originals are kept) |
-| 🔋 Battery | Plugging in the power adapter briefly shows a green charging battery left of the notch and the charge level right of it; unplugging shows a notice too; the battery in the icon fills to the current charge, with a bolt while on power. On battery, the charge falling to 20%, 10%, and 5% alerts once each: a red battery left of the notch and the charge in red right of it, for 5 seconds; if the island is open at that moment, the alert waits until it closes. A drop past several levels at once (after sleep, say) alerts only for the lowest; once the Mac charges above a level on power, falling to it again on battery alerts again; a level the charge is already below when Notch starts does not alert. In the open panel, the battery icon (on the folded button right of the notch, or among the unfolded right-side tabs) likewise fills to the current charge, with a bolt while on power; its tab shows the time remaining and the battery health (maximum capacity, cycle count) |
-| 🔊 Volume & Brightness | The volume and brightness keys show Notch's own notice beside the notch instead of the system one: an icon on the left and a ring with the current level on the right; hold Option + Shift for finer steps. Needs Accessibility access (see the installation steps below), and can be turned off in the **Island** pane of **Settings…** |
-| 🎵 Now Playing | While the system's Now Playing has something (a YouTube or Bilibili tab in a browser, Music, Spotify, and so on), the notch extends a little to each side: right beside it on the left, the cover (the player's icon when there is none), which flips over like a record sleeve when the track changes; on the right, three thin braided strands of a wave, swinging to a beat and flowing sideways. Click the wave to pause, and it calms into a single flat line; click again to play. With the pointer on the island, it grows and the cover and the wave move out with it a little; on the wave, the wave turns into a pause or play icon. The beat is made up per song (each song has its own, and the same one every time); it is not the real audio spectrum. With Light and Color on, the cover casts a glow in its own colors and the wave takes its colors. After a pause it stays for 3 seconds before it leaves. While a track is playing or paused, the open panel has a **Now Playing** tab left of the notch (after Files, before AirPods): a large cover on the left, which brings the playing app to the front when clicked; on the right, the app's name, the title, artist, and album, a progress bar you can click or drag to jump around in the track (with the time played and left; hidden for live streams and anything else without a length), and previous, play / pause, and next buttons. Clicking the cover beside the notch opens the island straight onto this tab, and the cover and the wave fly to their places in it, then back beside the notch as it closes; opening or closing midway turns them around from where they are. By default only Music and Spotify are read, which needs Automation access (to let Notch control them); with **Read Now Playing from Any App** on in the **Island** pane of **Settings…**, the bundled third-party mediaremote-adapter reads any app in the system's Now Playing instead (browsers included). **That switch carries some risk; read the note below before turning it on** |
-| 🔔 Notifications | When another app shows a notification banner, the notch extends to each side for a few seconds: the app's icon and name on the left, the title and the first line of the text on the right; a notification arriving while another still shows blurs in over it; while the pointer rests on the island, it grows and the icon and text move out with it. A click on the icon or the text opens the island on that notification alone: its source (the app's icon, name, and when it arrived) on the left, the title and the full text on the right, scrolling when it is long; this view has no tab buttons along the top and closes once the pointer moves away. While there are notifications, a Notifications tab joins the tabs right of the notch (after Notes) and lists the latest 30 in full, newest first: click one to switch to its app and remove it from the list; right-click to delete one, or clear them all at once. Notifications are kept in memory only, never written to disk, and are gone when Notch quits. macOS has no public way to read other apps' notifications, so Notch, like boring.notch, reads the banners on screen through Accessibility access. It therefore sees only banners that actually appear: notifications whose alert style is None, or that a Focus holds back, are missed, and a macOS update that changes the banner's interface may break it. You can turn it off in the **Island** pane of **Settings…**, which also has **Hide System Banners** (off by default): the system banner then moves off screen and shows only in the island, but it can flash briefly before it moves, and its buttons (such as Reply) are out of reach, so open the app from the island to act on it; alerts that stay until you click a button (such as Calendar's Snooze) are not hidden. Should Notch quit unexpectedly while it hides a banner, it moves the banner back the next time it opens; if later banners still do not appear, run `killall NotificationCenter` in Terminal to bring them back |
+| 🎵 Now Playing | While a song plays, the notch extends to each side with the cover and a wave that swings to a beat; click the wave to pause / resume, and it retracts 3 seconds after a pause. The open **Now Playing** tab has a large cover, a progress bar you can drag, and track-skip buttons. By default only Music and Spotify are read (needs Automation access); with **Read Now Playing from Any App** on, any app, browsers included, can be read too, **which carries some risk; see the note below**. The beat is made up per song; it is not the real audio spectrum |
+| 🔔 Notifications | When another app shows a notification banner, the notch extends to each side with the app's icon, the title, and the first line of the text; click it to read the full text. The latest 30 are listed in the **Notifications** tab, kept in memory only. macOS has no public way to read notifications, so Notch reads the banners on screen through Accessibility access: it sees only banners that actually appear (notifications whose alert style is None, or that a Focus holds back, are missed), and a macOS update may break it. You can choose **Hide System Banners** so they show only in the island; if system banners then never appear, run `killall NotificationCenter` in Terminal to bring them back |
+| 🏠 Home | The home tab of the open panel: the time, weather, calendar, notes, reminders, and usage modules in a row, four at most. In the **Home** pane of **Settings…** you pick the modules, drag to reorder them, and resize them; the island widens with the number of modules, 840 points at most |
+| 📅 Calendar | Lists the events of the next few days by day (3 by default, 1 to 14); click one to expand it to its full text, which you can copy. Events come from the Calendar app (needs Calendars access) or from ICS subscription links such as Google or Outlook (read-only; the links are kept on this Mac only). The notch reminds you shortly before an event (how early is adjustable, 5 minutes by default), and when an event has a Zoom, Google Meet, Teams, Tencent Meeting, Feishu, DingTalk, or Webex link you can join the meeting directly |
+| ⏱️ Timer | In the Timer tab right of the notch, pick a duration on a ruler (0 to 120 minutes); swiping with two fingers on the trackpad taps lightly every minute you pass. Clicking the time module on Home opens it too. While it counts down, an orange band of light lines the island's edge, its length showing the time left, and a bell rings when time is up. There is one timer at a time, kept in memory only |
+| 📊 Usage Limits | The 5-hour, weekly, and other usage limits of Claude, Codex (ChatGPT plan), and Grok subscriptions, shown in the **Usage** tab and a Home module. In the **Usage** pane of **Settings…**, turn on the AIs to show and sign in once in Notch's own sign-in window (your browser's sign-ins are not read; Google sign-in is not available, so use an email code or a password). It is read only while the panel is open or the **Usage** settings pane is open, at most every 5 minutes per AI. It uses the internal endpoints of the web pages, which are undocumented and may stop working at any time |
+| 🌤️ Weather | The current weather, today's high and low, and the forecast for the next few hours; the day splits into three periods, each showing today's weather, the next few hours, or tomorrow's weather, adjustable in the **Weather** pane of **Settings…**. Needs Location access (approximate location only); the data comes from [Open-Meteo](https://open-meteo.com) |
+| 📝 Notes | Jot down notes, in a tab of their own or on Home. You type right on the island without switching away from the current app; notes save as you type and stay on this Mac only |
+| ✅ Reminders | A Home module: the open to-dos from the Reminders app, which you can add, check off, and delete; changes reach your other devices through iCloud. Needs Reminders access |
+| 📂 Files | On the left, an AirDrop zone: drop files on it to send them. On the right, a shelf: files can be dragged out again, or copied and pasted, with multi-select. You can turn on **Remove after pasting** (it only removes files from the shelf, never the originals) |
+| 🎧 AirPods | When AirPods connect, the notch shows the earbuds and their battery on both sides; while they are connected an extra tab shows the left, right, and case battery levels and adjusts the volume and noise-control mode. Needs Bluetooth access; noise control uses undocumented system interfaces and may stop working after a macOS update |
+| 🔋 Battery | A notice when the power adapter is plugged or unplugged, and one alert each when the charge falls to 20%, 10%, and 5%; the open panel shows the time remaining and the battery health |
+| 🔊 Volume & Brightness | The volume and brightness keys show Notch's own notice beside the notch instead of the system one; hold Option + Shift for finer steps. Needs Accessibility access, and can be turned off in settings |
 
 > [!WARNING]
 > **"Read Now Playing from Any App" is a risky feature, and it is off by default.** Since macOS 15.4 only Apple-signed programs may read the system's Now Playing information. To get around that, with the switch on Notch has the system's own `/usr/bin/perl` load a prebuilt third-party library, [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD 3-Clause, taken unmodified from boring.notch and kept in `Vendor/MediaRemoteAdapter/`): code that is not Apple's then runs under an Apple identity and passes a privacy restriction macOS sets on purpose. Notch cannot check what that binary does beyond its published source, and any macOS update may block it. Although most notch apps on the market use this method, that does not stop it from being a fairly dangerous way to do it. Without it, Now Playing still shows Music and Spotify; with it on, Notch falls back to that by itself if the adapter cannot run on your Mac.
 
-The interface is available in English and Simplified Chinese. It follows the system language by default, and you can switch it under **Settings…** in the right-click menu; the change applies right away. **Settings…** also has an **Open at Login** switch that starts Notch when you log in.
-
-The **General** pane of **Settings…** has a **Light and Color** switch (on by default). Cards are lit from above with a fine rim; the weather, calendar, charging, low-battery, and AirDrop cards take a color from what they show; and large numbers get a slight sheen. Once open, the island's edge follows the sky: by day a soft halo marks where the sun stands (rising on the left side, at the bottom center at noon, setting on the right), turning more orange the closer it is to sunrise or sunset; after sunset moonlight takes over, climbing the right side and crossing the top from right to left (partly hidden behind the notch around midnight) to come down the left side at sunrise, so the light goes once around the island a day; the fuller the moon, the brighter and larger its halo. Sunrise and sunset come from the Weather module and are kept, so they still serve while the weather has not refreshed; until they are first fetched, Notch assumes sunrise at 6:00 and sunset at 18:00. With the switch off, cards are plain gray.
-
-The **Debug Mode** switch at the bottom of the **General** pane (off by default) is for checking how the interface looks; a warning under it says to leave it off if you don't know what you're doing. With it on, **Settings…** gets a **Debug** pane that lists actions grouped by source; one click shows the matching view on the notch at once, with sample data where needed, so you need not wait for a real notification, weather, or device. The first group is the **Island** itself: Expand and Keep Open, Hover and Keep, Collapse and Keep, and Follow the Pointer Again. Since the pointer is in the settings window and not on the island, an island opened from there closes again after about a second and a half; the first three keep it as it is until you choose Follow the Pointer Again, close Settings, or turn Debug Mode off. After that come the features' own actions: for now Timer, Calendar (event reminders), Weather, Usage Limits, Notifications, Now Playing, AirPods, Battery, Volume & Brightness, and Files. Home, Notes, and Reminders show your own content and have none. The actions only show sample content: they do not change your notes, reminders, calendars, the files on the shelf, or any setting, and do not control the system volume, brightness, or other apps. Turn the switch off and the **Debug** pane goes away.
-
-More features are planned; see the [roadmap](#roadmap) below.
+To open settings: move the pointer onto the notch, wait for it to grow, right-click, and choose **Settings…**. The interface is available in English and Simplified Chinese (it follows the system language by default). Settings also has **Open at Login** and **Light and Color** (cards are tinted by their content, and once open, the island's edge follows the positions of the sun and the moon). **Debug Mode** at the bottom of the **General** pane is for checking the interface; **do not turn it on if you don't know what you're doing**.
 
 ## Requirements
 
@@ -61,14 +53,21 @@ Download the latest `Notch-x.y.z.zip` from the [Releases](https://github.com/Hyp
 
 1. Unzip it and drag `Notch.app` into your Applications folder;
 2. Double-click it. The app is not notarized by Apple, so macOS blocks it and says it cannot verify the developer; click **Done**;
-3. Open **System Settings → Privacy & Security**, scroll to the bottom, click **Open Anyway**, and enter your password. It opens normally from then on;
-4. On first launch macOS asks for Accessibility access (used to take over the volume and brightness keys and to show notifications in the island). Click **Open System Settings** and turn Notch on in the list. It also asks for Bluetooth access (used to show your AirPods' connection and battery); click **Allow**. The first time you open the notch, it asks for Location access (used to show the local weather) and Calendars access (used to show events from the Calendar app); click **Allow**. Reminders access is asked for only when you first click **Allow** on the Reminders card. The first time Notch reads Music or Spotify, macOS asks whether Notch may control them (Automation, used to read the current track and to pause and play); click **Allow**.
+3. Open **System Settings → Privacy & Security**, scroll to the bottom, click **Open Anyway**, and enter your password.
 
 Or remove the download quarantine flag in Terminal and open it directly:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Notch.app
 ```
+
+The first time you use it, macOS asks for these permissions; allow them as you need:
+
+- **Accessibility**: to take over the volume and brightness keys and to show notifications in the island (asked on first launch; you then turn Notch on in System Settings);
+- **Bluetooth**: to show your AirPods' connection and battery (asked on first launch);
+- **Location**, **Calendars**: the local weather and the events in the Calendar app (asked the first time you open the notch; Calendars access can be declined if you only use subscription links);
+- **Reminders**: asked the first time you click **Allow** on the Reminders card;
+- **Automation**: to read and control Music and Spotify (asked the first time Notch reads them).
 
 If the volume and brightness notices fall back to the system ones after an update, or notifications stop showing in the island, select Notch in **System Settings → Privacy & Security → Accessibility**, remove it with **−**, then open Notch and allow it again. The app has no formal Apple signature, so macOS treats a new version whose signature changed as a different app.
 
@@ -80,32 +79,25 @@ To quit: move the pointer onto the notch, wait for it to grow, right-click, and 
 
 ```bash
 xcode-select --install
-```
-
-Then:
-
-```bash
 git clone https://github.com/HyperspaceFT/Notch.git
 cd Notch
+make cert   # only needed once, see "Local signing certificate" below
 make run
 ```
 
-The built app is at `build/Notch.app` and can be opened directly. Run `make cert` once first to create a local signing certificate; otherwise Accessibility access has to be granted again after every rebuild. See [Local signing certificate](#local-signing-certificate) below.
-
-Common commands:
+The built app is at `build/Notch.app`. Common commands:
 
 | Command | Effect |
 |---|---|
-| `make build` | Release build to `build/Notch.app` |
-| `make debug` | Debug build |
+| `make build` / `make debug` | Release / Debug build to `build/Notch.app` |
 | `make run` | Build and (re)launch the app |
 | `make test` | Run the unit tests |
-| `make dist` | Zip it into `build/dist/Notch-<version>.zip` for sharing |
+| `make dist` | Zip it into `build/dist/Notch-<version>.zip` |
 | `make clean` | Delete all build output |
-| `make cert` | Create a local signing certificate so Accessibility access survives rebuilds |
-| `make icon` | Regenerate the app icon `Resources/AppIcon.icns` after editing `Resources/AppIcon.svg` |
+| `make cert` | Create a local signing certificate |
+| `make icon` | Regenerate `Resources/AppIcon.icns` after editing `Resources/AppIcon.svg` |
 
-For debugging you can pin the island in one state, and `-NotchDebugSnapshot` also exports the interface as an image (no Screen Recording permission needed, but the image has no Liquid Glass):
+For debugging you can pin the island in one state, and `-NotchDebugSnapshot` also exports the interface as an image (the image has no Liquid Glass):
 
 ```bash
 open build/Notch.app --args -NotchDebugState expanded   # or activity / collapsed
@@ -114,26 +106,9 @@ open build/Notch.app --args -NotchDebugState expanded -NotchDebugSnapshot /tmp/n
 
 ### Local signing certificate
 
-By default a build only gets an ad-hoc signature, which differs on every build. macOS then treats each build as a new app, and the Accessibility access granted before stops working until you remove Notch and allow it again.
+Without a certificate, every build only gets an ad-hoc signature, which differs each time, so macOS treats each build as a different app and the Accessibility access stops working. `make cert` creates a self-signed certificate named "Notch Local Signing" in the login keychain (valid for 10 years, usable by `codesign` directly); every later build is signed with it and the access stays. It is only for signing Notch on this Mac, and Keychain Access marking it as "not trusted" does not affect its use.
 
-Create a local signing certificate in your keychain once, and every later build is signed with it: the signature no longer changes, and the access stays. Run this once:
-
-```bash
-make cert
-```
-
-It:
-
-1. creates a self-signed code-signing certificate named "Notch Local Signing", valid for 10 years;
-2. imports the certificate and its private key into the login keychain and lets `codesign` use them without asking during builds.
-
-From then on `make build`, `make debug`, and `make run` sign with it, and the build output shows `==> Signing (Notch Local Signing)`. Without it in the keychain, builds fall back to an ad-hoc signature and show `==> Signing (ad-hoc; …)`.
-
-The certificate is only for signing Notch on this Mac. Because it is self-signed, Keychain Access marks it as "not trusted"; that does not affect signing, and no trust settings need changing.
-
-On the first run after switching to the certificate, remove the old Notch from **System Settings → Privacy & Security → Accessibility** with **−** and allow it again one last time. Later rebuilds keep the access.
-
-To stop using it, open Keychain Access and delete "Notch Local Signing" from My Certificates in the login keychain; later builds go back to ad-hoc signatures.
+After switching to the certificate, remove the old Notch from **System Settings → Privacy & Security → Accessibility** and allow it again one last time. To stop using it, delete the certificate in Keychain Access; later builds go back to ad-hoc signatures.
 
 ## Project structure
 
@@ -145,22 +120,9 @@ Sources/
 ├── NotchUI/         # Design system: notch shape, theme, animations, Liquid Glass buttons, shared controls
 ├── NotchShell/      # The shell: window, screen/notch placement, hover, state machine, root view
 ├── Features/        # One folder per feature, depending only on NotchKit + NotchUI
-│   ├── Battery/
-│   ├── Calendar/
-│   ├── Clock/
-│   ├── Files/
-│   ├── Home/
-│   ├── Notes/
-│   ├── Notifications/
-│   ├── NowPlaying/
-│   ├── Reminders/
-│   ├── SystemHUD/
-│   ├── Usage/
-│   └── Weather/
 └── NotchApp/        # Executable entry point and settings window; FeatureCatalog.swift lists the enabled features
 Tests/               # Unit tests
-Resources/Info.plist # App info template
-Resources/AppIcon.*  # App icon: AppIcon.svg is the source, make icon generates AppIcon.icns
+Resources/           # Info.plist template, signing entitlements, app icon (AppIcon.svg is the source)
 scripts/             # Build, run, and packaging scripts
 Vendor/              # Prebuilt third-party component shipped in the app (mediaremote-adapter, BSD 3-Clause)
 VERSION              # Version number
@@ -172,49 +134,28 @@ NotchApp ──▶ NotchShell ──▶ NotchKit
     └──▶ Features/* ──▶ NotchKit + NotchUI
 ```
 
-The island has three states:
-
-- **collapsed**: exactly the size of the hardware notch, so it is invisible;
-- **activity**: when a feature presents a live activity, the island extends to both sides and shows content there (such as the charging notice);
-- **expanded**: after a click, the panel opens with the features' tabs along the top and the selected feature's content below. Home, Files, Now Playing while a track is known, and AirPods while connected sit left of the notch. The tabs right of it (Timer, Battery, Notes, Usage once you pick AIs to show in Settings, and Notifications while there are any) fold into one button at the panel's right end, showing the selected right-side tab when one is selected, else the timer's ring while it counts down, else the right-side feature you used last; with the pointer on it, it unfolds to the left into all the right-side tabs, a click picks one, and it folds again once the pointer leaves.
-
-While the pointer rests on the collapsed or activity island, it grows a little with a slight bounce (hovered), its bottom corners growing with it so they stay concentric with the original ones. A click then opens it, and a right-click shows the menu (**Settings…** and **Quit**).
+The island has three states: **collapsed** (the size of the hardware notch, so you can't see it), **activity** (extends to both sides when a feature presents a live activity, such as the charging notice), and **expanded** (opens after a click, with the features' tabs along the top). While the pointer rests on the notch it grows a little; a click then opens it, and a right-click shows the menu.
 
 ## Adding a feature
 
-A new feature takes three steps:
-
 1. Create a folder `Sources/Features/<Name>/` with a class that conforms to `NotchFeature`;
-2. Add `"<Name>"` to the `featureNames` array in `Package.swift`; this generates a `<Name>Feature` module and links it into the app;
-3. In `Sources/NotchApp/FeatureCatalog.swift`, `import <Name>Feature` and add an instance to the list. The list order is the tab order in the open panel; tabs sit left of the notch by default, and setting `tabPlacement` to `.trailing` puts them on the right; while `isTabAvailable` is `false` the tab is hidden (for example, AirPods while they are not connected); while a right-side tab's `isTabActive` is `true` (for example, a timer counting down), the folded right-side button shows its icon.
+2. Add `"<Name>"` to `featureNames` in `Package.swift`; this generates a `<Name>Feature` module automatically;
+3. In `Sources/NotchApp/FeatureCatalog.swift`, `import <Name>Feature` and add an instance to the list. The list order is the tab order.
 
-Features talk to the shell through `NotchContext`, e.g. `present(_:)` shows a live activity and `dismiss(activityID:)` removes it; `requestExpand(detail:)` opens the island on one view alone, without the tab buttons along the top (a notification's detail, for one). See `Sources/Features/Battery` for an example.
+A feature can optionally implement:
 
-A feature can also implement `makeHomeModules()` to offer modules for the Home tab (`NotchHomeModule`), stating their minimum and maximum widths, or a fixed width, with `HomeModuleSizing`; the user can then place them on Home in the **Home** pane of **Settings…**. See `Sources/Features/Weather` for an example. A feature whose tab needs more room can give the open island's width with `expandedWidth` (520 to 880 points); that is how Home widens with its modules.
+- `tabPlacement` (whether the tab sits left or right of the notch), `isTabAvailable` (hide the tab for now), `isTabActive` (let the folded right-side button show it);
+- `present(_:)` / `dismiss(activityID:)` on `NotchContext` to show and remove live activities, and `requestExpand(detail:)` to open the island on one view alone; see `Sources/Features/Battery`;
+- `makeHomeModules()` to offer modules for Home, and `expandedWidth` to make the tab wider (520 to 880 points); see `Sources/Features/Weather`;
+- `menuItems` to add entries to the right-click menu, and `debugItems` to add actions to the **Debug** pane (they show only sample content and must not change the user's data or control the system or other apps); see `Sources/Features/Clock`.
 
-Through `menuItems` a feature can add entries to the notch's right-click menu (`NotchMenuItem`: buttons, submenus, and dividers), shown above **Settings…** and free to follow the feature's state. No feature uses it at the moment; the Debug pane's buttons (`debugItems`) use the same `NotchMenuItem`, so see `Sources/Features/Clock` for an example.
-
-Through `debugItems` (also `NotchMenuItem`s) a feature can add actions to the **Debug** pane of **Settings…**, shown only while **Debug Mode** is on in the **General** pane. Each action shows one of the feature's views at once with sample data, for checking how it looks; none may change the user's own data or act on the system or other apps. Like `menuItems`, they are read while the pane draws. A feature whose content is the user's own data (Home, Notes, Reminders) has none.
-
-Write interface text with `localized(en:zh:)`, giving both the English and the Chinese, and read it while the view draws (for example, make `title` a computed property) so it updates as soon as the language changes.
+Write interface text with `localized(en:zh:)`, giving both the English and the Chinese, and read it while the view draws, so it refreshes as soon as the language changes.
 
 ## Roadmap
 
-- [x] 🎵 Now Playing (browsers, Music, Spotify, and more; click to pause / play)
-- [x] 📂 File shelf (drag files onto the notch to keep them)
-- [x] 🔊 Replace the system volume / brightness HUD
-- [x] 🎧 AirPods connection notice and headphone settings (battery, volume, noise control)
-- [x] 🌤️ Weather, a customizable Home layout (pick, order, and size modules), and weather periods
-- [x] 📅 Calendar (the Calendar app and subscription links for Google, Outlook, and other calendars), with Home widening by its modules
-- [x] ⏰ Event reminders (with a choice of how early, and joining online meetings directly)
-- [x] 📝 Notes (a tab and a Home module)
-- [x] ✅ Reminders (a Home module, reading and writing the Reminders app)
-- [x] 🔔 Notifications (other apps' banners in the island, optionally hiding the system banner)
-- [x] ⏱️ Timer (a tab right of the notch with a ruler for the duration, also opened from Home's time module, counting down beside the notch)
-- [x] 📊 Usage limits (the 5-hour and weekly usage of Claude / Codex / Grok plans, in a tab right of the notch and a Home module)
-- [x] ⚙️ Settings window (launch at login, Light and Color, Debug Mode, the volume/brightness HUD switch, the notification switches, the Home layout, weather periods, the calendar, usage, and language for now)
-- [x] 🚀 Launch at login
 - [ ] 🔄 Automatic updates
+
+Finished features are listed in [What it does](#what-it-does) above.
 
 ## Acknowledgements
 
