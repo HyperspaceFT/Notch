@@ -41,15 +41,20 @@ final class SettingsWindowController {
     private let windowDelegate = SettingsWindowDelegate()
 
     func show() {
+        // An accessory app is never active on its own; without this the window
+        // would open behind the frontmost app. Since macOS 14 this only asks, and
+        // the system may decline a request that no longer follows the click, so
+        // it goes out first, not after the slow first build of the window.
+        NSApp.activate()
         launchAtLogin.refresh()
         SystemHUDSettings.shared.refreshAccessibilityAccess()
         NotificationsSettings.shared.refreshAccessibilityAccess()
         LocalCalendars.shared.refreshAccess()
         let window = window ?? makeWindow()
-        // An accessory app is never active on its own; without this the window
-        // would open behind the frontmost app.
-        NSApp.activate()
         window.makeKeyAndOrderFront(nil)
+        // In front even if the activation is declined or still pending; it takes
+        // the keyboard once the app is active, or at the user's first click on it.
+        window.orderFrontRegardless()
     }
 
     private func makeWindow() -> NSWindow {
