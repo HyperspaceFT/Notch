@@ -256,7 +256,7 @@ struct PlaybackSnapshot: Sendable, Equatable {
 /// `pausedLinger` after it was paused, so a quick pause does not make it vanish.
 /// A track that was already paused when first seen (never seen playing) stays hidden.
 struct PresenceTracker: Sendable, Equatable {
-    static let pausedLinger: TimeInterval = 30
+    static let pausedLinger: TimeInterval = 3
 
     private(set) var snapshot: PlaybackSnapshot?
     /// When the shown player went from playing to paused.

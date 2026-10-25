@@ -223,8 +223,8 @@ struct SystemSnapshotTests {
         #expect(!tracker.isVisible(at: start + 1))
         tracker.update(browser(true), now: start + 2)
         tracker.update(browser(false), now: start + 3)
-        #expect(tracker.isVisible(at: start + 20))
-        #expect(!tracker.isVisible(at: start + 34))
+        #expect(tracker.isVisible(at: start + 5))
+        #expect(!tracker.isVisible(at: start + 6))
     }
 }
 

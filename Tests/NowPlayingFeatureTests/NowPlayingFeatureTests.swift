@@ -107,29 +107,29 @@ struct PresenceTrackerTests {
         #expect(tracker.hideDate == nil)
     }
 
-    @Test func pausedTrackLingersThirtySecondsThenHides() {
+    @Test func pausedTrackLingersThreeSecondsThenHides() {
         var tracker = PresenceTracker()
         tracker.update(snapshot(playing: true), now: start)
         tracker.update(snapshot(playing: false), now: start + 5)
         #expect(tracker.isVisible(at: start + 5))
-        #expect(tracker.isVisible(at: start + 34))
-        #expect(!tracker.isVisible(at: start + 35))
-        #expect(tracker.hideDate == start + 35)
+        #expect(tracker.isVisible(at: start + 7.9))
+        #expect(!tracker.isVisible(at: start + 8))
+        #expect(tracker.hideDate == start + 8)
     }
 
     @Test func laterPausedReadingsDoNotRestartTheLinger() {
         var tracker = PresenceTracker()
         tracker.update(snapshot(playing: true), now: start)
         tracker.update(snapshot(playing: false), now: start)
-        tracker.update(snapshot(playing: false), now: start + 20)
-        #expect(!tracker.isVisible(at: start + 31))
+        tracker.update(snapshot(playing: false), now: start + 2)
+        #expect(!tracker.isVisible(at: start + 4))
     }
 
     @Test func resumingWithinTheLingerStaysVisible() {
         var tracker = PresenceTracker()
         tracker.update(snapshot(playing: true), now: start)
         tracker.update(snapshot(playing: false), now: start + 1)
-        tracker.update(snapshot(playing: true), now: start + 10)
+        tracker.update(snapshot(playing: true), now: start + 2)
         #expect(tracker.isVisible(at: start + 100))
         #expect(tracker.hideDate == nil)
     }
