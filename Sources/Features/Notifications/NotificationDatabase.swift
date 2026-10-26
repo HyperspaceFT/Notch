@@ -1,5 +1,4 @@
 import AppKit
-import os
 import SQLite3
 
 /// One notification as usernoted keeps it in its database.
@@ -196,8 +195,8 @@ final class NotificationDatabaseWatcher {
     private enum Outcome: Sendable {
         case unchanged
         case records(FileState?, [DatabaseNotification])
-        /// With what the failure means, `nil` for a passing lock.
-        case failed(NotificationDatabase.ReadError, NotificationDatabaseStatus?)
+        /// What the failure means, `nil` for a passing lock.
+        case failed(NotificationDatabaseStatus?)
     }
 
     private let url: URL
@@ -211,8 +210,6 @@ final class NotificationDatabaseWatcher {
     private var cutoff = Date()
     private var seen: Set<Int64> = []
     private var fileState: FileState?
-    /// The last failure logged, so a lasting one is logged once.
-    private var lastFailure: NotificationDatabase.ReadError?
 
     init(
         url: URL = NotificationDatabase.url,
@@ -234,9 +231,7 @@ final class NotificationDatabaseWatcher {
         cutoff = started
         seen = []
         fileState = nil
-        lastFailure = nil
         status = .unknown
-        Logger.notifications.notice("Database reading started")
         poll = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.check()
@@ -249,7 +244,6 @@ final class NotificationDatabaseWatcher {
         guard let poll else { return }
         poll.cancel()
         self.poll = nil
-        Logger.notifications.notice("Database reading stopped")
     }
 
     private func check() async {
@@ -264,26 +258,18 @@ final class NotificationDatabaseWatcher {
             do throws(NotificationDatabase.ReadError) {
                 return .records(state, try NotificationDatabase.records(at: url, after: readCutoff))
             } catch {
-                return .failed(error, NotificationDatabase.status(after: error, at: url))
+                return .failed(NotificationDatabase.status(after: error, at: url))
             }
         }.value
         guard poll != nil else { return }
         switch outcome {
         case .unchanged:
             break
-        case .failed(let error, let failureStatus):
-            if error != lastFailure {
-                Logger.notifications.error("Could not read the notification database: \(String(describing: error), privacy: .public)")
-                lastFailure = error
-            }
+        case .failed(let failureStatus):
             if let failureStatus {
                 report(failureStatus)
             }
         case .records(let state, let records):
-            if lastFailure != nil {
-                Logger.notifications.notice("Notification database readable again")
-                lastFailure = nil
-            }
             fileState = state
             report(.working)
             let new = records.filter { !seen.contains($0.recordID) }

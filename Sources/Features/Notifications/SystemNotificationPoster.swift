@@ -1,5 +1,4 @@
 import AppKit
-import os
 import UserNotifications
 
 /// Posts the Debug pane's samples as real notifications from Notch, so they take
@@ -25,7 +24,6 @@ final class SystemNotificationPoster {
             let center = UNUserNotificationCenter.current()
             center.delegate = presenter
             guard await Self.isAuthorized(center) else {
-                Logger.notifications.notice("Debug notifications are not allowed; opening Notifications settings")
                 Self.openSettings(bundleIdentifier: bundleIdentifier)
                 return
             }
@@ -42,12 +40,7 @@ final class SystemNotificationPoster {
                 content.body = sample.body
                 // A fresh identifier each time, so no post replaces an earlier one.
                 let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-                do {
-                    try await center.add(request)
-                    Logger.notifications.notice("Posted debug notification \(index + 1) of \(samples.count)")
-                } catch {
-                    Logger.notifications.error("Could not post a debug notification: \(error.localizedDescription, privacy: .public)")
-                }
+                try? await center.add(request)
             }
         }
     }

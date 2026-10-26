@@ -2,7 +2,6 @@ import AppKit
 import NotchKit
 import NotchUI
 import Observation
-import os
 import SwiftUI
 
 /// Mirrors other apps' notification banners into the island: each new banner
@@ -107,9 +106,6 @@ public final class NotificationsFeature: NotchFeature {
                 self?.followSettings(generation: generation)
             }
         }
-        Logger.notifications.notice(
-            "Mirroring \(isEnabled ? "on" : "off", privacy: .public), hide system banners: \(hidesBanners), read database: \(readsDatabase)"
-        )
         if isEnabled {
             startWatching()
             watcher?.hidesBanners = hidesBanners
@@ -156,7 +152,6 @@ public final class NotificationsFeature: NotchFeature {
         }
         // No prompt: the volume HUD shows the system's, and the settings window
         // links to System Settings.
-        Logger.notifications.notice("No Accessibility access; checking again every 2 s")
         startPolling()
     }
 
@@ -184,7 +179,6 @@ public final class NotificationsFeature: NotchFeature {
                 guard !Task.isCancelled, let self else { return }
                 settings.refreshAccessibilityAccess()
                 if settings.hasAccessibilityAccess {
-                    Logger.notifications.notice("Accessibility access granted")
                     accessPoll = nil
                     if watcher == nil {
                         makeWatcher()
@@ -218,9 +212,6 @@ public final class NotificationsFeature: NotchFeature {
         // A banner NotificationCenter held back past its record's arrival was
         // shown from the database already.
         let unseen = items.filter { !recentBanners.claimShown($0, now: now) }
-        if unseen.count < items.count {
-            Logger.notifications.notice("\(items.count - unseen.count) banners were shown from the database already")
-        }
         for item in unseen {
             recentBanners.add(item, now: now)
         }
@@ -235,21 +226,9 @@ public final class NotificationsFeature: NotchFeature {
     private func recordsArrived(_ records: [DatabaseNotification]) {
         let now = Date()
         var items: [NotificationItem] = []
-        var matched = 0
-        var heldBack = 0
-        var bannerless = 0
-        for record in records where record.hasContent {
-            if record.isHeldBack {
-                heldBack += 1
-                continue
-            }
-            if !record.showsBanner {
-                bannerless += 1
-                continue
-            }
+        for record in records where record.hasContent && !record.isHeldBack && record.showsBanner {
             let app = Self.app(bundleIdentifier: record.bundleIdentifier)
             if recentBanners.claim(record, appName: app.name, now: now) {
-                matched += 1
                 continue
             }
             recentBanners.addShown(record, appName: app.name, now: now)
@@ -264,10 +243,6 @@ public final class NotificationsFeature: NotchFeature {
                 received: record.delivered
             ))
         }
-        let apps = items.map { $0.appName ?? "unknown app" }.joined(separator: ", ")
-        Logger.notifications.notice(
-            "Database: \(records.count) new records, \(matched) already shown from banners, \(heldBack) held back by Focus, \(bannerless) from apps without banners, \(items.count) shown [\(apps, privacy: .public)]"
-        )
         if !items.isEmpty {
             notificationsArrived(items)
         }
@@ -294,10 +269,6 @@ public final class NotificationsFeature: NotchFeature {
             inbox.insert(item)
         }
         guard let newest = items.last else { return }
-        let listed = inbox.items.count
-        Logger.notifications.notice(
-            "Presenting the activity for \(newest.appName ?? "unknown app", privacy: .public) (\(items.count) new, \(listed) listed)"
-        )
         // The same id replaces the previous banner's activity and restarts its timer.
         let open: @MainActor () -> Void = { [weak self] in
             self?.openDetail(of: newest)

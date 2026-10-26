@@ -1,6 +1,5 @@
 import AppKit
 import ApplicationServices
-import os
 
 /// Watches NotificationCenter's banners through Accessibility and reports each
 /// new one (`BannerScan`), and, while `hidesBanners` is on, moves the windows of
@@ -88,8 +87,6 @@ final class NotificationBannerWatcher {
     private var settleTask: Task<Void, Never>?
     private var attachTask: Task<Void, Never>?
     private var parkingTimer: Task<Void, Never>?
-    /// Accessibility events since the last scan, for its log line.
-    private var eventsSinceScan = 0
 
     init(defaults: UserDefaults, onBanners: @escaping @MainActor ([BannerCapture]) -> Void) {
         self.defaults = defaults
@@ -107,7 +104,6 @@ final class NotificationBannerWatcher {
 
     func start() {
         guard runningObservation == nil else { return }
-        Logger.notifications.notice("Watcher started")
         runningObservation = NSWorkspace.shared.observe(\.runningApplications, options: [.initial, .new]) {
             [weak self] _, _ in
             // KVO may call on any thread; follow on the main actor.
@@ -119,9 +115,6 @@ final class NotificationBannerWatcher {
 
     /// Stops watching and moves every parked window back.
     func stop() {
-        if runningObservation != nil {
-            Logger.notifications.notice("Watcher stopped")
-        }
         runningObservation?.invalidate()
         runningObservation = nil
         detach(isAlive: true)
@@ -134,7 +127,6 @@ final class NotificationBannerWatcher {
         guard isRunning else { return }
         let running = Self.runningNotificationCenters()
         if let processID, !running.contains(processID) {
-            Logger.notifications.notice("NotificationCenter \(processID) is gone")
             detach(isAlive: false)
         }
         if let pending = pendingAttachProcessID, !running.contains(pending) {
@@ -174,9 +166,6 @@ final class NotificationBannerWatcher {
             }
         }, &created)
         guard status == .success, let observer = created else {
-            Logger.notifications.error(
-                "Could not observe NotificationCenter \(processID): AXObserverCreate \(status.rawValue)"
-            )
             retryAttach(to: processID, attemptsLeft: attemptsLeft)
             return
         }
@@ -187,7 +176,6 @@ final class NotificationBannerWatcher {
             isRegistered = true
         }
         guard isRegistered else {
-            Logger.notifications.error("Could not register for NotificationCenter \(processID)'s events")
             retryAttach(to: processID, attemptsLeft: attemptsLeft)
             return
         }
@@ -198,18 +186,12 @@ final class NotificationBannerWatcher {
         self.application = application
         self.observer = observer
         runLoopSource = source
-        Logger.notifications.notice("Attached to NotificationCenter \(processID)")
         recoverStrandedWindows()
         scan()
     }
 
     private func retryAttach(to processID: pid_t, attemptsLeft: Int) {
-        guard attemptsLeft > 1 else {
-            Logger.notifications.error(
-                "Gave up attaching to NotificationCenter \(processID) after \(Self.attachAttempts) attempts"
-            )
-            return
-        }
+        guard attemptsLeft > 1 else { return }
         pendingAttachProcessID = processID
         attachTask = Task { [weak self] in
             try? await Task.sleep(for: Self.attachRetryInterval)
@@ -226,9 +208,6 @@ final class NotificationBannerWatcher {
     /// is alive, the registrations are removed and parked windows moved back
     /// first; once it is gone, there is nothing left to write to.
     private func detach(isAlive: Bool) {
-        if let processID {
-            Logger.notifications.notice("Detached from NotificationCenter \(processID) (alive: \(isAlive))")
-        }
         attachTask?.cancel()
         attachTask = nil
         pendingAttachProcessID = nil
@@ -275,7 +254,6 @@ final class NotificationBannerWatcher {
         application = nil
         processID = nil
         observedWindows = [:]
-        eventsSinceScan = 0
         seen = SeenBanners()
         liveTokens = [:]
         blockedWindows = []
@@ -283,13 +261,11 @@ final class NotificationBannerWatcher {
 
     private func received(_ notification: String, from element: AXUIElement) {
         guard application != nil else { return }
-        Logger.notifications.debug("Accessibility event \(notification, privacy: .public)")
         // A destroyed element cannot be read; a created window is not a panel yet.
         if notification != "AXWindowCreated", notification != "AXUIElementDestroyed",
            BannerScan.isPanelOrWidget(AXNode(element)) {
             return
         }
-        eventsSinceScan += 1
         scheduleScan()
     }
 
@@ -316,20 +292,12 @@ final class NotificationBannerWatcher {
     // MARK: Scanning
 
     private func scan() {
-        guard let application else { return }
-        let events = eventsSinceScan
-        eventsSinceScan = 0
-        guard let windows = AXNode(application).windows else {
-            Logger.notifications.error("Could not read NotificationCenter's windows (after \(events) events)")
-            return
-        }
+        guard let application, let windows = AXNode(application).windows else { return }
         var captures: [BannerCapture] = []
         var watchedWindows: [AXNode] = []
         var windowsByKey: [Int: AXUIElement] = [:]
-        var windowSummaries: [String] = []
         for window in windows {
             let result = BannerScan.scan(window: window)
-            windowSummaries.append(Self.summary(of: result, window: window))
             if !result.isPanelOrWidget {
                 watchedWindows.append(window)
             }
@@ -351,21 +319,6 @@ final class NotificationBannerWatcher {
         updateParking()
 
         let reported = newCaptures.filter(\.hasContent)
-        // Only scans that saw a window other than the history panel or a widget,
-        // which NotificationCenter has while a banner shows: the rest are noise.
-        if !watchedWindows.isEmpty {
-            let summary = windowSummaries.joined(separator: ", ")
-            Logger.notifications.notice(
-                "Scan after \(events) events: windows [\(summary, privacy: .public)], \(captures.count) banners, \(newCaptures.count) new, \(reported.count) reported"
-            )
-        }
-        for capture in newCaptures {
-            let app = capture.appName ?? "unknown app"
-            let outcome = capture.hasContent ? "reported" : "no content, dropped"
-            Logger.notifications.notice(
-                "New banner from \(app, privacy: .public) [\(capture.subrole, privacy: .public)], title: \(capture.title != nil), body: \(capture.body != nil), own token: \(capture.hasOwnToken), \(outcome, privacy: .public)"
-            )
-        }
         if !reported.isEmpty {
             onBanners(reported)
         }
@@ -411,7 +364,6 @@ final class NotificationBannerWatcher {
             else { continue }
             parking.park(capture.token, window: key, savedPosition: position, at: now, blocked: blockedWindows)
             parkedWindows[key] = window
-            Logger.notifications.notice("Parked the banner window of \(capture.appName ?? "unknown app", privacy: .public)")
         }
     }
 
@@ -419,32 +371,13 @@ final class NotificationBannerWatcher {
     /// whose time is up, tries failed moves again, and waits for what is next.
     private func updateParking() {
         let now = Date()
-        let parked = parking.windows
-        let restored = parking.update(live: liveTokens, blocked: blockedWindows, at: now)
-        for key in restored.keys {
-            guard let window = parked[key] else { continue }
-            let reason = if blockedWindows.contains(key) {
-                "it shows an alert"
-            } else if now.timeIntervalSince(window.lastBannerAt) >= BannerParking.maximumDuration {
-                "timeout"
-            } else {
-                "its banners are gone"
-            }
-            Logger.notifications.notice(
-                "Moving a banner window back (\(reason, privacy: .public)) after \(now.timeIntervalSince(window.parkedAt), format: .fixed(precision: 1)) s parked, last banner \(now.timeIntervalSince(window.lastBannerAt), format: .fixed(precision: 1)) s ago"
-            )
-        }
-        moveBack(restored, at: now)
+        moveBack(parking.update(live: liveTokens, blocked: blockedWindows, at: now), at: now)
         retryPendingRestores(at: now)
         scheduleParkingTimer()
     }
 
     private func restoreAllWindows() {
         let now = Date()
-        let count = parking.windows.count
-        if count > 0 {
-            Logger.notifications.notice("Moving \(count) parked banner windows back")
-        }
         moveBack(parking.restoreAll(), at: now)
         parkedWindows = [:]
         persistHome()
@@ -471,7 +404,6 @@ final class NotificationBannerWatcher {
             if Self.move(pending.window, to: pending.position) {
                 pendingRestores[key] = nil
             } else if pending.triesLeft <= 1 {
-                Logger.notifications.error("Could not move a parked banner window back")
                 pendingRestores[key] = nil
                 hasStrandedWindow = true
             } else {
@@ -527,20 +459,6 @@ final class NotificationBannerWatcher {
         }
         hasStrandedWindow = false
         persistHome()
-    }
-
-    /// One window of a scan for the log: what the scan made of it, and for a
-    /// window without banners its role and subrole, in case macOS renamed the
-    /// banners' subroles.
-    private static func summary(of result: WindowScan, window: AXNode) -> String {
-        switch result {
-        case .panel: "panel"
-        case .desktopWidget: "widget"
-        case .tooLarge: "too large, skipped"
-        case .banners(let banners) where banners.isEmpty:
-            "no banners (\(window.role ?? "?")/\(window.subrole ?? "?"))"
-        case .banners(let banners): "\(banners.count) banners"
-        }
     }
 
     private static func position(of window: AXUIElement) -> CGPoint? {
