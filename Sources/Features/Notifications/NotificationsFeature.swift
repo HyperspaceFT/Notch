@@ -33,8 +33,8 @@ public final class NotificationsFeature: NotchFeature {
     private let apps = NotificationAppResolver()
     private var watcher: NotificationBannerWatcher?
     private var accessPoll: Task<Void, Never>?
-    /// Shows the Debug pane's notifications one after another.
-    private var sampleSequence: Task<Void, Never>?
+    /// Posts the Debug pane's notifications through the system.
+    private let samplePoster = SystemNotificationPoster()
     /// Bumped on activate and deactivate; an observation armed under another
     /// generation is stale and does nothing when it fires.
     private var observationGeneration = 0
@@ -56,8 +56,7 @@ public final class NotificationsFeature: NotchFeature {
         // its pending change handler a no-op.
         observationGeneration += 1
         stopWatching()
-        sampleSequence?.cancel()
-        sampleSequence = nil
+        samplePoster.cancel()
         context?.dismiss(activityID: Self.activityID)
         inbox.removeAll()
         apps.onResolved = nil
@@ -70,18 +69,19 @@ public final class NotificationsFeature: NotchFeature {
         })
     }
 
-    /// Sample notifications, listed and shown as banners' are, with or without
-    /// mirroring on and Accessibility access; no system banner is moved for them.
+    /// Real notifications from Notch, posted through the system: the island shows
+    /// them only as it would any app's banner, so only with mirroring on,
+    /// Accessibility access, and the banner caught.
     public var debugItems: [NotchMenuItem] {
         [
             .button(localized(en: "Short Notification", zh: "短通知"), symbol: "bell") { [weak self] in
-                self?.showSamples([NotificationSample.short])
+                self?.samplePoster.post([NotificationSample.short])
             },
             .button(localized(en: "Long Notification", zh: "长通知"), symbol: "text.alignleft") { [weak self] in
-                self?.showSamples([NotificationSample.long])
+                self?.samplePoster.post([NotificationSample.long])
             },
             .button(localized(en: "Three Notifications in a Row", zh: "连续 3 条通知"), symbol: "square.stack") { [weak self] in
-                self?.showSamples(NotificationSample.sequence)
+                self?.samplePoster.post(NotificationSample.sequence)
             },
         ]
     }
@@ -171,22 +171,6 @@ public final class NotificationsFeature: NotchFeature {
                 received: now
             )
         })
-    }
-
-    /// Shows the Debug pane's samples about a second apart, replacing a run
-    /// still going.
-    private func showSamples(_ samples: [NotificationSample]) {
-        sampleSequence?.cancel()
-        sampleSequence = Task { [weak self] in
-            for (index, sample) in samples.enumerated() {
-                if index > 0 {
-                    try? await Task.sleep(for: .seconds(1))
-                }
-                guard !Task.isCancelled, let self else { return }
-                notificationsArrived([sample.item(received: Date())])
-            }
-            self?.sampleSequence = nil
-        }
     }
 
     /// Lists `items` and shows the last beside the notch.
