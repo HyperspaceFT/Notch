@@ -3,7 +3,8 @@ import ApplicationServices
 import Observation
 
 /// Whether the island shows other apps' notification banners and hides the
-/// system's, and whether Notch has the Accessibility access reading them needs.
+/// system's, whether it also reads the notification database, and whether Notch
+/// has the Accessibility and Full Disk Access these need.
 @MainActor
 @Observable
 public final class NotificationsSettings {
@@ -11,6 +12,7 @@ public final class NotificationsSettings {
 
     static let enabledKey = "NotchMirrorsNotifications"
     static let hidesBannersKey = "NotchHidesNotificationBanners"
+    static let readsDatabaseKey = "NotchReadsNotificationDatabase"
 
     /// On by default; takes effect only with Accessibility access.
     public var isEnabled: Bool {
@@ -22,6 +24,17 @@ public final class NotificationsSettings {
         didSet { defaults.set(hidesSystemBanners, forKey: Self.hidesBannersKey) }
     }
 
+    /// Off by default: also reads usernoted's database (`NotificationDatabase`),
+    /// for the notifications macOS lists without showing a banner. Needs Full
+    /// Disk Access.
+    public var readsDatabase: Bool {
+        didSet { defaults.set(readsDatabase, forKey: Self.readsDatabaseKey) }
+    }
+
+    /// Whether Notch may open the notification database. Read again by
+    /// `refreshFullDiskAccess()`, since the user grants it in System Settings.
+    public private(set) var hasFullDiskAccess: Bool
+
     /// Whether macOS trusts Notch for Accessibility. Read again by
     /// `refreshAccessibilityAccess()`, since the user grants it in System Settings.
     public private(set) var hasAccessibilityAccess: Bool
@@ -32,7 +45,9 @@ public final class NotificationsSettings {
         self.defaults = defaults
         isEnabled = defaults.object(forKey: Self.enabledKey) as? Bool ?? true
         hidesSystemBanners = defaults.object(forKey: Self.hidesBannersKey) as? Bool ?? false
+        readsDatabase = defaults.object(forKey: Self.readsDatabaseKey) as? Bool ?? false
         hasAccessibilityAccess = AXIsProcessTrusted()
+        hasFullDiskAccess = NotificationDatabase.isReadable()
     }
 
     public func refreshAccessibilityAccess() {
@@ -41,6 +56,22 @@ public final class NotificationsSettings {
         if trusted != hasAccessibilityAccess {
             hasAccessibilityAccess = trusted
         }
+    }
+
+    public func refreshFullDiskAccess() {
+        let readable = NotificationDatabase.isReadable()
+        if readable != hasFullDiskAccess {
+            hasFullDiskAccess = readable
+        }
+    }
+
+    /// Opens System Settings at Privacy & Security → Full Disk Access, where the
+    /// user adds Notch; macOS has no prompt for it.
+    public func requestFullDiskAccess() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") else {
+            return
+        }
+        NSWorkspace.shared.open(url)
     }
 
     /// Opens System Settings at Privacy & Security → Accessibility. Never shows the

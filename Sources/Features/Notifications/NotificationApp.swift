@@ -171,7 +171,7 @@ final class NotificationAppResolver {
         return nil
     }
 
-    private nonisolated static func infoPlist(of app: URL) -> [String: Any]? {
+    nonisolated static func infoPlist(of app: URL) -> [String: Any]? {
         NSDictionary(contentsOf: app.appending(path: "Contents/Info.plist")) as? [String: Any]
     }
 }

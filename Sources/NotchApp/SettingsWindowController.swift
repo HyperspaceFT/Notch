@@ -52,6 +52,7 @@ final class SettingsWindowController {
         launchAtLogin.refresh()
         SystemHUDSettings.shared.refreshAccessibilityAccess()
         NotificationsSettings.shared.refreshAccessibilityAccess()
+        NotificationsSettings.shared.refreshFullDiskAccess()
         LocalCalendars.shared.refreshAccess()
         let window = window ?? makeWindow()
         window.makeKeyAndOrderFront(nil)
@@ -315,6 +316,26 @@ private struct IslandSettingsView: View {
                 }
                 .toggleStyle(.switch)
                 .disabled(!notifications.isEnabled)
+                Toggle(isOn: $notifications.readsDatabase) {
+                    Text(localized(en: "Read the Notification Database Directly", zh: "直接读取通知数据库"))
+                    Text(localized(
+                        en: "Needs Full Disk Access. When many notifications arrive within a short time, macOS shows only some of them as banners, so the island misses the rest; reading the system's notification database fills them in, a few seconds late. Notifications a Focus holds back stay hidden.",
+                        zh: "需要「完全磁盘访问权限」。短时间内出现大量通知时，macOS 本身只会把其中一部分弹成横幅，灵动岛因此会漏掉其余的；直接读取系统的通知数据库可以有效补上这些通知，但会晚几秒出现。被专注模式拦下的通知仍不显示。"
+                    ))
+                    if needsFullDiskAccess {
+                        Text(localized(
+                            en: "Add Notch in System Settings → Privacy & Security → Full Disk Access.",
+                            zh: "请在「系统设置 → 隐私与安全性 → 完全磁盘访问权限」中添加并允许 Notch。"
+                        ))
+                    }
+                }
+                .toggleStyle(.switch)
+                .disabled(!notifications.isEnabled)
+                if needsFullDiskAccess {
+                    Button(localized(en: "Open Full Disk Access Settings…", zh: "打开完全磁盘访问权限设置…")) {
+                        notifications.requestFullDiskAccess()
+                    }
+                }
             }
         }
         .formStyle(.grouped)
@@ -324,6 +345,7 @@ private struct IslandSettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             systemHUD.refreshAccessibilityAccess()
             notifications.refreshAccessibilityAccess()
+            notifications.refreshFullDiskAccess()
         }
     }
 
@@ -335,5 +357,10 @@ private struct IslandSettingsView: View {
     /// Notifications are on but cannot be read until the user grants access.
     private var needsNotificationsAccess: Bool {
         notifications.isEnabled && !notifications.hasAccessibilityAccess
+    }
+
+    /// Reading the notification database is on but needs Full Disk Access.
+    private var needsFullDiskAccess: Bool {
+        notifications.isEnabled && notifications.readsDatabase && !notifications.hasFullDiskAccess
     }
 }

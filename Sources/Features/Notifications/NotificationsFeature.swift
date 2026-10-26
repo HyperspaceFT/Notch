@@ -1,3 +1,4 @@
+import AppKit
 import NotchKit
 import NotchUI
 import Observation
@@ -14,7 +15,11 @@ import SwiftUI
 /// has that access.
 ///
 /// With "Hide System Banners" on (`NotificationsSettings`, off by default), the
-/// system's banner moves off screen while the island shows it.
+/// system's banner moves off screen while the island shows it. With "Read the
+/// Notification Database" on (off by default, needs Full Disk Access), the
+/// notifications macOS listed without a banner are shown too, from usernoted's
+/// database (`NotificationDatabaseWatcher`), some seconds late; those whose
+/// banner the island already showed are recognized (`RecentBanners`).
 @MainActor
 public final class NotificationsFeature: NotchFeature {
     public let id = "notifications"
@@ -33,6 +38,9 @@ public final class NotificationsFeature: NotchFeature {
     private let inbox = NotificationInbox()
     private let apps = NotificationAppResolver()
     private var watcher: NotificationBannerWatcher?
+    private var databaseWatcher: NotificationDatabaseWatcher?
+    /// The banners shown lately, which database records are matched against.
+    private var recentBanners = RecentBanners()
     private var accessPoll: Task<Void, Never>?
     /// Posts the Debug pane's notifications through the system.
     private let samplePoster = SystemNotificationPoster()
@@ -57,6 +65,7 @@ public final class NotificationsFeature: NotchFeature {
         // its pending change handler a no-op.
         observationGeneration += 1
         stopWatching()
+        stopReadingDatabase()
         samplePoster.cancel()
         context?.dismiss(activityID: Self.activityID)
         inbox.removeAll()
@@ -87,18 +96,20 @@ public final class NotificationsFeature: NotchFeature {
         ]
     }
 
-    /// Starts or stops watching to match `isEnabled`, and passes on
-    /// `hidesSystemBanners`, again on every change.
+    /// Starts or stops watching to match `isEnabled` and `readsDatabase`, and
+    /// passes on `hidesSystemBanners`, again on every change.
     private func followSettings(generation: Int) {
         guard generation == observationGeneration else { return }
-        let (isEnabled, hidesBanners) = withObservationTracking {
-            (settings.isEnabled, settings.hidesSystemBanners)
+        let (isEnabled, hidesBanners, readsDatabase) = withObservationTracking {
+            (settings.isEnabled, settings.hidesSystemBanners, settings.readsDatabase)
         } onChange: { [weak self] in
             Task { @MainActor in
                 self?.followSettings(generation: generation)
             }
         }
-        Logger.notifications.notice("Mirroring \(isEnabled ? "on" : "off", privacy: .public), hide system banners: \(hidesBanners)")
+        Logger.notifications.notice(
+            "Mirroring \(isEnabled ? "on" : "off", privacy: .public), hide system banners: \(hidesBanners), read database: \(readsDatabase)"
+        )
         if isEnabled {
             startWatching()
             watcher?.hidesBanners = hidesBanners
@@ -107,6 +118,28 @@ public final class NotificationsFeature: NotchFeature {
             context?.dismiss(activityID: Self.activityID)
             inbox.removeAll()
         }
+        if isEnabled, readsDatabase {
+            startReadingDatabase()
+        } else {
+            stopReadingDatabase()
+        }
+    }
+
+    /// Without Full Disk Access the watcher keeps trying, so access granted later
+    /// takes effect without turning the switch off and on.
+    private func startReadingDatabase() {
+        guard databaseWatcher == nil else { return }
+        let watcher = NotificationDatabaseWatcher { [weak self] records in
+            self?.recordsArrived(records)
+        }
+        databaseWatcher = watcher
+        watcher.start()
+    }
+
+    private func stopReadingDatabase() {
+        databaseWatcher?.stop()
+        databaseWatcher = nil
+        recentBanners = RecentBanners()
     }
 
     private func startWatching() {
@@ -162,7 +195,7 @@ public final class NotificationsFeature: NotchFeature {
     /// Lists every new banner and shows the newest beside the notch.
     private func bannersArrived(_ captures: [BannerCapture]) {
         let now = Date()
-        notificationsArrived(captures.map { capture in
+        let items = captures.map { capture in
             let app = capture.appName.flatMap(apps.resolve)
             return NotificationItem(
                 token: capture.token,
@@ -174,7 +207,82 @@ public final class NotificationsFeature: NotchFeature {
                 body: capture.body,
                 received: now
             )
-        })
+        }
+        guard databaseWatcher != nil else {
+            notificationsArrived(items)
+            return
+        }
+        // A banner NotificationCenter held back past its record's arrival was
+        // shown from the database already.
+        let unseen = items.filter { !recentBanners.claimShown($0, now: now) }
+        if unseen.count < items.count {
+            Logger.notifications.notice("\(items.count - unseen.count) banners were shown from the database already")
+        }
+        for item in unseen {
+            recentBanners.add(item, now: now)
+        }
+        if !unseen.isEmpty {
+            notificationsArrived(unseen)
+        }
+    }
+
+    /// Lists the records that no banner shown lately stands for, and shows the
+    /// newest beside the notch. Records a Focus held back, and those of apps
+    /// whose alert style is None, are left out, as their banners would have been.
+    private func recordsArrived(_ records: [DatabaseNotification]) {
+        let now = Date()
+        var items: [NotificationItem] = []
+        var matched = 0
+        var heldBack = 0
+        var bannerless = 0
+        for record in records where record.hasContent {
+            if record.isHeldBack {
+                heldBack += 1
+                continue
+            }
+            if !record.showsBanner {
+                bannerless += 1
+                continue
+            }
+            let app = Self.app(bundleIdentifier: record.bundleIdentifier)
+            if recentBanners.claim(record, appName: app.name, now: now) {
+                matched += 1
+                continue
+            }
+            recentBanners.addShown(record, appName: app.name, now: now)
+            items.append(NotificationItem(
+                token: "database-\(record.recordID)",
+                appName: app.name,
+                bundleIdentifier: app.bundleIdentifier ?? record.bundleIdentifier,
+                appURL: app.url,
+                title: record.title,
+                subtitle: record.subtitle,
+                body: record.body,
+                received: record.delivered
+            ))
+        }
+        let apps = items.map { $0.appName ?? "unknown app" }.joined(separator: ", ")
+        Logger.notifications.notice(
+            "Database: \(records.count) new records, \(matched) already shown from banners, \(heldBack) held back by Focus, \(bannerless) from apps without banners, \(items.count) shown [\(apps, privacy: .public)]"
+        )
+        if !items.isEmpty {
+            notificationsArrived(items)
+        }
+    }
+
+    /// The installed app with this bundle identifier (which the database may have
+    /// lowercased), named as the system names it.
+    private static func app(bundleIdentifier: String) -> (name: String?, bundleIdentifier: String?, url: URL?) {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) else {
+            return (nil, nil, nil)
+        }
+        let name = FileManager.default.displayName(atPath: url.path)
+        return (
+            name.hasSuffix(".app") ? String(name.dropLast(4)) : name,
+            // Not `Bundle(url:)`, which keeps every bundle it opens for the rest of the launch.
+            NotificationAppResolver.infoPlist(of: url)?["CFBundleIdentifier"] as? String,
+            url
+        )
     }
 
     /// Lists `items` and shows the last beside the notch.
