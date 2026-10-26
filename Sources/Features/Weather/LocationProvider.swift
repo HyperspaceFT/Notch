@@ -35,7 +35,9 @@ final class LocationProvider: NSObject, CLLocationManagerDelegate {
     private var lastStatus: CLAuthorizationStatus?
 
     /// The current location, after asking for access if the user has not decided yet.
-    func requestLocation() async -> LocationResult {
+    /// Answers with the manager's last fix while `recentFixAge` old, unless
+    /// `reusingRecentFix` is false.
+    func requestLocation(reusingRecentFix: Bool) async -> LocationResult {
         finish(.failed)
         return await withCheckedContinuation { continuation in
             pending = continuation
@@ -50,7 +52,7 @@ final class LocationProvider: NSObject, CLLocationManagerDelegate {
                 // Continues in `authorizationChanged` once the user answers.
                 manager.requestWhenInUseAuthorization()
             case .authorizedAlways:
-                if let location = manager.location, Self.isRecent(location.timestamp, now: Date()) {
+                if reusingRecentFix, let location = manager.location, Self.isRecent(location.timestamp, now: Date()) {
                     finish(.coordinate(Coordinate(
                         latitude: location.coordinate.latitude,
                         longitude: location.coordinate.longitude

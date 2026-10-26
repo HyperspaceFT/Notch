@@ -3,12 +3,16 @@ import NotchKit
 import Observation
 
 /// The last weather report and what the module shows about it. Refreshes only
-/// when the module's view asks (`refreshIfNeeded`), so nothing runs while the
+/// when the module's view asks (`refreshIfNeeded`) or the Weather settings'
+/// Refresh button does (`refreshNow`), so nothing runs on its own while the
 /// panel is closed or the module is not on Home.
 @MainActor
 @Observable
-final class WeatherModel {
-    enum Status: Equatable {
+public final class WeatherModel {
+    /// The one the Weather feature shows and the Weather settings refresh.
+    public static let shared = WeatherModel()
+
+    public enum Status: Equatable {
         /// No report yet, and none failed.
         case loading
         /// Location access is denied or restricted.
@@ -19,14 +23,20 @@ final class WeatherModel {
     }
 
     private(set) var report: WeatherReport?
-    private(set) var status = Status.loading
+    public private(set) var status = Status.loading
+    /// When the last report arrived (or a Debug sample was shown).
+    public private(set) var lastSuccess: Date?
+    /// When the last refresh failed, kept until the next success.
+    public private(set) var lastFailure: Date?
 
     @ObservationIgnored private let location = LocationProvider()
-    @ObservationIgnored private var refreshTask: Task<Void, Never>?
-    @ObservationIgnored private var lastSuccess: Date?
-    @ObservationIgnored private var lastFailure: Date?
+    /// Observed, for the settings' Refresh button and its spinner.
+    private var refreshTask: Task<Void, Never>?
     /// The last place a fix found, used when a later fix fails.
     @ObservationIgnored private var lastCoordinate: Coordinate?
+
+    /// Whether a refresh, location fix included, is in progress.
+    public var isRefreshing: Bool { refreshTask != nil }
 
     init() {
         location.onAccessGranted = { [weak self] in
@@ -44,10 +54,23 @@ final class WeatherModel {
             lastFailure: lastFailure,
             isInFlight: refreshTask != nil
         ) else { return }
+        startRefresh(reusingRecentFix: true)
+    }
+
+    /// For the Weather settings' Refresh button: drops the refresh in progress
+    /// and starts one now with a new location fix, however fresh the report is.
+    /// The report stays on screen meanwhile, and after a failure while recent
+    /// enough, as for any refresh.
+    public func refreshNow() {
+        cancelRefresh()
+        startRefresh(reusingRecentFix: false)
+    }
+
+    private func startRefresh(reusingRecentFix: Bool) {
         refreshTask = Task { [weak self, location] in
             // `stop()` may come before the task first runs.
             guard !Task.isCancelled else { return }
-            let result = await location.requestLocation()
+            let result = await location.requestLocation(reusingRecentFix: reusingRecentFix)
             guard !Task.isCancelled, let coordinate = self?.coordinate(for: result) else { return }
             do {
                 let report = try await OpenMeteo.fetch(for: coordinate)
@@ -90,7 +113,8 @@ final class WeatherModel {
         refreshIfNeeded()
     }
 
-    /// Lets no fetch in progress replace a sample when it ends.
+    /// Lets no fetch in progress replace a sample, or the refresh that replaces
+    /// it, when it ends.
     private func cancelRefresh() {
         if refreshTask != nil {
             stop()

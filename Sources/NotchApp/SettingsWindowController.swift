@@ -76,7 +76,7 @@ final class SettingsWindowController {
         addPane(HomeSettingsView(settings: .shared), symbol: "house") {
             localized(en: "Home", zh: "主页")
         }
-        addPane(WeatherSettingsView(settings: .shared), symbol: "cloud.sun") {
+        addPane(WeatherSettingsView(settings: .shared, model: .shared), symbol: "cloud.sun") {
             localized(en: "Weather", zh: "天气")
         }
         addPane(CalendarSettingsView(settings: .shared, local: .shared, feeds: .shared), symbol: "calendar") {

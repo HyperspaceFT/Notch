@@ -4,9 +4,11 @@ import WeatherFeature
 
 /// The Weather pane: what the Home weather module shows at each time of day.
 /// The day splits into three periods, set on a 24-hour dial, each showing
-/// today's weather, the next hours, or tomorrow's weather.
+/// today's weather, the next hours, or tomorrow's weather. Below them, when the
+/// weather last arrived and a button that fetches the location and weather now.
 struct WeatherSettingsView: View {
     @Bindable var settings: WeatherSettings
+    let model: WeatherModel
 
     var body: some View {
         Form {
@@ -37,10 +39,71 @@ struct WeatherSettingsView: View {
                     .disabled(settings.schedule == .standard)
                 }
             }
+            RefreshSection(model: model)
         }
         .formStyle(.grouped)
         .frame(width: 420)
         .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// When the weather last arrived, and a button that fetches a new location fix
+/// and the weather for it now.
+private struct RefreshSection: View {
+    let model: WeatherModel
+
+    var body: some View {
+        Section {
+            HStack(spacing: 10) {
+                Text(statusText)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                if model.isRefreshing {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+                Button(localized(en: "Refresh Now", zh: "立即刷新")) {
+                    model.refreshNow()
+                }
+                .disabled(model.isRefreshing)
+            }
+        } header: {
+            Text(localized(en: "Location & Weather", zh: "定位与天气"))
+        } footer: {
+            Text(model.status == .locationNotAllowed
+                ? localized(
+                    en: "Location access is off. Allow Notch in System Settings > Privacy & Security > Location Services.",
+                    zh: "定位权限已关闭。请在“系统设置 > 隐私与安全性 > 定位服务”中允许 Notch。"
+                )
+                : localized(
+                    en: "Gets your approximate location again and the weather there. The weather also refreshes on its own every 15 minutes while Home shows it.",
+                    zh: "重新获取你的大致位置和当地天气。主页显示天气时，也会每 15 分钟自动刷新。"
+                ))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var statusText: String {
+        if model.isRefreshing {
+            return localized(en: "Refreshing…", zh: "正在刷新…")
+        }
+        switch model.status {
+        case .loading:
+            return localized(en: "Not loaded yet", zh: "尚未加载")
+        case .locationNotAllowed:
+            return localized(en: "Location not allowed", zh: "未允许定位")
+        case .failed:
+            return localized(en: "Failed to load", zh: "加载失败")
+        case .ready:
+            // A report kept through a failed refresh shows with when it arrived.
+            let time = model.lastSuccess?.formatted(date: .omitted, time: .shortened)
+            if let lastFailure = model.lastFailure, model.lastSuccess.map({ lastFailure > $0 }) ?? true {
+                return time.map { localized(en: "Refresh failed; weather from \($0)", zh: "刷新失败，显示 \($0) 的天气") }
+                    ?? localized(en: "Refresh failed", zh: "刷新失败")
+            }
+            return time.map { localized(en: "Updated at \($0)", zh: "更新于 \($0)") } ?? ""
+        }
     }
 }
 

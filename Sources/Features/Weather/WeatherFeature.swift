@@ -10,7 +10,7 @@ public final class WeatherFeature: NotchFeature {
     public var title: String { localized(en: "Weather", zh: "天气") }
     public let symbol = "cloud.sun"
 
-    private let model = WeatherModel()
+    private let model = WeatherModel.shared
 
     public init() {}
 
