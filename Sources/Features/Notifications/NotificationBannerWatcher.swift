@@ -397,7 +397,7 @@ final class NotificationBannerWatcher {
         let now = Date()
         for capture in captures where capture.isParkable && parking.canPark(capture.token) {
             let key = capture.windowKey
-            if parking.join(capture.token, window: key, blocked: blockedWindows) { continue }
+            if parking.join(capture.token, window: key, at: now, blocked: blockedWindows) { continue }
             // A window that cannot be read or moved stays where it is, as does one
             // still waiting to be moved back or already off screen (its position is
             // no home); its banner is still mirrored.
@@ -419,13 +419,32 @@ final class NotificationBannerWatcher {
     /// whose time is up, tries failed moves again, and waits for what is next.
     private func updateParking() {
         let now = Date()
-        moveBack(parking.update(live: liveTokens, blocked: blockedWindows, at: now), at: now)
+        let parked = parking.windows
+        let restored = parking.update(live: liveTokens, blocked: blockedWindows, at: now)
+        for key in restored.keys {
+            guard let window = parked[key] else { continue }
+            let reason = if blockedWindows.contains(key) {
+                "it shows an alert"
+            } else if now.timeIntervalSince(window.lastBannerAt) >= BannerParking.maximumDuration {
+                "timeout"
+            } else {
+                "its banners are gone"
+            }
+            Logger.notifications.notice(
+                "Moving a banner window back (\(reason, privacy: .public)) after \(now.timeIntervalSince(window.parkedAt), format: .fixed(precision: 1)) s parked, last banner \(now.timeIntervalSince(window.lastBannerAt), format: .fixed(precision: 1)) s ago"
+            )
+        }
+        moveBack(restored, at: now)
         retryPendingRestores(at: now)
         scheduleParkingTimer()
     }
 
     private func restoreAllWindows() {
         let now = Date()
+        let count = parking.windows.count
+        if count > 0 {
+            Logger.notifications.notice("Moving \(count) parked banner windows back")
+        }
         moveBack(parking.restoreAll(), at: now)
         parkedWindows = [:]
         persistHome()

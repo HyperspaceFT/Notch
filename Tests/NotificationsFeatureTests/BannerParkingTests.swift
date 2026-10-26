@@ -58,7 +58,7 @@ struct BannerParkingTests {
         parking.park("a", window: 1, savedPosition: home, at: start)
         restored = parking.update(live: [:], at: at(1))
         #expect(restored == [:])
-        let joined = parking.join("b", window: 1)
+        let joined = parking.join("b", window: 1, at: at(1))
         #expect(joined)
         #expect(parking.windows[1]?.parkedAt == start)
         restored = parking.update(live: ["b": 1], at: at(1 + delay))
@@ -92,7 +92,7 @@ struct BannerParkingTests {
         var parking = BannerParking()
         var restored: [Int: CGPoint] = [:]
         parking.park("a", window: 1, savedPosition: home, at: start)
-        let joined = parking.join("b", window: 1)
+        let joined = parking.join("b", window: 1, at: start)
         #expect(joined)
         restored = parking.update(live: ["b": 1], at: at(1))
         #expect(restored == [:])
@@ -105,17 +105,37 @@ struct BannerParkingTests {
         #expect(restored == [1: home])
     }
 
-    @Test func joiningKeepsTheFirstSavedPositionAndTimeout() {
+    @Test func joiningKeepsTheFirstSavedPositionAndRestartsTheTimeout() {
         var parking = BannerParking()
         parking.park("a", window: 1, savedPosition: home, at: start)
-        parking.join("b", window: 1)
+        parking.join("b", window: 1, at: at(3))
         #expect(parking.windows[1]?.savedPosition == home)
-        #expect(parking.nextDeadline == at(BannerParking.maximumDuration))
+        #expect(parking.windows[1]?.parkedAt == start)
+        #expect(parking.nextDeadline == at(3 + BannerParking.maximumDuration))
+    }
+
+    @Test func aStreamOfBannersKeepsTheWindowParkedPastTheTimeout() {
+        var parking = BannerParking()
+        var restored: [Int: CGPoint] = [:]
+        parking.park("a", window: 1, savedPosition: home, at: start)
+        // A new banner every second, under the one token an app's banners share.
+        for second in 1...20 {
+            parking.join("a", window: 1, at: at(TimeInterval(second)))
+            restored = parking.update(live: ["a": 1], at: at(TimeInterval(second) + 0.5))
+            #expect(restored == [:])
+        }
+        #expect(parking.isParked(window: 1))
+        // The last banner lingers: the timeout counts from it.
+        restored = parking.update(live: ["a": 1], at: at(20 + BannerParking.maximumDuration - 0.1))
+        #expect(restored == [:])
+        restored = parking.update(live: ["a": 1], at: at(20 + BannerParking.maximumDuration))
+        #expect(restored == [1: home])
+        #expect(!parking.canPark("a"))
     }
 
     @Test func joiningAWindowThatIsNotParkedFails() {
         var parking = BannerParking()
-        let joined = parking.join("a", window: 1)
+        let joined = parking.join("a", window: 1, at: start)
         #expect(!joined)
         #expect(parking.windows.isEmpty)
     }
@@ -168,7 +188,7 @@ struct BannerParkingTests {
         #expect(!parked)
         #expect(!parking.isParked(window: 1))
         parking.park("b", window: 2, savedPosition: home, at: start)
-        let joined = parking.join("c", window: 2, blocked: [2])
+        let joined = parking.join("c", window: 2, at: start, blocked: [2])
         #expect(!joined)
         #expect(parking.windows[2]?.tokens == ["b"])
     }

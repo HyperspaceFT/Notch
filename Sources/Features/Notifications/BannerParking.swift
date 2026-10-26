@@ -6,16 +6,19 @@ import Foundation
 ///
 /// A window is parked for the banners (tokens) it shows. It goes back
 /// `restoreDelay` after none of them is live any more, so the outgoing banner
-/// finishes sliding out unseen, and in any case `maximumDuration` after it was
-/// parked; a banner still live then is not parked again, so a banner that
-/// lingers (or a token NotificationCenter reuses) cannot keep a window off
-/// screen. A window that also shows an alert ("blocked", see
+/// finishes sliding out unseen, and in any case `maximumDuration` after the
+/// latest new banner joined it, so a stream of banners keeps it parked; a banner
+/// still live then is not parked again, so a banner that lingers (or a token
+/// NotificationCenter reuses) cannot keep a window off screen. A window that also shows an alert ("blocked", see
 /// `BannerCapture.isParkable`) is never parked and goes back at once.
 struct BannerParking {
     struct Window: Equatable {
         /// Where the window was before it was moved.
         var savedPosition: CGPoint
         var parkedAt: Date
+        /// When the latest new banner was parked in it or joined it, which its
+        /// timeout counts from.
+        var lastBannerAt: Date
         var tokens: Set<String>
         /// When its last live token went; `nil` while one is live.
         var emptySince: Date?
@@ -57,7 +60,7 @@ struct BannerParking {
     /// its timeout or the end of its restore delay.
     var nextDeadline: Date? {
         windows.values.flatMap { window in
-            [window.parkedAt.addingTimeInterval(Self.maximumDuration)]
+            [window.lastBannerAt.addingTimeInterval(Self.maximumDuration)]
                 + (window.emptySince.map { [$0.addingTimeInterval(Self.restoreDelay)] } ?? [])
         }.min()
     }
@@ -79,17 +82,18 @@ struct BannerParking {
         blocked: Set<Int> = []
     ) -> Bool {
         guard !blocked.contains(window), Self.isHome(savedPosition) else { return false }
-        windows[window] = Window(savedPosition: savedPosition, parkedAt: date, tokens: [token])
+        windows[window] = Window(savedPosition: savedPosition, parkedAt: date, lastBannerAt: date, tokens: [token])
         return true
     }
 
-    /// Adds `token` to a window that is already parked, also during its restore
-    /// delay, keeping the window's saved position and timeout. `false` when the
-    /// window is not parked or is blocked.
+    /// Adds the new banner `token` to a window that is already parked, also
+    /// during its restore delay, keeping the window's saved position and starting
+    /// its timeout over. `false` when the window is not parked or is blocked.
     @discardableResult
-    mutating func join(_ token: String, window: Int, blocked: Set<Int> = []) -> Bool {
+    mutating func join(_ token: String, window: Int, at date: Date, blocked: Set<Int> = []) -> Bool {
         guard windows[window] != nil, !blocked.contains(window) else { return false }
         windows[window]?.tokens.insert(token)
+        windows[window]?.lastBannerAt = date
         windows[window]?.emptySince = nil
         return true
     }
@@ -104,7 +108,7 @@ struct BannerParking {
             if blocked.contains(key) {
                 restored[key] = window.savedPosition
                 windows[key] = nil
-            } else if now.timeIntervalSince(window.parkedAt) >= Self.maximumDuration {
+            } else if now.timeIntervalSince(window.lastBannerAt) >= Self.maximumDuration {
                 restored[key] = window.savedPosition
                 released.formUnion(liveTokens)
                 windows[key] = nil
