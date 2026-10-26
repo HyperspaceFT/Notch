@@ -97,12 +97,58 @@ struct NotificationDatabaseTests {
         #expect(records.allSatisfy { $0.bundleIdentifier == "com.example.chat" && $0.body == "Body" })
     }
 
+    /// A database at a fresh temporary path, made by `sql`.
+    static func makeDatabase(_ sql: String) throws -> (url: URL, directory: URL) {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "NotchDatabaseTest-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appending(path: "db")
+        var database: OpaquePointer?
+        sqlite3_open(url.path, &database)
+        sqlite3_exec(database, sql, nil, nil, nil)
+        sqlite3_close(database)
+        return (url, directory)
+    }
+
+    @Test func tablesThatNoLongerFitMeanTheFeatureBroke() throws {
+        let made = try Self.makeDatabase("CREATE TABLE notifications (id INTEGER PRIMARY KEY, payload BLOB);")
+        defer { try? FileManager.default.removeItem(at: made.directory) }
+        var failure: NotificationDatabase.ReadError?
+        do {
+            _ = try NotificationDatabase.records(at: made.url, after: delivered)
+        } catch {
+            failure = error
+        }
+        guard case .query = failure else {
+            Issue.record("expected a query error, got \(String(describing: failure))")
+            return
+        }
+        #expect(failure.flatMap { NotificationDatabase.status(after: $0, at: made.url) } == .broken)
+    }
+
+    @Test func recordsThatNoLongerParseMeanTheFeatureBroke() throws {
+        let made = try Self.makeDatabase("""
+            CREATE TABLE app (app_id INTEGER PRIMARY KEY, identifier VARCHAR, badge INTEGER NULL);
+            CREATE TABLE record (rec_id INTEGER PRIMARY KEY, app_id INTEGER, uuid BLOB, data BLOB, request_date REAL,
+                request_last_date REAL, delivered_date REAL, presented Bool, style INTEGER, snooze_fire_date REAL);
+            INSERT INTO app VALUES (1, 'com.example.chat', NULL);
+            INSERT INTO record (rec_id, app_id, data, delivered_date) VALUES (1, 1, X'00010203', \(delivered.timeIntervalSinceReferenceDate + 1));
+            """)
+        defer { try? FileManager.default.removeItem(at: made.directory) }
+        #expect(throws: NotificationDatabase.ReadError.format) {
+            try NotificationDatabase.records(at: made.url, after: delivered)
+        }
+        #expect(NotificationDatabase.status(after: .format, at: made.url) == .broken)
+        // A passing lock says nothing about the feature.
+        #expect(NotificationDatabase.status(after: .query(SQLITE_BUSY), at: made.url) == nil)
+    }
+
     @Test func aMissingDatabaseCannotBeOpened() {
         let url = FileManager.default.temporaryDirectory.appending(path: "NotchMissing-\(UUID().uuidString)/db")
         #expect(throws: NotificationDatabase.ReadError.self) {
             try NotificationDatabase.records(at: url, after: delivered)
         }
-        #expect(!NotificationDatabase.isReadable(at: url))
+        #expect(NotificationDatabase.access(at: url) == .missing)
+        #expect(NotificationDatabase.status(after: .cannotOpen(SQLITE_CANTOPEN), at: url) == .broken)
     }
 }
 

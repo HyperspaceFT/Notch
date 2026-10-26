@@ -2,6 +2,18 @@ import AppKit
 import ApplicationServices
 import Observation
 
+/// How reading the notification database goes, for the settings window.
+public enum NotificationDatabaseStatus: Equatable, Sendable {
+    /// Not read yet, or reading is off.
+    case unknown
+    case working
+    /// Full Disk Access is missing.
+    case noAccess
+    /// The database is missing or no longer reads as Notch expects: macOS
+    /// changed it, most likely in an update.
+    case broken
+}
+
 /// Whether the island shows other apps' notification banners and hides the
 /// system's, whether it also reads the notification database, and whether Notch
 /// has the Accessibility and Full Disk Access these need.
@@ -33,7 +45,11 @@ public final class NotificationsSettings {
 
     /// Whether Notch may open the notification database. Read again by
     /// `refreshFullDiskAccess()`, since the user grants it in System Settings.
+    /// Also true while the file is missing, which `databaseStatus` reports.
     public private(set) var hasFullDiskAccess: Bool
+
+    /// Set by the feature while it reads the database.
+    public internal(set) var databaseStatus = NotificationDatabaseStatus.unknown
 
     /// Whether macOS trusts Notch for Accessibility. Read again by
     /// `refreshAccessibilityAccess()`, since the user grants it in System Settings.
@@ -47,7 +63,7 @@ public final class NotificationsSettings {
         hidesSystemBanners = defaults.object(forKey: Self.hidesBannersKey) as? Bool ?? false
         readsDatabase = defaults.object(forKey: Self.readsDatabaseKey) as? Bool ?? false
         hasAccessibilityAccess = AXIsProcessTrusted()
-        hasFullDiskAccess = NotificationDatabase.isReadable()
+        hasFullDiskAccess = NotificationDatabase.access() != .denied
     }
 
     public func refreshAccessibilityAccess() {
@@ -59,7 +75,7 @@ public final class NotificationsSettings {
     }
 
     public func refreshFullDiskAccess() {
-        let readable = NotificationDatabase.isReadable()
+        let readable = NotificationDatabase.access() != .denied
         if readable != hasFullDiskAccess {
             hasFullDiskAccess = readable
         }

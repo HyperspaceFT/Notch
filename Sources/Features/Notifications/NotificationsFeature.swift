@@ -129,7 +129,9 @@ public final class NotificationsFeature: NotchFeature {
     /// takes effect without turning the switch off and on.
     private func startReadingDatabase() {
         guard databaseWatcher == nil else { return }
-        let watcher = NotificationDatabaseWatcher { [weak self] records in
+        let watcher = NotificationDatabaseWatcher { [settings] status in
+            settings.databaseStatus = status
+        } onRecords: { [weak self] records in
             self?.recordsArrived(records)
         }
         databaseWatcher = watcher
@@ -140,6 +142,7 @@ public final class NotificationsFeature: NotchFeature {
         databaseWatcher?.stop()
         databaseWatcher = nil
         recentBanners = RecentBanners()
+        settings.databaseStatus = .unknown
     }
 
     private func startWatching() {

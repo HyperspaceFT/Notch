@@ -35,6 +35,14 @@ enum NotificationDatabase {
         /// Most often no Full Disk Access.
         case cannotOpen(Int32)
         case query(Int32)
+        /// Records came back, and none of them read as a notification.
+        case format
+    }
+
+    /// Whether the database file can be opened: it may be missing (a macOS update
+    /// moved it) or refused (no Full Disk Access).
+    enum Access: Equatable, Sendable {
+        case readable, denied, missing
     }
 
     static var url: URL {
@@ -45,11 +53,28 @@ enum NotificationDatabase {
     /// Whether Notch may open the database. Without Full Disk Access macOS
     /// refuses to open a file in another app's group container; `access()` would
     /// not tell, it ignores that.
-    nonisolated static func isReadable(at url: URL = url) -> Bool {
+    nonisolated static func access(at url: URL = url) -> Access {
         let descriptor = open(url.path, O_RDONLY)
-        guard descriptor >= 0 else { return false }
-        close(descriptor)
-        return true
+        if descriptor >= 0 {
+            close(descriptor)
+            return .readable
+        }
+        return errno == ENOENT ? .missing : .denied
+    }
+
+    /// What a failed read says about the feature, or `nil` for a passing lock.
+    /// A missing file, one SQLite cannot read, a query that no longer fits the
+    /// tables, or records that no longer parse all mean macOS changed the
+    /// database: most likely an update.
+    nonisolated static func status(after error: ReadError, at url: URL) -> NotificationDatabaseStatus? {
+        switch error {
+        case .cannotOpen:
+            access(at: url) == .denied ? .noAccess : .broken
+        case .query(let code) where code == SQLITE_BUSY || code == SQLITE_LOCKED:
+            nil
+        case .query, .format:
+            .broken
+        }
     }
 
     /// The records delivered after `cutoff`, oldest first. The database is
@@ -76,10 +101,12 @@ enum NotificationDatabase {
         sqlite3_bind_double(statement, 1, cutoff.timeIntervalSinceReferenceDate)
 
         var records: [DatabaseNotification] = []
+        var rows = 0
         while true {
             let status = sqlite3_step(statement)
             if status == SQLITE_DONE { break }
             guard status == SQLITE_ROW else { throw .query(status) }
+            rows += 1
             guard
                 let identifier = sqlite3_column_text(statement, 1),
                 let bytes = sqlite3_column_blob(statement, 2)
@@ -94,6 +121,9 @@ enum NotificationDatabase {
             if let record {
                 records.append(record)
             }
+        }
+        if rows > 0, records.isEmpty {
+            throw .format
         }
         return records
     }
@@ -132,9 +162,10 @@ enum NotificationDatabase {
 }
 
 /// Follows usernoted's database and reports each record delivered since `start`
-/// once. usernoted writes in batches, about every five seconds, so a record
-/// lands that long after its notification; the files are checked every second
-/// and read only when they changed.
+/// once, and whether reading works (`onStatus`, on every change). usernoted
+/// writes in batches, about every five seconds, so a record lands that long
+/// after its notification; the files are checked every second and read only
+/// when they changed.
 @MainActor
 final class NotificationDatabaseWatcher {
     static let pollInterval: Duration = .seconds(1)
@@ -165,11 +196,14 @@ final class NotificationDatabaseWatcher {
     private enum Outcome: Sendable {
         case unchanged
         case records(FileState?, [DatabaseNotification])
-        case failed(NotificationDatabase.ReadError)
+        /// With what the failure means, `nil` for a passing lock.
+        case failed(NotificationDatabase.ReadError, NotificationDatabaseStatus?)
     }
 
     private let url: URL
     private let onRecords: @MainActor ([DatabaseNotification]) -> Void
+    private let onStatus: @MainActor (NotificationDatabaseStatus) -> Void
+    private var status = NotificationDatabaseStatus.unknown
     private var poll: Task<Void, Never>?
     private var started = Date()
     /// Only ever moves forward, so a clock set back cannot bring seen records
@@ -180,8 +214,13 @@ final class NotificationDatabaseWatcher {
     /// The last failure logged, so a lasting one is logged once.
     private var lastFailure: NotificationDatabase.ReadError?
 
-    init(url: URL = NotificationDatabase.url, onRecords: @escaping @MainActor ([DatabaseNotification]) -> Void) {
+    init(
+        url: URL = NotificationDatabase.url,
+        onStatus: @escaping @MainActor (NotificationDatabaseStatus) -> Void = { _ in },
+        onRecords: @escaping @MainActor ([DatabaseNotification]) -> Void
+    ) {
         self.url = url
+        self.onStatus = onStatus
         self.onRecords = onRecords
     }
 
@@ -196,6 +235,7 @@ final class NotificationDatabaseWatcher {
         seen = []
         fileState = nil
         lastFailure = nil
+        status = .unknown
         Logger.notifications.notice("Database reading started")
         poll = Task { [weak self] in
             while !Task.isCancelled {
@@ -224,17 +264,20 @@ final class NotificationDatabaseWatcher {
             do throws(NotificationDatabase.ReadError) {
                 return .records(state, try NotificationDatabase.records(at: url, after: readCutoff))
             } catch {
-                return .failed(error)
+                return .failed(error, NotificationDatabase.status(after: error, at: url))
             }
         }.value
         guard poll != nil else { return }
         switch outcome {
         case .unchanged:
             break
-        case .failed(let error):
+        case .failed(let error, let failureStatus):
             if error != lastFailure {
                 Logger.notifications.error("Could not read the notification database: \(String(describing: error), privacy: .public)")
                 lastFailure = error
+            }
+            if let failureStatus {
+                report(failureStatus)
             }
         case .records(let state, let records):
             if lastFailure != nil {
@@ -242,6 +285,7 @@ final class NotificationDatabaseWatcher {
                 lastFailure = nil
             }
             fileState = state
+            report(.working)
             let new = records.filter { !seen.contains($0.recordID) }
             // Everything still in the window is seen now; older IDs never come back.
             seen = Set(records.map(\.recordID))
@@ -249,6 +293,12 @@ final class NotificationDatabaseWatcher {
                 onRecords(new)
             }
         }
+    }
+
+    private func report(_ newStatus: NotificationDatabaseStatus) {
+        guard newStatus != status else { return }
+        status = newStatus
+        onStatus(newStatus)
     }
 }
 
