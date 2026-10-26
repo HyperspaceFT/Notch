@@ -1,6 +1,7 @@
 import NotchKit
 import NotchUI
 import Observation
+import os
 import SwiftUI
 
 /// Mirrors other apps' notification banners into the island: each new banner
@@ -97,6 +98,7 @@ public final class NotificationsFeature: NotchFeature {
                 self?.followSettings(generation: generation)
             }
         }
+        Logger.notifications.notice("Mirroring \(isEnabled ? "on" : "off", privacy: .public), hide system banners: \(hidesBanners)")
         if isEnabled {
             startWatching()
             watcher?.hidesBanners = hidesBanners
@@ -118,6 +120,7 @@ public final class NotificationsFeature: NotchFeature {
         }
         // No prompt: the volume HUD shows the system's, and the settings window
         // links to System Settings.
+        Logger.notifications.notice("No Accessibility access; checking again every 2 s")
         startPolling()
     }
 
@@ -145,6 +148,7 @@ public final class NotificationsFeature: NotchFeature {
                 guard !Task.isCancelled, let self else { return }
                 settings.refreshAccessibilityAccess()
                 if settings.hasAccessibilityAccess {
+                    Logger.notifications.notice("Accessibility access granted")
                     accessPoll = nil
                     if watcher == nil {
                         makeWatcher()
@@ -179,6 +183,10 @@ public final class NotificationsFeature: NotchFeature {
             inbox.insert(item)
         }
         guard let newest = items.last else { return }
+        let listed = inbox.items.count
+        Logger.notifications.notice(
+            "Presenting the activity for \(newest.appName ?? "unknown app", privacy: .public) (\(items.count) new, \(listed) listed)"
+        )
         // The same id replaces the previous banner's activity and restarts its timer.
         let open: @MainActor () -> Void = { [weak self] in
             self?.openDetail(of: newest)
