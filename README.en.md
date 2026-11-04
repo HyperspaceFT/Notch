@@ -19,7 +19,7 @@
 
 ## What it does
 
-Move the pointer onto the notch and it bounces and grows a little. Click it and it opens into a small black panel; move away and it shrinks back into the hardware notch. Drag files toward the notch and it opens straight to the Files tab.
+Move the pointer onto the notch and it bounces and grows a little. Click it and it opens into a small black panel; move away and it shrinks back into the hardware notch. Drag files toward the notch and it opens straight to the Files tab. The tabs right of the notch fold into one button that spreads out to the left when the pointer is on it, showing four at most; swipe sideways on the trackpad to see the rest.
 
 | Feature | Description |
 |---|---|
@@ -31,7 +31,7 @@ Move the pointer onto the notch and it bounces and grows a little. Click it and 
 | 📊 Usage Limits | The 5-hour, weekly, and other usage limits of Claude, Codex (ChatGPT plan), and Grok subscriptions, shown in the **Usage** tab and a Home module. In the **Usage** pane of **Settings…**, turn on the AIs to show and sign in once in Notch's own sign-in window (your browser's sign-ins are not read; Google sign-in is not available, so use an email code or a password). It is read only while the panel is open or the **Usage** settings pane is open, at most every 5 minutes per AI. It uses the internal endpoints of the web pages, which are undocumented and may stop working at any time |
 | 🌤️ Weather | The current weather, today's high and low, and the forecast for the next few hours; the day splits into three periods, each showing today's weather, the next few hours, or tomorrow's weather, adjustable in the **Weather** pane of **Settings…**, which can also refresh the location and weather on demand. Needs Location access (approximate location only); the data comes from [Open-Meteo](https://open-meteo.com) |
 | 📝 Notes | Jot down notes, in a tab of their own or on Home. You type right on the island without switching away from the current app; notes save as you type and stay on this Mac only |
-| ✅ Reminders | A Home module: the open to-dos from the Reminders app, which you can add, check off, and delete; changes reach your other devices through iCloud. Needs Reminders access |
+| ✅ Reminders | The open to-dos from the Reminders app, which you can add, check off, and delete; changes reach your other devices through iCloud. It has its own tab and can go on Home too. Needs Reminders access |
 | 📂 Files | On the left, an AirDrop zone: drop files on it to send them. On the right, a shelf: files can be dragged out again, or copied and pasted, with multi-select. You can turn on **Remove after pasting** (it only removes files from the shelf, never the originals) |
 | 🎧 AirPods | When AirPods connect, the notch shows the earbuds and their battery on both sides; while they are connected an extra tab shows the left, right, and case battery levels and adjusts the volume and noise-control mode. Needs Bluetooth access; noise control uses undocumented system interfaces and may stop working after a macOS update |
 | 🔋 Battery | A notice when the power adapter is plugged or unplugged, and one alert each when the charge falls to 20%, 10%, and 5%; the open panel shows the time remaining and the battery health |

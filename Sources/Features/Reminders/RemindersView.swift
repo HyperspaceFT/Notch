@@ -3,8 +3,8 @@ import NotchUI
 import Observation
 import SwiftUI
 
-/// The reminders module at the size Home gives it: a field to add one, then
-/// the incomplete reminders of every list. From
+/// The reminders card at the size it is given, in the Reminders tab or on Home:
+/// a field to add one, then the incomplete reminders of every list. From
 /// `wideThreshold` on, a reminder's due date sits on its title's line; below
 /// it, under the title.
 struct RemindersView: View {

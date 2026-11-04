@@ -1,6 +1,7 @@
 import AppKit
 import NotchKit
 import NotchUI
+import Observation
 import SwiftUI
 
 /// Root of the panel: the island, pinned to the top center of the fixed-size panel.
@@ -11,6 +12,9 @@ struct NotchRootView: View {
     /// Shared by an activity's wings and the tabs, for views that fly between
     /// them (`notchMorphHero`).
     @Namespace private var activityMorph
+    /// Kept here, for the panel's lifetime, rather than in `@State`, which needs a
+    /// macro plugin the Command Line Tools do not ship.
+    private let trailingTabRowScroll = TrailingTabRowScroll()
 
     var body: some View {
         let shape = NotchShape(
@@ -55,7 +59,7 @@ struct NotchRootView: View {
         .frame(width: model.islandSize.width, height: model.islandSize.height, alignment: .top)
         .overlay(alignment: .top) {
             if model.isExpandedContentMounted {
-                ExpandedIslandView(model: model, activityMorph: morph)
+                ExpandedIslandView(model: model, activityMorph: morph, trailingTabRowScroll: trailingTabRowScroll)
                     // Laid out at the expanded size even while the outline is
                     // smaller, so nothing reflows as the island opens or closes.
                     // Its width follows the selected tab, which opening and
@@ -449,10 +453,22 @@ private struct ExpandedIslandView: View {
     /// Set on every tab's content, so a tab can leave its places to the heroes
     /// that fly in from an activity's wings.
     let activityMorph: NotchActivityMorph
+    let trailingTabRowScroll: TrailingTabRowScroll
     /// Shared by the tab buttons and the selection highlight that slides between them.
     @Namespace private var tabSelection
     /// Shared by the views in different tabs that grow into one another (`notchTabMorph`).
     @Namespace private var tabMorph
+
+    /// The most right-side tab buttons the open row shows at once; it scrolls
+    /// sideways to the others. At the standard width, more would reach under the
+    /// hardware notch, which hides the leftmost one's selection.
+    static let maximumVisibleTrailingTabs = 4
+    private static let tabButtonSpacing: CGFloat = 6
+    /// Room around the right-side buttons inside their scroll view, so its clip
+    /// never cuts into a button at rest or into the selection's glass.
+    private static let trailingRowMargin: CGFloat = 8
+    /// Between the right-side buttons and the scroll indicator below them.
+    private static let scrollIndicatorGap: CGFloat = 4
 
     /// Visible tabs in header order, left to right.
     private var orderedTabs: [NotchViewModel.Tab] {
@@ -490,7 +506,8 @@ private struct ExpandedIslandView: View {
     /// Sits in the same band as the hardware notch, so the tab buttons stay clear
     /// of it: leading tabs to its left, trailing tabs to its right. The trailing
     /// tabs are one button at the header's right end (`trailingRepresentative`),
-    /// spread into a row to its left while the pointer is on it.
+    /// spread into a row to its left while the pointer is on it, which shows at
+    /// most `maximumVisibleTrailingTabs` of them and scrolls to the rest.
     private var header: some View {
         HStack(spacing: 0) {
             tabButtons(model.visibleTabs.filter { $0.placement == .leading })
@@ -500,13 +517,62 @@ private struct ExpandedIslandView: View {
         .frame(height: headerHeight)
     }
 
+    /// Always in a scroll view, open or folded, so opening and closing only change
+    /// its width and buttons; it scrolls only while the open row has more buttons
+    /// than it shows. A scroll comes to rest on whole buttons, and the indicator
+    /// below shows that the row scrolls and where it is.
     private var trailingTabGroup: some View {
         let isOpen = model.isTrailingTabGroupOpen
         let tabs = isOpen ? model.trailingTabRow : model.trailingRepresentative.map { [$0] } ?? []
-        return tabButtons(tabs, transition: .opacity.combined(with: .scale(scale: 0.6, anchor: .trailing)))
-            .onHover { model.setTrailingTabGroupHovered($0) }
-            // Spreads out like the hovered island grows, and folds back as it shrinks.
-            .animation(isOpen ? NotchTheme.hoverAnimation : NotchTheme.collapseAnimation, value: isOpen)
+        let overflows = tabs.count > Self.maximumVisibleTrailingTabs
+        let margin = Self.trailingRowMargin
+        let width = Self.rowWidth(buttons: min(tabs.count, Self.maximumVisibleTrailingTabs))
+        let scroll = trailingTabRowScroll
+        return ScrollView(.horizontal) {
+            tabButtons(tabs, transition: .opacity.combined(with: .scale(scale: 0.6, anchor: .trailing)))
+                .padding(margin)
+        }
+        // On the row's right end, where the representative is, when it opens; and
+        // that end stays put as the row widens, narrows, or gains a tab at its left.
+        .defaultScrollAnchor(.trailing)
+        .scrollTargetBehavior(TabSlotScrollBehavior(slot: TabButton.size + Self.tabButtonSpacing))
+        .scrollIndicators(.never)
+        .scrollDisabled(!overflows)
+        .onScrollGeometryChange(for: CGFloat.self, of: Self.scrolledFraction) { _, fraction in
+            scroll.fraction = fraction
+        }
+        .frame(width: width + margin * 2, height: TabButton.size + margin * 2)
+        // Laid out as the buttons alone, so they keep their places in the header.
+        .padding(-margin)
+        .overlay(alignment: .bottom) {
+            if overflows {
+                TrailingRowScrollIndicator(
+                    scroll: scroll,
+                    visibleShare: CGFloat(Self.maximumVisibleTrailingTabs) / CGFloat(tabs.count)
+                )
+                .offset(y: Self.scrollIndicatorGap + TrailingRowScrollIndicator.height)
+                .allowsHitTesting(false)
+                .transition(.opacity)
+            }
+        }
+        .onHover { model.setTrailingTabGroupHovered($0) }
+        // Spreads out like the hovered island grows, and folds back as it shrinks.
+        .animation(isOpen ? NotchTheme.hoverAnimation : NotchTheme.collapseAnimation, value: isOpen)
+    }
+
+    /// Width of `buttons` tab buttons side by side.
+    private static func rowWidth(buttons: Int) -> CGFloat {
+        guard buttons > 0 else { return 0 }
+        return CGFloat(buttons) * TabButton.size + CGFloat(buttons - 1) * tabButtonSpacing
+    }
+
+    /// How far the right-side row is scrolled: 0 at its left end, 1 at its right
+    /// end, and 1 while it does not scroll.
+    nonisolated private static func scrolledFraction(_ geometry: ScrollGeometry) -> CGFloat {
+        let insets = geometry.contentInsets
+        let range = geometry.contentSize.width + insets.leading + insets.trailing - geometry.containerSize.width
+        guard range > 0 else { return 1 }
+        return min(max((geometry.contentOffset.x + insets.leading) / range, 0), 1)
     }
 
     private var headerHeight: CGFloat {
@@ -519,7 +585,7 @@ private struct ExpandedIslandView: View {
     /// `transition` brings buttons in and out as the right-side row opens and closes.
     private func tabButtons(_ tabs: [NotchViewModel.Tab], transition: AnyTransition = .opacity) -> some View {
         let selectedID = model.selectedTab?.id
-        return HStack(spacing: 6) {
+        return HStack(spacing: Self.tabButtonSpacing) {
             ForEach(tabs) { tab in
                 TabButton(
                     symbol: tab.symbol(),
@@ -530,6 +596,14 @@ private struct ExpandedIslandView: View {
                     withAnimation(NotchTheme.tabSwitchAnimation) {
                         model.selectedTabID = tab.id
                     }
+                }
+                // In the scrolling right-side row, a button shrinks and fades as it
+                // slides out past the row's ends. The buttons left of the notch are
+                // in no scroll view and stay as they are.
+                .scrollTransition(.interactive, axis: .horizontal) { content, phase in
+                    content
+                        .opacity(1 - abs(phase.value) * 0.7)
+                        .scaleEffect(1 - abs(phase.value) * 0.3)
                 }
                 .matchedGeometryEffect(id: tab.id, in: tabSelection)
                 .transition(transition)
@@ -591,6 +665,9 @@ private struct TabButton: View {
     let help: String
     let action: () -> Void
 
+    /// Width and height, which the selection's glass circle takes too.
+    static let size: CGFloat = 28
+
     var body: some View {
         Button(action: action) {
             Group {
@@ -602,10 +679,56 @@ private struct TabButton: View {
                         .foregroundStyle(isSelected ? NotchTheme.primaryText : NotchTheme.secondaryText)
                 }
             }
-            .frame(width: 28, height: 28)
+            .frame(width: Self.size, height: Self.size)
             .contentShape(.circle)
         }
         .buttonStyle(.plain)
         .help(help)
+    }
+}
+
+/// How far the header's right-side row is scrolled, for its scroll indicator.
+@MainActor
+@Observable
+final class TrailingTabRowScroll {
+    /// 0 with the row at its left end; 1 at its right end, or while it does not scroll.
+    var fraction: CGFloat = 1
+}
+
+/// Brings a scroll of the right-side row to rest with whole buttons in view: on
+/// a multiple of `slot`, one button and the gap after it.
+private struct TabSlotScrollBehavior: ScrollTargetBehavior {
+    let slot: CGFloat
+
+    func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {
+        let range = max(context.contentSize.width - context.containerSize.width, 0)
+        let resting = (target.rect.minX / slot).rounded() * slot
+        target.rect.origin.x = min(max(resting, 0), range)
+    }
+}
+
+/// Under the right-side row while it has more buttons than it shows: a short
+/// track with a thumb as long as the share of the buttons in view, which moves
+/// along with the scroll as a scroll bar's would. Faint, so it reads as a hint
+/// rather than a control.
+private struct TrailingRowScrollIndicator: View {
+    let scroll: TrailingTabRowScroll
+    /// The share of the row's buttons in view, below 1.
+    let visibleShare: CGFloat
+
+    static let height: CGFloat = 3
+    private static let trackWidth: CGFloat = 32
+
+    var body: some View {
+        let thumbWidth = Self.trackWidth * visibleShare
+        Capsule()
+            .fill(Color.white.opacity(0.15))
+            .frame(width: Self.trackWidth, height: Self.height)
+            .overlay(alignment: .leading) {
+                Capsule()
+                    .fill(NotchTheme.secondaryText)
+                    .frame(width: thumbWidth)
+                    .offset(x: (Self.trackWidth - thumbWidth) * scroll.fraction)
+            }
     }
 }

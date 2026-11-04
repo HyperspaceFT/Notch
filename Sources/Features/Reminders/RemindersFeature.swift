@@ -1,14 +1,15 @@
 import NotchKit
 import SwiftUI
 
-/// Offers a Home module with the Reminders app's incomplete reminders
-/// (`RemindersStore.shared`), where reminders can be added, completed, and
-/// deleted. Has no tab of its own.
+/// The Reminders app's incomplete reminders in the island: a tab right of the
+/// notch and a Home module, both showing `RemindersStore.shared`, where
+/// reminders can be added, completed, and deleted.
 @MainActor
 public final class RemindersFeature: NotchFeature {
     public let id = "reminders"
     public var title: String { localized(en: "Reminders", zh: "提醒事项") }
     public let symbol = "checklist"
+    public let tabPlacement = NotchTabPlacement.trailing
 
     /// The narrowest the Home module may be. With the clock (134 pt), the weather
     /// and the calendar (a third each) in a four-module row of 812 pt, 120 pt are
@@ -23,6 +24,18 @@ public final class RemindersFeature: NotchFeature {
 
     public func deactivate() {
         RemindersStore.shared.stop()
+    }
+
+    /// Not tied to the Home module with `notchTabMorph`, unlike Notes: growing the
+    /// card from Home into the tab made its text wrap and unwrap on the way.
+    public func makeExpandedView() -> AnyView? {
+        // Apart from the Home module's: each card scrolls to the reminders it added.
+        let state = RemindersCardState()
+        return AnyView(
+            GeometryReader { proxy in
+                RemindersView(store: .shared, state: state, size: proxy.size)
+            }
+        )
     }
 
     public func makeHomeModules() -> [NotchHomeModule] {
