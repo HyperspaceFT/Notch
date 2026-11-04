@@ -464,11 +464,13 @@ private struct ExpandedIslandView: View {
     /// hardware notch, which hides the leftmost one's selection.
     static let maximumVisibleTrailingTabs = 4
     private static let tabButtonSpacing: CGFloat = 6
-    /// Room around the right-side buttons inside their scroll view, so its clip
-    /// never cuts into a button at rest or into the selection's glass.
+    /// Room around the right-side buttons inside the row's clip, so it never cuts
+    /// into a button at rest or into the selection's glass.
     private static let trailingRowMargin: CGFloat = 8
     /// Between the right-side buttons and the scroll indicator below them.
     private static let scrollIndicatorGap: CGFloat = 4
+    /// The right-side row's clip, against which its buttons fade.
+    nonisolated private static let trailingRowSpace = "trailingTabRow"
 
     /// Visible tabs in header order, left to right.
     private var orderedTabs: [NotchViewModel.Tab] {
@@ -517,62 +519,69 @@ private struct ExpandedIslandView: View {
         .frame(height: headerHeight)
     }
 
-    /// Always in a scroll view, open or folded, so opening and closing only change
-    /// its width and buttons; it scrolls only while the open row has more buttons
-    /// than it shows. A scroll comes to rest on whole buttons, and the indicator
-    /// below shows that the row scrolls and where it is.
+    /// The buttons in a row clipped to `maximumVisibleTrailingTabs` of them and
+    /// aligned on its right end, as before the clip: opening still only adds
+    /// buttons to the left of the representative. With more buttons than it shows,
+    /// the row moves by `trailingTabRowScroll`'s offset, and the indicator below
+    /// shows that it scrolls and where it is.
     private var trailingTabGroup: some View {
         let isOpen = model.isTrailingTabGroupOpen
         let tabs = isOpen ? model.trailingTabRow : model.trailingRepresentative.map { [$0] } ?? []
-        let overflows = tabs.count > Self.maximumVisibleTrailingTabs
+        let visibleCount = min(tabs.count, Self.maximumVisibleTrailingTabs)
+        let slot = TabButton.size + Self.tabButtonSpacing
+        let range = CGFloat(tabs.count - visibleCount) * slot
         let margin = Self.trailingRowMargin
-        let width = Self.rowWidth(buttons: min(tabs.count, Self.maximumVisibleTrailingTabs))
         let scroll = trailingTabRowScroll
-        return ScrollView(.horizontal) {
-            tabButtons(tabs, transition: .opacity.combined(with: .scale(scale: 0.6, anchor: .trailing)))
-                .padding(margin)
+        return ScrolledTrailingRow(scroll: scroll, range: range) {
+            tabButtons(
+                tabs,
+                transition: .opacity.combined(with: .scale(scale: 0.6, anchor: .trailing)),
+                fadeMargin: margin
+            )
+            .padding(margin)
         }
-        // On the row's right end, where the representative is, when it opens; and
-        // that end stays put as the row widens, narrows, or gains a tab at its left.
-        .defaultScrollAnchor(.trailing)
-        .scrollTargetBehavior(TabSlotScrollBehavior(slot: TabButton.size + Self.tabButtonSpacing))
-        .scrollIndicators(.never)
-        .scrollDisabled(!overflows)
-        .onScrollGeometryChange(for: CGFloat.self, of: Self.scrolledFraction) { _, fraction in
-            scroll.fraction = fraction
-        }
-        .frame(width: width + margin * 2, height: TabButton.size + margin * 2)
+        // Wider than this, the row overflows to the left, under the clip.
+        .frame(
+            width: Self.rowWidth(buttons: visibleCount) + margin * 2,
+            height: TabButton.size + margin * 2,
+            alignment: .trailing
+        )
+        .coordinateSpace(.named(Self.trailingRowSpace))
+        .clipped()
+        // The clip alone leaves the hidden buttons hit-testable past it.
+        .contentShape(.rect)
         // Laid out as the buttons alone, so they keep their places in the header.
         .padding(-margin)
         .overlay(alignment: .bottom) {
-            if overflows {
+            if range > 0 {
                 TrailingRowScrollIndicator(
                     scroll: scroll,
-                    visibleShare: CGFloat(Self.maximumVisibleTrailingTabs) / CGFloat(tabs.count)
+                    range: range,
+                    visibleShare: CGFloat(visibleCount) / CGFloat(tabs.count)
                 )
                 .offset(y: Self.scrollIndicatorGap + TrailingRowScrollIndicator.height)
                 .allowsHitTesting(false)
                 .transition(.opacity)
             }
         }
-        .onHover { model.setTrailingTabGroupHovered($0) }
-        // Spreads out like the hovered island grows, and folds back as it shrinks.
-        .animation(isOpen ? NotchTheme.hoverAnimation : NotchTheme.collapseAnimation, value: isOpen)
+        .onHover { hovered in
+            model.setTrailingTabGroupHovered(hovered)
+            scroll.setPointerOnRow(hovered)
+        }
+        // The island collapsed under the pointer, so no hover exit will come.
+        .onDisappear { scroll.setPointerOnRow(false) }
+        .onChange(of: range, initial: true) {
+            scroll.setRange(range, slot: slot)
+        }
+        // Without overshoot either way, so the opening row never reaches past its
+        // last visible button; with the hover's bounce it swung out too far.
+        .animation(NotchTheme.collapseAnimation, value: isOpen)
     }
 
     /// Width of `buttons` tab buttons side by side.
     private static func rowWidth(buttons: Int) -> CGFloat {
         guard buttons > 0 else { return 0 }
         return CGFloat(buttons) * TabButton.size + CGFloat(buttons - 1) * tabButtonSpacing
-    }
-
-    /// How far the right-side row is scrolled: 0 at its left end, 1 at its right
-    /// end, and 1 while it does not scroll.
-    nonisolated private static func scrolledFraction(_ geometry: ScrollGeometry) -> CGFloat {
-        let insets = geometry.contentInsets
-        let range = geometry.contentSize.width + insets.leading + insets.trailing - geometry.containerSize.width
-        guard range > 0 else { return 1 }
-        return min(max((geometry.contentOffset.x + insets.leading) / range, 0), 1)
     }
 
     private var headerHeight: CGFloat {
@@ -583,7 +592,13 @@ private struct ExpandedIslandView: View {
     /// view per side that slides between that side's buttons, and fades out on one
     /// side and in on the other when the selection crosses the notch.
     /// `transition` brings buttons in and out as the right-side row opens and closes.
-    private func tabButtons(_ tabs: [NotchViewModel.Tab], transition: AnyTransition = .opacity) -> some View {
+    /// With `fadeMargin`, the buttons are in the right-side row's clip
+    /// (`trailingRowSpace`), which has that much room inside its edges.
+    private func tabButtons(
+        _ tabs: [NotchViewModel.Tab],
+        transition: AnyTransition = .opacity,
+        fadeMargin: CGFloat? = nil
+    ) -> some View {
         let selectedID = model.selectedTab?.id
         return HStack(spacing: Self.tabButtonSpacing) {
             ForEach(tabs) { tab in
@@ -597,13 +612,19 @@ private struct ExpandedIslandView: View {
                         model.selectedTabID = tab.id
                     }
                 }
-                // In the scrolling right-side row, a button shrinks and fades as it
-                // slides out past the row's ends. The buttons left of the notch are
-                // in no scroll view and stay as they are.
-                .scrollTransition(.interactive, axis: .horizontal) { content, phase in
-                    content
-                        .opacity(1 - abs(phase.value) * 0.7)
-                        .scaleEffect(1 - abs(phase.value) * 0.3)
+                // In the right-side row, a button shrinks and fades by how far it
+                // is past the clip's room at either end: hidden ones, and ones
+                // sliding out while the row scrolls, opens, or closes.
+                .visualEffect { content, proxy in
+                    var amount: CGFloat = 0
+                    if let fadeMargin, let clip = proxy.bounds(of: .named(Self.trailingRowSpace)) {
+                        let inside = clip.insetBy(dx: fadeMargin, dy: 0)
+                        let outside = max(inside.minX, proxy.size.width - inside.maxX, 0)
+                        amount = min(outside / max(proxy.size.width, 1), 1)
+                    }
+                    return content
+                        .opacity(1 - amount * 0.7)
+                        .scaleEffect(1 - amount * 0.3)
                 }
                 .matchedGeometryEffect(id: tab.id, in: tabSelection)
                 .transition(transition)
@@ -687,23 +708,147 @@ private struct TabButton: View {
     }
 }
 
-/// How far the header's right-side row is scrolled, for its scroll indicator.
+/// How far the header's right-side row is scrolled, and the scroll input that
+/// moves it: while the pointer is on the row, the panel's scroll events go to it.
+/// - Two-finger scrolling on a trackpad moves the row with the fingers, and its
+///   momentum carries it on; it comes to rest on a whole button once momentum
+///   stops, or when the fingers lift without any.
+/// - A mouse's wheel, which reports no phases, moves it a button per notch.
 @MainActor
 @Observable
 final class TrailingTabRowScroll {
-    /// 0 with the row at its left end; 1 at its right end, or while it does not scroll.
-    var fraction: CGFloat = 1
+    /// How far the row is moved right from its right end, in points, bringing the
+    /// buttons on its left into view: 0 there, at most `range`.
+    private(set) var offset: CGFloat = 0
+    /// How far the row can move: the width of the buttons it does not show.
+    @ObservationIgnored private var range: CGFloat = 0
+    /// One button and the gap after it: a wheel notch's step, and where the row rests.
+    @ObservationIgnored private var slot: CGFloat = 1
+    @ObservationIgnored private var monitor: Any?
+    /// Settles a scroll whose fingers lifted, unless momentum begins first.
+    @ObservationIgnored private var pendingSettle: Task<Void, Never>?
+    /// How long after the fingers lift to wait for momentum to begin; it follows
+    /// the lift within a frame or two.
+    private static let momentumGrace: Duration = .milliseconds(70)
+    private static let settleAnimation = Animation.smooth(duration: 0.25)
+
+    isolated deinit {
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
+        }
+        pendingSettle?.cancel()
+    }
+
+    /// Called by the row whenever its buttons change. A folded row has nothing to
+    /// scroll, so it opens again on its right end.
+    func setRange(_ range: CGFloat, slot: CGFloat) {
+        self.range = max(range, 0)
+        self.slot = max(slot, 1)
+        offset = min(offset, self.range)
+    }
+
+    /// Takes the panel's scroll events while the pointer is on the row. A scroll
+    /// still under way when it leaves comes to rest at once.
+    func setPointerOnRow(_ isOn: Bool) {
+        if isOn {
+            guard monitor == nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+                let input = ScrollInput(event)
+                let isTaken = MainActor.assumeIsolated { self?.take(input) ?? false }
+                return isTaken ? nil : event
+            }
+        } else {
+            guard let monitor else { return }
+            NSEvent.removeMonitor(monitor)
+            self.monitor = nil
+            if pendingSettle != nil || offset != restingOffset(near: offset) {
+                settle()
+            }
+        }
+    }
+
+    /// Whether the event was the row's: the panel's, while the row scrolls.
+    private func take(_ input: ScrollInput) -> Bool {
+        guard input.isInPanel, range > 0 else { return false }
+        if input.isWheel {
+            // A notch that would move content right or down brings the buttons on
+            // the left, as the trackpad does when the fingers move right.
+            let delta = abs(input.deltaX) > abs(input.deltaY) ? input.deltaX : input.deltaY
+            if delta != 0 {
+                withAnimation(Self.settleAnimation) {
+                    offset = restingOffset(near: offset + (delta > 0 ? slot : -slot))
+                }
+            }
+            return true
+        }
+        // Only the horizontal part: a mostly vertical swipe barely moves it.
+        if input.deltaX != 0 {
+            offset = min(max(offset + input.deltaX, 0), range)
+        }
+        // Momentum carries the row on from where it is, and it settles where the
+        // momentum ends. Fingers that lift settle it only when no momentum begins
+        // within `momentumGrace`.
+        pendingSettle?.cancel()
+        pendingSettle = nil
+        if input.isCancelled || input.didMomentumEnd {
+            settle()
+        } else if input.didFingersLift {
+            pendingSettle = Task { [weak self] in
+                try? await Task.sleep(for: Self.momentumGrace)
+                guard !Task.isCancelled, let self else { return }
+                self.settle()
+            }
+        }
+        return true
+    }
+
+    private func settle() {
+        pendingSettle?.cancel()
+        pendingSettle = nil
+        withAnimation(Self.settleAnimation) {
+            offset = restingOffset(near: offset)
+        }
+    }
+
+    /// The whole-button offset nearest `offset`, within the row's range.
+    private func restingOffset(near offset: CGFloat) -> CGFloat {
+        min(max((offset / slot).rounded() * slot, 0), range)
+    }
 }
 
-/// Brings a scroll of the right-side row to rest with whole buttons in view: on
-/// a multiple of `slot`, one button and the gap after it.
-private struct TabSlotScrollBehavior: ScrollTargetBehavior {
-    let slot: CGFloat
+/// What the row reads from a scroll event, taken out of the event so it can
+/// cross into the main actor's code.
+private struct ScrollInput: Sendable {
+    let isInPanel: Bool
+    let isWheel: Bool
+    let deltaX: CGFloat
+    let deltaY: CGFloat
+    let didFingersLift: Bool
+    let didMomentumEnd: Bool
+    let isCancelled: Bool
 
-    func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {
-        let range = max(context.contentSize.width - context.containerSize.width, 0)
-        let resting = (target.rect.minX / slot).rounded() * slot
-        target.rect.origin.x = min(max(resting, 0), range)
+    init(_ event: NSEvent) {
+        isInPanel = event.window is NotchPanel
+        isWheel = event.phase.isEmpty && event.momentumPhase.isEmpty
+        // A wheel's deltas are in lines; only its direction counts.
+        deltaX = event.scrollingDeltaX
+        deltaY = event.scrollingDeltaY
+        didFingersLift = event.phase.contains(.ended)
+        didMomentumEnd = event.momentumPhase.contains(.ended)
+        isCancelled = event.phase.contains(.cancelled) || event.momentumPhase.contains(.cancelled)
+    }
+}
+
+/// Moves the right-side row's buttons by its scroll offset, kept within `range`
+/// so a folding row moves back to its right end along with the fold. A view of
+/// its own, so a scroll redraws the row alone.
+private struct ScrolledTrailingRow<Content: View>: View {
+    let scroll: TrailingTabRowScroll
+    let range: CGFloat
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        content.offset(x: min(scroll.offset, range))
     }
 }
 
@@ -713,6 +858,8 @@ private struct TabSlotScrollBehavior: ScrollTargetBehavior {
 /// rather than a control.
 private struct TrailingRowScrollIndicator: View {
     let scroll: TrailingTabRowScroll
+    /// How far the row can scroll, above 0.
+    let range: CGFloat
     /// The share of the row's buttons in view, below 1.
     let visibleShare: CGFloat
 
@@ -721,6 +868,8 @@ private struct TrailingRowScrollIndicator: View {
 
     var body: some View {
         let thumbWidth = Self.trackWidth * visibleShare
+        // 0 with the row at its left end, 1 at its right end, as the thumb sits.
+        let fraction = 1 - min(scroll.offset, range) / range
         Capsule()
             .fill(Color.white.opacity(0.15))
             .frame(width: Self.trackWidth, height: Self.height)
@@ -728,7 +877,7 @@ private struct TrailingRowScrollIndicator: View {
                 Capsule()
                     .fill(NotchTheme.secondaryText)
                     .frame(width: thumbWidth)
-                    .offset(x: (Self.trackWidth - thumbWidth) * scroll.fraction)
+                    .offset(x: (Self.trackWidth - thumbWidth) * fraction)
             }
     }
 }
