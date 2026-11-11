@@ -43,17 +43,27 @@ enum ClaudeUsage {
     }
 
     /// The plan's name: Team and Enterprise from `raven_type`; a personal plan
-    /// from the Max multiple in `rate_limit_tier` ("default_claude_max_5x" →
-    /// "Max 5x"), else `claude_max` / `claude_pro` in `capabilities`; empty when
-    /// none of these says.
+    /// from `rate_limit_tier`, else `claude_ultra` / `claude_max` / `claude_pro`
+    /// in `capabilities`; empty when none of these says. Since 2026-10-30 the
+    /// $100 Max 5x is called Max and the $200 Max 20x is called Ultra, while the
+    /// tier may still read "default_claude_max_5x" / "default_claude_max_20x";
+    /// any other Max multiple keeps its old "Max Nx" name.
     static func planName(_ organization: [String: Any]) -> String {
         if let raven = organization["raven_type"] as? String, let first = raven.first {
             return first.uppercased() + raven.dropFirst()
         }
-        if let tier = organization["rate_limit_tier"] as? String, let match = tier.firstMatch(of: /max_(\d+)x/) {
-            return "Max \(match.1)x"
+        if let tier = organization["rate_limit_tier"] as? String {
+            if tier.contains("ultra") { return "Ultra" }
+            if let match = tier.firstMatch(of: /max_(\d+)x/) {
+                switch match.1 {
+                case "5": return "Max"
+                case "20": return "Ultra"
+                default: return "Max \(match.1)x"
+                }
+            }
         }
         let capabilities = (organization["capabilities"] as? [Any])?.compactMap { $0 as? String } ?? []
+        if capabilities.contains("claude_ultra") { return "Ultra" }
         if capabilities.contains("claude_max") { return "Max" }
         if capabilities.contains("claude_pro") { return "Pro" }
         return ""

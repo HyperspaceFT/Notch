@@ -110,8 +110,11 @@ struct ClaudeUsageTests {
             ClaudeUsage.planName(try #require(json(text) as? [String: Any]))
         }
         #expect(try plan(#"{"raven_type": "team", "rate_limit_tier": "default_claude_max_5x"}"#) == "Team")
-        #expect(try plan(#"{"raven_type": "", "rate_limit_tier": "default_claude_max_5x"}"#) == "Max 5x")
-        #expect(try plan(#"{"rate_limit_tier": "default_claude_max_20x", "capabilities": ["chat", "claude_pro"]}"#) == "Max 20x")
+        #expect(try plan(#"{"raven_type": "", "rate_limit_tier": "default_claude_max_5x"}"#) == "Max")
+        #expect(try plan(#"{"rate_limit_tier": "default_claude_max_20x", "capabilities": ["chat", "claude_pro"]}"#) == "Ultra")
+        #expect(try plan(#"{"rate_limit_tier": "default_claude_max_40x"}"#) == "Max 40x")
+        #expect(try plan(#"{"rate_limit_tier": "default_claude_ultra"}"#) == "Ultra")
+        #expect(try plan(#"{"capabilities": ["chat", "claude_ultra", "claude_max"]}"#) == "Ultra")
         #expect(try plan(#"{"capabilities": ["chat", "claude_max"]}"#) == "Max")
         #expect(try plan(#"{"capabilities": ["chat", "claude_pro"]}"#) == "Pro")
         #expect(try plan(#"{"capabilities": ["chat"]}"#) == "")
@@ -159,6 +162,13 @@ struct CodexUsageTests {
         #expect(report.windows[0].percent == 0)
         #expect(report.windows[1].resetsAt == now.addingTimeInterval(600))
         #expect(report.windows[1].duration == nil)
+    }
+
+    @Test func planNames() {
+        #expect(CodexUsage.planName("pro") == "Pro")
+        #expect(CodexUsage.planName("pro_50x") == "Pro 50x")
+        #expect(CodexUsage.planName("Pro50X") == "Pro 50x")
+        #expect(CodexUsage.planName("go") == "go")
     }
 
     @Test func unknownPlanPassesThrough() throws {

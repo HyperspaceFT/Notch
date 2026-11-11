@@ -16,6 +16,15 @@ enum CodexUsage {
         "business": "Business", "enterprise": "Enterprise", "edu": "Edu",
     ]
 
+    /// The plan's display name. The $500 Pro 50x plan (2026-11) has no
+    /// `plan_type` in the Codex CLI yet, so any value naming 50x is taken as it;
+    /// other unknown values pass through unchanged.
+    static func planName(_ planType: String) -> String {
+        if let name = planNames[planType] { return name }
+        if planType.lowercased().contains("50x") { return "Pro 50x" }
+        return planType
+    }
+
     /// The claims in a JWT's payload; empty when it does not decode.
     private static func jwtPayload(_ token: String) -> [String: Any] {
         let parts = token.split(separator: ".", omittingEmptySubsequences: false)
@@ -67,7 +76,7 @@ enum CodexUsage {
                 )
             }
         guard let data, !windows.isEmpty else { throw .failed(.formatChanged) }
-        let plan = (data["plan_type"] as? String).map { planNames[$0] ?? $0 } ?? ""
+        let plan = (data["plan_type"] as? String).map(planName) ?? ""
         return UsageReport(plan: plan, windows: windows)
     }
 

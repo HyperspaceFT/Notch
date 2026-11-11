@@ -3,7 +3,7 @@ import NotchKit
 
 /// One provider's usage as its website reports it: the plan and its limit windows.
 public struct UsageReport: Equatable, Sendable {
-    /// The plan's display name, such as "Max 5x"; empty when unknown.
+    /// The plan's display name, such as "Ultra"; empty when unknown.
     public var plan: String
     /// The limits in the order the provider lists them, the shortest first.
     public var windows: [UsageWindow]
@@ -247,7 +247,7 @@ enum UsageFormat {
         }
     }
 
-    /// The settings pane's line for a provider: "Max 5x · 5 hours 42% · Weekly 18%",
+    /// The settings pane's line for a provider: "Ultra · 5 hours 42% · Weekly 18%",
     /// or what keeps it from showing.
     static func summary(_ status: UsageStatus, language: AppLanguage = Localization.shared.language) -> String {
         switch status.state {
@@ -302,7 +302,7 @@ enum UsageFormat {
 }
 
 extension UsageStatus {
-    /// The settings pane's line: "Max 5x · 5 hours 42% · Weekly 18%", or what
+    /// The settings pane's line: "Ultra · 5 hours 42% · Weekly 18%", or what
     /// keeps the usage from showing, in the interface language.
     @MainActor public var summary: String {
         UsageFormat.summary(self)
