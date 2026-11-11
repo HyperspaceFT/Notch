@@ -166,7 +166,8 @@ struct CodexUsageTests {
 
     @Test func planNames() {
         #expect(CodexUsage.planName("pro") == "Pro")
-        #expect(CodexUsage.planName("promax") == "Pro 50x")
+        #expect(CodexUsage.planName("prolite") == "Pro Lite")
+        #expect(CodexUsage.planName("promax") == "Pro Max")
         #expect(CodexUsage.planName("go") == "go")
     }
 

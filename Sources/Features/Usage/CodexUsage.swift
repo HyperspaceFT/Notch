@@ -14,8 +14,9 @@ enum CodexUsage {
     private static let planNames = [
         "free": "Free", "plus": "Plus", "pro": "Pro", "team": "Team",
         "business": "Business", "enterprise": "Enterprise", "edu": "Edu",
-        // The $500 Pro 50x plan (2026-11); Codex CLI 0.167 names it `promax`.
-        "promax": "Pro 50x",
+        // The three Pro tiers ($100 / $200 / $500, the last one 50x since
+        // 2026-11), named like Claude's plans rather than by their multiple.
+        "prolite": "Pro Lite", "promax": "Pro Max",
     ]
 
     /// The plan's display name; an unknown `plan_type` passes through unchanged.
