@@ -14,15 +14,13 @@ enum CodexUsage {
     private static let planNames = [
         "free": "Free", "plus": "Plus", "pro": "Pro", "team": "Team",
         "business": "Business", "enterprise": "Enterprise", "edu": "Edu",
+        // The $500 Pro 50x plan (2026-11); Codex CLI 0.167 names it `promax`.
+        "promax": "Pro 50x",
     ]
 
-    /// The plan's display name. The $500 Pro 50x plan (2026-11) has no
-    /// `plan_type` in the Codex CLI yet, so any value naming 50x is taken as it;
-    /// other unknown values pass through unchanged.
+    /// The plan's display name; an unknown `plan_type` passes through unchanged.
     static func planName(_ planType: String) -> String {
-        if let name = planNames[planType] { return name }
-        if planType.lowercased().contains("50x") { return "Pro 50x" }
-        return planType
+        planNames[planType] ?? planType
     }
 
     /// The claims in a JWT's payload; empty when it does not decode.
