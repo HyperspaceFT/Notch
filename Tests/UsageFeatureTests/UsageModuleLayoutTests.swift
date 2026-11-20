@@ -23,9 +23,11 @@ struct UsageModuleLayoutTests {
             ([], 68),
             ([.claude], 68),
             ([.grok], 68),
+            ([.google], 68),
             ([.claude, .codex], 86),
             ([.claude, .grok], 71),
             ([.codex, .grok], 71),
+            ([.codex, .google], 71),
             ([.claude, .codex, .grok], 106),
         ]
         for (providers, width) in table {

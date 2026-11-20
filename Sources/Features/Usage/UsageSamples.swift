@@ -51,6 +51,11 @@ struct UsageSample: Equatable, Sendable {
                 UsageWindow(duration: 5 * hour, percent: 76, resetsAt: now.addingTimeInterval(1.2 * hour)),
                 UsageWindow(duration: 7 * 24 * hour, percent: 93, resetsAt: now.addingTimeInterval(5 * 24 * hour)),
             ])
+        case .google:
+            // One Gemini pool, reported as a fraction with no window length.
+            return UsageReport(plan: "Antigravity", windows: [
+                UsageWindow(duration: nil, percent: 39, resetsAt: now.addingTimeInterval(2.6 * hour)),
+            ])
         case .grok:
             return UsageReport(plan: "SuperGrok", windows: [
                 UsageWindow(

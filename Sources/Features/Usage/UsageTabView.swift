@@ -124,7 +124,7 @@ private struct UsageProviderCard: View {
                     .lineLimit(1)
             }
         case .signedOut:
-            message(UsageFormat.stateTitle(state) ?? "", detail: UsageFormat.signInHint())
+            message(UsageFormat.stateTitle(state) ?? "", detail: UsageFormat.signInHint(provider: provider))
         case .needsVerification:
             message(UsageFormat.stateTitle(state) ?? "", detail: UsageFormat.verificationHint())
         case .failed(let failure):

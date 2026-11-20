@@ -109,7 +109,7 @@ struct SVGPathTests {
     }
 
     @Test func everyLogoParsesWithinItsViewBox() throws {
-        for (provider, data) in [(UsageProvider.claude, UsageLogos.claudeData), (.codex, UsageLogos.codexData), (.grok, UsageLogos.grokData)] {
+        for (provider, data) in [(UsageProvider.claude, UsageLogos.claudeData), (.codex, UsageLogos.codexData), (.grok, UsageLogos.grokData), (.google, UsageLogos.geminiData)] {
             let parsed = try SVGPath.elements(data)
             #expect(parsed.count > 10)
             let bounds = UsageLogos.path(for: provider).boundingRect

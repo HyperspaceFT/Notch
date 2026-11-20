@@ -10,30 +10,46 @@ public enum UsageProvider: String, CaseIterable, Sendable {
     case codex
     /// grok.com (SuperGrok and its tiers, or a free account).
     case grok
+    /// Google's Gemini quota in Antigravity, read from the Cloud Code endpoint
+    /// with the sign-in the Antigravity app keeps on this Mac (not a web
+    /// sign-in: `usesWebSignIn` is false, and `GoogleUsage` handles its auth).
+    case google
 
     public var displayName: String {
         switch self {
         case .claude: "Claude"
         case .codex: "Codex"
         case .grok: "Grok"
+        case .google: "Gemini"
         }
     }
 
     /// The website every request for this provider goes to, and nothing else.
+    /// For Google it is the Cloud Code host `GoogleUsage` calls (its auth is a
+    /// bearer token, not this origin's cookies).
     public var origin: URL {
         switch self {
         case .claude: URL(string: "https://claude.ai")!
         case .codex: URL(string: "https://chatgpt.com")!
         case .grok: URL(string: "https://grok.com")!
+        case .google: URL(string: "https://\(GoogleUsage.host)")!
         }
     }
 
-    /// Where the sign-in window starts.
+    /// Whether the provider signs in through Notch's own sign-in window. Google
+    /// does not: its sign-in lives in the Antigravity app, so the Usage pane
+    /// shows no sign-in button for it.
+    public var usesWebSignIn: Bool {
+        self != .google
+    }
+
+    /// Where the sign-in window starts. Unused for Google (`usesWebSignIn` is false).
     public var signInURL: URL {
         switch self {
         case .claude: URL(string: "https://claude.ai/login")!
         case .codex: URL(string: "https://chatgpt.com/auth/login")!
         case .grok: URL(string: "https://grok.com/")!
+        case .google: URL(string: "https://antigravity.google/")!
         }
     }
 
@@ -43,35 +59,40 @@ public enum UsageProvider: String, CaseIterable, Sendable {
         case .claude: URL(string: "https://claude.ai/settings/usage")!
         case .codex: URL(string: "https://chatgpt.com/codex/settings/usage")!
         case .grok: URL(string: "https://grok.com/?_s=usage")!
+        case .google: URL(string: "https://antigravity.google/")!
         }
     }
 
     /// The registrable domains whose website data "Sign Out" removes: the site
-    /// and the domains its sign-in passes through.
+    /// and the domains its sign-in passes through. Empty for Google, which keeps
+    /// no website data in Notch.
     public var signOutDomains: [String] {
         switch self {
         case .claude: ["claude.ai"]
         case .codex: ["chatgpt.com", "openai.com"]
         case .grok: ["grok.com", "x.ai"]
+        case .google: []
         }
     }
 
     /// How many limit windows the provider usually reports (Claude and Codex a
-    /// session and a weekly one, Grok one weekly pool), for the Home module's width.
+    /// session and a weekly one, Grok one weekly pool, Google one Gemini pool),
+    /// for the Home module's width.
     var expectedWindowCount: Int {
         switch self {
         case .claude, .codex: 2
-        case .grok: 1
+        case .grok, .google: 1
         }
     }
 
     /// The provider's color, for its bars; Claude's and Codex's match their
-    /// logos (`UsageProviderLogo`).
+    /// logos (`UsageProviderLogo`), and Google's is Gemini's blue.
     public var accentColor: Color {
         switch self {
         case .claude: Color(red: 0xD9 / 255, green: 0x77 / 255, blue: 0x57 / 255)
         case .codex: Color(red: 0x7A / 255, green: 0x9D / 255, blue: 0xFF / 255)
         case .grok: Color(red: 0x9F / 255, green: 0xB3 / 255, blue: 0xC8 / 255)
+        case .google: Color(red: 0x31 / 255, green: 0x86 / 255, blue: 0xFF / 255)
         }
     }
 }

@@ -86,6 +86,8 @@ public struct UsageProviderLogo: View {
     }
 
     private static let claudeOrange = Color(red: 0xD9 / 255, green: 0x77 / 255, blue: 0x57 / 255)
+    /// Gemini's blue (gemini-color.svg's base fill).
+    private static let geminiBlue = Color(red: 0x31 / 255, green: 0x86 / 255, blue: 0xFF / 255)
     /// Lobe's codex-color gradient stops.
     private static let codexGradient = LinearGradient(
         stops: [
@@ -100,11 +102,14 @@ public struct UsageProviderLogo: View {
     private var fill: AnyShapeStyle {
         switch (style, provider) {
         case (.system, .claude): AnyShapeStyle(Self.claudeOrange)
+        case (.system, .google): AnyShapeStyle(Self.geminiBlue)
         case (.system, _): AnyShapeStyle(.primary)
         case (.island, .claude): NotchTheme.accent(Self.claudeOrange)
         case (.island, .codex):
             NotchAppearance.shared.isLightAndColorEnabled ? AnyShapeStyle(Self.codexGradient) : AnyShapeStyle(NotchTheme.primaryText)
         case (.island, .grok): AnyShapeStyle(NotchTheme.primaryText)
+        case (.island, .google):
+            NotchAppearance.shared.isLightAndColorEnabled ? AnyShapeStyle(NotchTheme.accent(Self.geminiBlue)) : AnyShapeStyle(NotchTheme.primaryText)
         }
     }
 }

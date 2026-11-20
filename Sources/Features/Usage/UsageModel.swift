@@ -26,6 +26,7 @@ public final class UsageModel {
     @ObservationIgnored private let webSession: UsageWebSession
     @ObservationIgnored private lazy var client = UsageClient(webSession: webSession)
     @ObservationIgnored private let claudeOrganization = ClaudeOrganizationCache()
+    @ObservationIgnored private lazy var googleAuth = GoogleAuth()
     @ObservationIgnored private var tasks: [UsageProvider: Task<Void, Never>] = [:]
     /// Sign-outs in progress. They always run to completion and clear their own
     /// entry, which `signOutIDs` tells apart from a later sign-out's.
@@ -107,6 +108,9 @@ public final class UsageModel {
         if provider == .claude {
             claudeOrganization.organization = nil
         }
+        if provider == .google {
+            googleAuth.forget()
+        }
         statuses[provider] = UsageStatus(state: .signedOut, report: nil, checkedAt: Date())
         let id = signOutIDs[provider, default: 0] + 1
         signOutIDs[provider] = id
@@ -175,6 +179,7 @@ public final class UsageModel {
         case .claude: try await ClaudeUsage.fetch(client: client, cache: claudeOrganization)
         case .codex: try await CodexUsage.fetch(client: client)
         case .grok: try await GrokUsage.fetch(client: client)
+        case .google: try await GoogleUsage.fetch(auth: googleAuth)
         }
     }
 

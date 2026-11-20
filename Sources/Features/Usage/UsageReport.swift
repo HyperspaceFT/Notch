@@ -218,7 +218,7 @@ enum UsageFormat {
     static func scopeLabel(_ scope: UsageScope, provider: UsageProvider, language: AppLanguage = Localization.shared.language) -> String {
         if let label = scope.label { return label }
         switch provider {
-        case .grok: return text(language, en: "Other", zh: "其它")
+        case .grok, .google: return text(language, en: "Other", zh: "其它")
         case .claude, .codex: return text(language, en: "Other", zh: "单项")
         }
     }
@@ -267,8 +267,11 @@ enum UsageFormat {
         }
     }
 
-    static func signInHint(language: AppLanguage = Localization.shared.language) -> String {
-        text(language, en: "Sign in under Settings → Usage.", zh: "在「设置 → 用量」中登录。")
+    static func signInHint(provider: UsageProvider? = nil, language: AppLanguage = Localization.shared.language) -> String {
+        if provider?.usesWebSignIn == false {
+            return text(language, en: "Sign in with the Antigravity app.", zh: "在 Antigravity 应用中登录。")
+        }
+        return text(language, en: "Sign in under Settings → Usage.", zh: "在「设置 → 用量」中登录。")
     }
 
     static func verificationHint(language: AppLanguage = Localization.shared.language) -> String {
