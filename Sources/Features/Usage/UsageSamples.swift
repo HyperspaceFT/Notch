@@ -52,9 +52,14 @@ struct UsageSample: Equatable, Sendable {
                 UsageWindow(duration: 7 * 24 * hour, percent: 93, resetsAt: now.addingTimeInterval(5 * 24 * hour)),
             ])
         case .google:
-            // One Gemini pool, reported as a fraction with no window length.
-            return UsageReport(plan: "Antigravity", windows: [
-                UsageWindow(duration: nil, percent: 39, resetsAt: now.addingTimeInterval(2.6 * hour)),
+            // Gemini's 5-hour and weekly limits, as the Antigravity CLI reports them.
+            return UsageReport(plan: "", windows: [
+                UsageWindow(duration: GoogleUsage.fiveHourDuration, percent: 53, resetsAt: now.addingTimeInterval(1.9 * hour)),
+                UsageWindow(
+                    duration: GoogleUsage.weeklyDuration,
+                    percent: 15,
+                    resetsAt: now.addingTimeInterval(6.8 * 24 * hour)
+                ),
             ])
         case .grok:
             return UsageReport(plan: "SuperGrok", windows: [

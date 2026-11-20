@@ -25,14 +25,14 @@ public enum UsageProvider: String, CaseIterable, Sendable {
     }
 
     /// The website every request for this provider goes to, and nothing else.
-    /// For Google it is the Cloud Code host `GoogleUsage` calls (its auth is a
-    /// bearer token, not this origin's cookies).
+    /// Google makes no web request of its own (`GoogleUsage` runs the Antigravity
+    /// CLI), so its origin is only a nominal home page.
     public var origin: URL {
         switch self {
         case .claude: URL(string: "https://claude.ai")!
         case .codex: URL(string: "https://chatgpt.com")!
         case .grok: URL(string: "https://grok.com")!
-        case .google: URL(string: "https://\(GoogleUsage.host)")!
+        case .google: URL(string: "https://antigravity.google")!
         }
     }
 
@@ -75,13 +75,13 @@ public enum UsageProvider: String, CaseIterable, Sendable {
         }
     }
 
-    /// How many limit windows the provider usually reports (Claude and Codex a
-    /// session and a weekly one, Grok one weekly pool, Google one Gemini pool),
+    /// How many limit windows the provider usually reports (Claude, Codex, and
+    /// Google each a session/5-hour one and a weekly one, Grok one weekly pool),
     /// for the Home module's width.
     var expectedWindowCount: Int {
         switch self {
-        case .claude, .codex: 2
-        case .grok, .google: 1
+        case .claude, .codex, .google: 2
+        case .grok: 1
         }
     }
 

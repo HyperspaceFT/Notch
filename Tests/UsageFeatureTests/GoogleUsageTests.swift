@@ -6,104 +6,91 @@ import Testing
 struct GoogleUsageTests {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
-    /// A `fetchAvailableModels` body: the Gemini models share one pool, a
-    /// non-Google model sits on its own, and a local model has no reset.
-    private func models() -> Any {
+    /// The shape `agy -p /usage --output-format json` returns: Gemini's two
+    /// buckets, a separate Argon weekly bucket, and the Claude/GPT group that
+    /// the Gemini card ignores.
+    private func usage(argonRemaining: Double = 1) -> Any {
         [
-            "models": [
-                "gemini-3-flash": [
-                    "apiProvider": "API_PROVIDER_GOOGLE_GEMINI",
-                    "modelProvider": "MODEL_PROVIDER_GOOGLE",
-                    "quotaInfo": ["remainingFraction": 0.614092, "resetTime": "2026-11-20T23:08:52Z"],
-                ],
-                "gemini-2.5-pro": [
-                    "apiProvider": "API_PROVIDER_GOOGLE_GEMINI",
-                    "modelProvider": "MODEL_PROVIDER_GOOGLE",
-                    "quotaInfo": ["remainingFraction": 0.614092, "resetTime": "2026-11-20T23:08:52Z"],
-                ],
-                "claude-opus-5-5-low": [
-                    "apiProvider": "API_PROVIDER_ANTHROPIC",
-                    "modelProvider": "MODEL_PROVIDER_ANTHROPIC",
-                    "quotaInfo": ["remainingFraction": 1, "resetTime": "2026-11-21T01:34:16Z"],
-                ],
-                "tab_flash_lite_preview": [
-                    "apiProvider": "API_PROVIDER_GOOGLE_GEMINI",
-                    "modelProvider": "MODEL_PROVIDER_GOOGLE",
-                    "quotaInfo": ["remainingFraction": 1],
-                ],
-            ],
-        ]
-    }
-
-    @Test func theQuotaIsTheDominantGeminiPool() throws {
-        let window = try GoogleUsage.parseQuota(models(), now: now)
-        #expect(window.duration == nil)
-        #expect(abs(window.percent - 38.5908) < 0.001)
-        #expect(window.resetsAt == UsageJSON.date("2026-11-20T23:08:52Z"))
-        #expect(window.scoped.isEmpty)
-    }
-
-    @Test func aMissingFractionReadsAsNoneLeft() throws {
-        let json: Any = [
-            "models": [
-                "gemini-3-pro": [
-                    "modelProvider": "MODEL_PROVIDER_GOOGLE",
-                    "quotaInfo": ["resetTime": "2026-11-20T23:08:52Z"],
+            "status": "SUCCESS",
+            "command": [
+                "name": "usage",
+                "data": [
+                    "groups": [
+                        [
+                            "name": "Gemini Models",
+                            "buckets": [
+                                ["id": "gemini-weekly", "window": "weekly", "remaining_fraction": 0.847, "reset_time": "2026-11-27T18:08:52Z"],
+                                ["id": "gemini-5h", "window": "5h", "remaining_fraction": 0.466, "reset_time": "2026-11-20T23:08:52Z"],
+                            ],
+                        ],
+                        [
+                            "name": "Claude and GPT models",
+                            "buckets": [
+                                ["id": "3p-weekly", "window": "weekly", "remaining_fraction": 1, "reset_time": "2026-11-27T21:13:39Z"],
+                                ["id": "3p-5h", "window": "5h", "remaining_fraction": 1, "reset_time": "2026-11-21T02:13:39Z"],
+                            ],
+                        ],
+                        [
+                            "name": "Gemini 4 Argon",
+                            "buckets": [
+                                ["id": "gemini-argon-wtu-weekly", "window": "weekly", "remaining_fraction": argonRemaining, "reset_time": "2026-11-27T21:13:39Z"],
+                            ],
+                        ],
+                    ],
                 ],
             ],
         ]
-        let window = try GoogleUsage.parseQuota(json, now: now)
-        #expect(window.percent == 100)
     }
 
-    @Test func noGeminiPoolIsAFormatChange() {
-        let json: Any = ["models": ["tab": ["modelProvider": "MODEL_PROVIDER_GOOGLE", "quotaInfo": ["remainingFraction": 1]]]]
+    @Test func geminiGivesAFiveHourAndWeeklyWindow() throws {
+        let report = try GoogleUsage.parse(usage(), now: now)
+        #expect(report.plan.isEmpty)
+        #expect(report.windows.count == 2)
+
+        let fiveHour = report.windows[0]
+        #expect(fiveHour.duration == GoogleUsage.fiveHourDuration)
+        #expect(abs(fiveHour.percent - 53.4) < 0.001)
+        #expect(fiveHour.resetsAt == UsageJSON.date("2026-11-20T23:08:52Z"))
+
+        let weekly = report.windows[1]
+        #expect(weekly.duration == GoogleUsage.weeklyDuration)
+        #expect(abs(weekly.percent - 15.3) < 0.001)
+        // Argon fully remaining: not shown as a part.
+        #expect(weekly.scoped.isEmpty)
+    }
+
+    @Test func aUsedArgonBucketBecomesAWeeklyPart() throws {
+        let report = try GoogleUsage.parse(usage(argonRemaining: 0.4), now: now)
+        let weekly = try #require(report.windows.last)
+        #expect(weekly.scoped.count == 1)
+        #expect(weekly.scoped.first?.label == "Argon")
+        #expect(abs((weekly.scoped.first?.percent ?? 0) - 60) < 0.001)
+    }
+
+    @Test func aNonSuccessRunReadsAsSignedOut() {
+        #expect(throws: UsageFetchError.signedOut) {
+            try GoogleUsage.parse(["status": "ERROR", "command": [:]], now: now)
+        }
+    }
+
+    @Test func missingGroupsIsAFormatChange() {
         #expect(throws: UsageFetchError.failed(.formatChanged)) {
-            try GoogleUsage.parseQuota(json, now: now)
+            try GoogleUsage.parse(["status": "SUCCESS"], now: now)
         }
         #expect(throws: UsageFetchError.failed(.formatChanged)) {
-            try GoogleUsage.parseQuota(["nope": 1], now: now)
+            try GoogleUsage.parse("nope", now: now)
         }
     }
 
-    @Test func theKeychainBlobParses() {
-        let json = #"{"token":{"access_token":"abc","token_type":"Bearer","refresh_token":"ref","expiry":"2026-11-20T15:20:31.809397-05:00"}}"#
-        let expiry = UsageJSON.date("2026-11-20T15:20:31.809397-05:00")
-
-        let plain = GoogleAuth.parse(Data(json.utf8))
-        #expect(plain == GoogleAuth.StoredToken(accessToken: "abc", refreshToken: "ref", expiry: expiry))
-
-        let wrapped = "go-keyring-base64:" + Data(json.utf8).base64EncodedString()
-        #expect(GoogleAuth.parse(Data(wrapped.utf8)) == plain)
-    }
-
-    @Test func aBadKeychainBlobIsNil() {
-        #expect(GoogleAuth.parse(Data("not json".utf8)) == nil)
-        #expect(GoogleAuth.parse(Data("go-keyring-base64:!!!".utf8)) == nil)
-    }
-
-    /// The binary scan pulls each client id and `GOCSPX-` secret out of
-    /// surrounding bytes, in order, without duplicates, and ignores look-alikes.
-    @Test func theCredentialScanFindsClientsAndSecrets() {
-        let secretA = "GOCSPX-" + String(repeating: "a", count: 28)
-        let secretB = "GOCSPX-" + String(repeating: "b", count: 28)
-        let idA = "123456789012-examplefixtureoneexampleoneab.apps.googleusercontent.com"
-        let idB = "210987654321-examplefixturetwoexampletwocd.apps.googleusercontent.com"
-        let blob = [
-            "\u{0}junk\u{0}", idA, "\"", secretA, "\u{0}",
-            "noise\u{0}", idB, " ", secretA, // a repeat, dropped
-            "\u{0}", secretB, "\u{0}",
-            "GOCSPX-short", // too short, ignored
-            "x.apps.googleusercontent.com", // no leading digit, ignored
-        ].joined()
-
-        let found = GoogleCredentials.extract(Array(blob.utf8))
-        #expect(found.secrets == [secretA, secretB])
-        #expect(found.clientIDs == [idA, idB])
-        #expect(!found.isEmpty)
-    }
-
-    @Test func anEmptyScanIsEmpty() {
-        #expect(GoogleCredentials.extract(Array("nothing to see here".utf8)).isEmpty)
+    @Test func noGeminiBucketIsAFormatChange() {
+        let onlyThirdParty: Any = [
+            "status": "SUCCESS",
+            "command": ["data": ["groups": [
+                ["buckets": [["id": "3p-weekly", "window": "weekly", "remaining_fraction": 1]]],
+            ]]],
+        ]
+        #expect(throws: UsageFetchError.failed(.formatChanged)) {
+            try GoogleUsage.parse(onlyThirdParty, now: now)
+        }
     }
 }

@@ -27,7 +27,7 @@ struct UsageModuleLayoutTests {
             ([.claude, .codex], 86),
             ([.claude, .grok], 71),
             ([.codex, .grok], 71),
-            ([.codex, .google], 71),
+            ([.codex, .google], 86),
             ([.claude, .codex, .grok], 106),
         ]
         for (providers, width) in table {
